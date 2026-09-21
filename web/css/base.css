@@ -1,0 +1,37 @@
+/* ============ Dejoiy Mail — base.css : reset, tokens, typography ============ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --radius:12px; --radius-s:8px;
+  --font: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --shadow: 0 8px 28px rgba(0,0,0,.28);
+  --shadow-s: 0 2px 10px rgba(0,0,0,.22);
+  --hdr1:#2f7cf6; --hdr2:#1c46b4; --accent:#2f7cf6; --accent-ink:#ffffff;
+  --scenic: linear-gradient(135deg,#20355f,#0e1830);
+}
+html{-webkit-text-size-adjust:100%}
+body{
+  font-family:var(--font); color:var(--ink); background:#0e1420;
+  height:100dvh; overflow:hidden; font-size:14px; line-height:1.45;
+}
+/* default (dark) surfaces — overridden per brightness in themes.css */
+body{ --surface:rgba(20,27,42,.86); --surface-2:rgba(28,37,56,.86); --surface-3:rgba(38,50,74,.9);
+  --ink:#eef2fa; --ink-2:#aeb9cf; --ink-3:#7c88a3;
+  --line:rgba(255,255,255,.09); --hover:rgba(255,255,255,.06); --active:rgba(255,255,255,.11);
+}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+input,select,textarea{font:inherit;color:var(--ink)}
+input[type="text"],input[type="search"],input[type="email"],input[type="date"],input[type="number"],select,textarea{
+  background:var(--surface-3); border:1px solid var(--line); border-radius:var(--radius-s);
+  padding:8px 10px; width:100%; outline:none;
+}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 30%,transparent)}
+input::placeholder,textarea::placeholder{color:var(--ink-3)}
+a{color:var(--accent)}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:rgba(140,150,175,.35);border-radius:8px;border:2px solid transparent;background-clip:content-box}
+::-webkit-scrollbar-track{background:transparent}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+#bg{position:fixed;inset:0;z-index:-1;background:var(--scenic);transition:background .4s ease}
+#bg.custom{background-size:cover;background-position:center}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
