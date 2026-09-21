@@ -1036,6 +1036,103 @@
         transform: none !important; will-change: auto !important;
       }
     }
+  /* ---- Dejoiy Mail sign-in + mode pill (backend integration) ---- */
+/* ============ Dejoiy Mail — login.css : sign-in screen + mode pill (live bundle) ============
+   Self-contained: works with the bundle's theme variables, with safe fallbacks. */
+
+#login-root:empty{ display:none; }
+
+.login-wrap{
+  position:fixed; inset:0; z-index:200;
+  display:flex; align-items:center; justify-content:center;
+  padding:20px;
+  background:
+    radial-gradient(1200px 600px at 20% -10%, rgba(5,120,111,.22), transparent 60%),
+    radial-gradient(900px 500px at 110% 110%, rgba(47,124,246,.16), transparent 60%),
+    rgba(8,12,14,.72);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  overflow-y:auto;
+}
+.login-card{
+  width:100%; max-width:400px;
+  background:#10181c;
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:18px;
+  padding:30px 28px 24px;
+  box-shadow:0 24px 70px rgba(0,0,0,.5);
+  color:#e8edf7;
+}
+.login-brand{ display:flex; align-items:center; gap:14px; margin-bottom:22px; }
+.brand-mark.lg{
+  width:52px; height:52px; font-size:26px; border-radius:14px;
+  display:flex; align-items:center; justify-content:center;
+  background:linear-gradient(135deg, #05786f, #2f7cf6);
+  color:#fff; flex:none;
+}
+.login-title{ font-family:"Plus Jakarta Sans", system-ui, sans-serif; font-size:22px; letter-spacing:.2px; color:#fff; }
+.login-sub{ font-size:13px; color:#93a0b8; margin-top:2px; }
+.login-notice{
+  font-size:13px; color:#9fb4c7;
+  background:rgba(5,120,111,.14);
+  border:1px solid rgba(5,120,111,.4);
+  border-radius:10px; padding:9px 12px; margin-bottom:14px;
+}
+.login-error{
+  font-size:13px; color:#ffb4b4; background:rgba(220,38,38,.12);
+  border:1px solid rgba(220,38,38,.4);
+  border-radius:10px; padding:9px 12px; margin-bottom:14px;
+}
+.login-card .field{ margin-bottom:14px; }
+.login-card .field label{ display:block; font-size:12.5px; font-weight:600; color:#9fb4c7; margin-bottom:6px; }
+.login-card .field input, .login-card .field select{
+  width:100%; box-sizing:border-box;
+  background:#0b1216;
+  border:1px solid rgba(255,255,255,.12);
+  color:#e8edf7;
+  border-radius:10px; padding:11px 13px; font-size:14.5px;
+  font-family:inherit;
+}
+.login-card .field input:focus, .login-card .field select:focus{
+  outline:none; border-color:#2f7cf6;
+  box-shadow:0 0 0 3px rgba(47,124,246,.25);
+}
+.login-card .field .hint{ font-size:12px; color:#7d8ba1; margin-top:5px; }
+.login-btn{
+  width:100%; padding:12px; font-size:15px; font-weight:700;
+  border:0; border-radius:11px; cursor:pointer; margin-top:4px;
+  background:linear-gradient(135deg, #05786f, #2f7cf6); color:#fff;
+}
+.login-btn:disabled{ opacity:.6; cursor:wait; }
+.login-demo{
+  width:100%; margin-top:10px; font-size:13.5px; padding:10px;
+  background:transparent; color:#9fb4c7; border:1px solid rgba(255,255,255,.14);
+  border-radius:11px; cursor:pointer;
+}
+.login-foot{ margin-top:18px; text-align:center; font-size:12px; color:#5d6b87; }
+
+/* mode indicator pill in the mailbox header */
+.mode-pill{
+  font-size:11.5px; font-weight:600; letter-spacing:.3px;
+  padding:4px 10px; border-radius:999px; white-space:nowrap; cursor:pointer;
+  color:var(--ink-2, #6b7a72);
+  border:1px solid var(--line, #dbe2e4);
+  background:var(--panel-2, #eef2f3);
+}
+.mode-pill.on{
+  color:#0a7a4e; border-color:rgba(34,197,94,.45);
+  background:rgba(34,197,94,.12);
+}
+
+/* ---------- responsive ---------- */
+@media (max-width:760px){
+  .login-wrap{ padding:14px; align-items:flex-start; padding-top:8vh; }
+  .login-card{ padding:24px 20px 20px; border-radius:16px; }
+  .login-title{ font-size:20px; }
+  .brand-mark.lg{ width:46px; height:46px; font-size:23px; }
+  .mode-pill{ display:none; } /* keep the phone top bar compact */
+}
+
   </style>
 </head>
 <body>
@@ -1102,6 +1199,7 @@
       </div>
       <label class="search"><span class="sr-only">Search mail</span><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><input id="searchInput" type="search" placeholder="Search mail" autocomplete="off"><button class="icon-btn advanced-search-btn" type="button" id="advancedSearchBtn" aria-label="Advanced search" aria-expanded="false"><svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg></button></label>
       <div class="mailbox-header-actions">
+        <span id="mode-pill" class="mode-pill" title="Demo preview — no server connected">○ Demo</span>
         <button class="icon-btn header-refresh" id="refreshBtn" aria-label="Refresh inbox"><svg viewBox="0 0 24 24"><path d="M20 6v5h-5"/><path d="M4 18v-5h5"/><path d="M18.5 9a7 7 0 0 0-12-2L4 11M5.5 15a7 7 0 0 0 12 2L20 13"/></svg></button>
         <button class="icon-btn" id="themeBtn" aria-label="Theme settings" aria-expanded="false"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9c0-1-.8-1.8-1.8-1.8h-1.7a2 2 0 0 1-2-2V6.8C15.5 4.7 14 3 12 3z"/><circle cx="7.5" cy="11" r=".7"/><circle cx="10" cy="7.5" r=".7"/><circle cx="14" cy="7" r=".7"/></svg></button>
         <button class="icon-btn header-settings" id="headerSettingsBtn" aria-label="Open mail settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14h-.1v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V3h4v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1z"/></svg></button>
@@ -1467,6 +1565,7 @@
   <input type="file" id="orgLogoFile" accept="image/png,image/jpeg,image/webp" hidden>
   <input type="file" id="bannerImageFile" accept="image/png,image/jpeg,image/webp" hidden>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <div id="login-root"></div>
 
   <script type="text/obsolete">
     const messages = [
@@ -1666,6 +1765,188 @@
     document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeComposer(); closeThemes(); advancedSearch.classList.remove('open'); document.querySelectorAll('.dialog-backdrop').forEach(x=>x.classList.remove('open')); document.getElementById('sendMenu').classList.remove('open'); content.classList.remove('mobile-open'); } });
   </script>
   <script>
+/* ============ Dejoiy Mail — api.js : /api/v1 HTTP client ============
+   Zero dependencies. Works in the browser and in Node (for smoke tests).
+   - Base URL: window.DMAIL_API_BASE (browser) or globalThis.DMAIL_API_BASE (Node).
+     Default "" = same origin.
+   - Bearer-token auth; token persisted in localStorage (in-memory fallback).
+   - fetch with credentials:"include", JSON bodies, timeout via AbortController.
+   - Errors normalized to ApiError {status, code, message, details}.
+   - 401 responses trigger DmailApi.onUnauthorized (wired by session.js). */
+(function(){
+"use strict";
+
+function getBase(){
+  var b = "";
+  try{
+    if(typeof window !== "undefined" && window.DMAIL_API_BASE) b = window.DMAIL_API_BASE;
+    else if(typeof globalThis !== "undefined" && globalThis.DMAIL_API_BASE) b = globalThis.DMAIL_API_BASE;
+  }catch(e){}
+  return String(b || "").replace(/\/+$/, "");
+}
+
+var TOKEN_KEY = "dmail.session.v1";
+var memStore = {};
+function storage(){
+  try{ if(typeof localStorage !== "undefined") return localStorage; }catch(e){}
+  return {
+    getItem: function(k){ return Object.prototype.hasOwnProperty.call(memStore, k) ? memStore[k] : null; },
+    setItem: function(k, v){ memStore[k] = String(v); },
+    removeItem: function(k){ delete memStore[k]; }
+  };
+}
+
+function ApiError(status, code, message, details){
+  var err = new Error(message || ("Request failed" + (status ? " (" + status + ")" : "")));
+  err.name = "ApiError";
+  err.status = status;
+  err.code = code || null;
+  err.details = details || null;
+  return err;
+}
+
+function buildUrl(path, query){
+  var url = getBase() + "/api/v1" + path;
+  if(query){
+    var parts = [];
+    for(var k in query){
+      if(!Object.prototype.hasOwnProperty.call(query, k)) continue;
+      var v = query[k];
+      if(v === undefined || v === null || v === "") continue;
+      parts.push(encodeURIComponent(k) + "=" + encodeURIComponent(String(v)));
+    }
+    if(parts.length) url += "?" + parts.join("&");
+  }
+  return url;
+}
+
+function request(path, opts){
+  opts = opts || {};
+  var method = opts.method || "GET";
+  var token = opts.token === undefined ? DmailApi.token : opts.token;
+  var timeout = opts.timeout || 15000;
+  var url = buildUrl(path, opts.query);
+
+  var controller = null, timer = null;
+  try{
+    if(typeof AbortController !== "undefined"){
+      controller = new AbortController();
+      timer = setTimeout(function(){ controller.abort(); }, timeout);
+    }
+  }catch(e){ controller = null; }
+
+  var headers = { "Content-Type": "application/json" };
+  if(token) headers["Authorization"] = "Bearer " + token;
+
+  return fetch(url, {
+    method: method,
+    headers: headers,
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+    credentials: "include",
+    signal: controller ? controller.signal : undefined
+  }).then(function(res){
+    if(timer) clearTimeout(timer);
+    var ct = res.headers.get("content-type") || "";
+    var asJson = ct.indexOf("application/json") !== -1;
+    return (asJson ? res.json().catch(function(){ return null; }) : Promise.resolve(null))
+      .then(function(data){
+        if(!res.ok){
+          var e = (data && data.error) || {};
+          throw ApiError(res.status, e.code || null,
+            e.message || ("Request failed with status " + res.status), e.details || null);
+        }
+        return data;
+      });
+  }).catch(function(err){
+    if(timer) clearTimeout(timer);
+    if(err && err.name === "ApiError") throw err;
+    if(err && err.name === "AbortError")
+      throw ApiError(0, "timeout", "The server took too long to respond. Please try again.");
+    throw ApiError(0, "network", "Could not reach the Dejoiy Mail server. Check your connection and try again.");
+  });
+}
+
+var DmailApi = {
+  get token(){ try{ return storage().getItem(TOKEN_KEY); }catch(e){ return null; } },
+  set token(v){
+    try{
+      if(v) storage().setItem(TOKEN_KEY, v);
+      else storage().removeItem(TOKEN_KEY);
+    }catch(e){}
+  },
+  clearToken: function(){ DmailApi.token = null; },
+
+  /* Called on any 401 from an authenticated call. session.js wires this. */
+  onUnauthorized: null,
+
+  _call: function(path, opts){
+    var self = this;
+    return request(path, opts).catch(function(err){
+      if(err && err.status === 401 && typeof self.onUnauthorized === "function"){
+        try{ self.onUnauthorized(err); }catch(e){}
+      }
+      throw err;
+    });
+  },
+
+  /* ---------- auth ---------- */
+  login: function(email, password, extra){
+    extra = extra || {};
+    var body = { email: email, password: password };
+    if(extra.orgSlug) body.orgSlug = extra.orgSlug;
+    if(extra.totpCode) body.totpCode = extra.totpCode;
+    return this._call("/auth/login", { method: "POST", body: body, token: null })
+      .then(function(res){
+        if(res && res.data && res.data.token) DmailApi.token = res.data.token;
+        return res.data;
+      });
+  },
+  logout: function(){
+    var p = this._call("/auth/logout", { method: "POST" }).catch(function(){ return null; });
+    this.clearToken();
+    return p;
+  },
+  me: function(){ return this._call("/auth/me").then(function(res){ return res.data; }); },
+
+  /* ---------- mail ---------- */
+  folders: function(){ return this._call("/mail/folders").then(function(res){ return res.data; }); },
+  messages: function(folder, params){
+    var q = Object.assign({ folder: folder }, params || {});
+    return this._call("/mail/messages", { query: q }); // -> { data, pagination }
+  },
+  message: function(id){
+    return this._call("/mail/messages/" + encodeURIComponent(id)).then(function(res){ return res.data; });
+  },
+  patchMessage: function(id, patch){
+    return this._call("/mail/messages/" + encodeURIComponent(id), { method: "PATCH", body: patch })
+      .then(function(res){ return res.data; });
+  },
+  deleteMessage: function(id){
+    return this._call("/mail/messages/" + encodeURIComponent(id), { method: "DELETE" })
+      .then(function(res){ return res.data; });
+  },
+  createDraft: function(d){
+    return this._call("/mail/drafts", { method: "POST", body: d }).then(function(res){ return res.data; });
+  },
+  updateDraft: function(id, d){
+    return this._call("/mail/drafts/" + encodeURIComponent(id), { method: "PATCH", body: d })
+      .then(function(res){ return res.data; });
+  },
+  send: function(payload){
+    return this._call("/mail/send", { method: "POST", body: payload }).then(function(res){ return res.data; });
+  }
+};
+
+if(typeof module !== "undefined" && module.exports){
+  module.exports = { DmailApi: DmailApi, ApiError: ApiError };
+}else{
+  window.DmailApi = DmailApi;
+  window.ApiError = ApiError;
+}
+})();
+
+  </script>
+  <script>
   (() => {
     'use strict';
     const $ = (s, r=document) => r.querySelector(s);
@@ -1716,7 +1997,7 @@
     function dateGroup(m){if(m.date==='2026-09-21')return 'Today';if(m.date==='2026-09-20')return 'Yesterday';return 'Last week';}
     function renderList(){ const arr=getVisible(); const nudge=$('#replyNudge')?.classList.contains('on')&&activeFolder==='Inbox'&&!activeLabel&&!searchCriteria?'<div class="nudge-banner">Nudge · A recent conversation may need a reply.</div>':''; if(!arr.length){list.innerHTML='<div class="empty-state">No messages match these filters.</div>';return;}let group='';list.innerHTML=nudge+arr.map(m=>{const g=dateGroup(m),head=dateGroups&&g!==group?`<div class="date-group">${group=g}</div>`:'';return head+`<article class="mail-item ${m.unread?'unread':''} ${m.id===activeId?'active':''} ${selectedIds.has(m.id)?'selected':''}" data-id="${m.id}"><input class="mail-select" type="checkbox" data-select-id="${m.id}" aria-label="Select ${esc(m.subject)}" ${selectedIds.has(m.id)?'checked':''}><button class="mail-open" data-open="${m.id}"><i class="unread-dot"></i><div class="mail-main"><div class="sender">${m.important?'› ':''}${esc(m.sender)}${m.email.endsWith('@example.com')?'<span class="verified-badge">✓ Verified</span>':''}${starHTML(m)}</div><div class="subject">${esc(m.subject)}</div><div class="preview">${esc(m.preview)}</div><div class="mail-flags">${m.attachment?'<span class="tiny-tag">Attachment</span>':''}${smartCategory(m)?`<span class="tiny-tag">${smartCategory(m)}</span>`:''}${m.labels.map(l=>`<span class="tiny-tag">${esc(l)}</span>`).join('')}${m.snoozeAt?`<span class="tiny-tag">Returns ${esc(m.snoozeAt.replace('T',' '))}</span>`:''}</div></div><time class="mail-time">${esc(m.time)}</time></button><span class="hover-actions"><button class="icon-btn hover-search" data-quick="sender" title="Search by sender">From</button><button class="icon-btn hover-search" data-quick="subject" title="Search by subject">Subject</button><button class="icon-btn" data-quick="archive" title="Archive">⌂</button><button class="icon-btn" data-quick="delete" title="Delete">×</button><button class="icon-btn" data-quick="read" title="Read/unread">✉</button><button class="icon-btn" data-quick="snooze" title="Snooze">◷</button></span></article>`;}).join(''); }
     function renderMessageTabs(){const bar=$('#messageTabs');bar.classList.toggle('on',messageTabsEnabled);bar.innerHTML=openTabIds.map(id=>{const m=messages.find(x=>x.id===id);return m?`<button class="message-tab ${id===activeId?'active':''}" data-tab-id="${id}">${esc(m.subject.slice(0,24))}</button>`:'';}).join('');}
-    function openMessage(id,reveal=true){ const m=messages.find(x=>x.id===id); if(!m)return; content.classList.remove('reader-transition'); requestAnimationFrame(()=>content.classList.add('reader-transition')); activeId=id;if(messageTabsEnabled&&!openTabIds.includes(id))openTabIds.push(id);const readDelay=$('#readInterval')?.value||'Immediately';if(readDelay==='Immediately')m.unread=false;else if(readDelay!=='Never')setTimeout(()=>{m.unread=false;renderList();},readDelay.includes('2')?2000:5000);const prior=conversationMode?'<div class="thread-card"><strong>You · earlier in this conversation</strong><p>Thanks — I’ll review this and follow up.</p></div>':''; reader.innerHTML=`<h2>${esc(m.subject)}</h2>${prior}<div class="sender-row"><div class="sender-avatar">${esc(m.initials)}</div><div class="sender-meta"><strong>${esc(m.sender)}${m.email.endsWith('@example.com')?'<span class="verified-badge">✓ Verified sender</span>':''}</strong><span>${esc(m.email)} · to ${esc(m.to)}</span></div><div class="per-message"><button class="icon-btn" id="perMessageBtn" aria-label="Message actions">•••</button><div class="toolbar-menu per-message-menu" id="perMessageMenu"><button data-message-action="unread">Mark as unread</button><button data-message-action="star">Star</button><button data-message-action="archive">Archive</button><button data-message-action="delete">Delete</button><button data-message-action="block">Block senders</button><button data-message-action="filter">Filter messages like this</button><button data-message-action="raw">View raw message</button><button data-message-action="print">Download message copy</button></div></div></div><div class="reader-labels">${m.labels.map(l=>`<span class="label-chip">${esc(l)}</span>`).join('')}${m.muted?'<span class="label-chip">Muted</span>':''}</div><div class="message-body">${m.body}</div><div class="reply-box" id="replyBox"><strong>Reply to ${esc(m.sender)}</strong><div class="demo-note" style="margin-top:4px">Open composer</div></div>`; $('#replyBox').onclick=()=>openComposer(m.email,`Re: ${m.subject}`);$('#perMessageBtn').onclick=e=>{e.stopPropagation();$('#perMessageMenu').classList.toggle('open');};$('#perMessageMenu').onclick=e=>{const b=e.target.closest('[data-message-action]');if(b)handleMessageAction(b.dataset.messageAction,m);}; renderList();renderMessageTabs(); updateReaderStar(); refreshReaderMore(); if(reveal&&innerWidth<=760)content.classList.add('mobile-open'); }
+    function openMessage(id,reveal=true){ const m=messages.find(x=>x.id===id); if(!m)return; if(dmailHooks.beforeOpen)dmailHooks.beforeOpen(m); content.classList.remove('reader-transition'); requestAnimationFrame(()=>content.classList.add('reader-transition')); activeId=id;if(messageTabsEnabled&&!openTabIds.includes(id))openTabIds.push(id);const readDelay=$('#readInterval')?.value||'Immediately';if(readDelay==='Immediately'){m.unread=false;if(dmailHooks.afterRead)dmailHooks.afterRead(m);}else if(readDelay!=='Never')setTimeout(()=>{m.unread=false;renderList();if(dmailHooks.afterRead)dmailHooks.afterRead(m);},readDelay.includes('2')?2000:5000);const prior=conversationMode?'<div class="thread-card"><strong>You · earlier in this conversation</strong><p>Thanks — I’ll review this and follow up.</p></div>':''; reader.innerHTML=`<h2>${esc(m.subject)}</h2>${prior}<div class="sender-row"><div class="sender-avatar">${esc(m.initials)}</div><div class="sender-meta"><strong>${esc(m.sender)}${m.email.endsWith('@example.com')?'<span class="verified-badge">✓ Verified sender</span>':''}</strong><span>${esc(m.email)} · to ${esc(m.to)}</span></div><div class="per-message"><button class="icon-btn" id="perMessageBtn" aria-label="Message actions">•••</button><div class="toolbar-menu per-message-menu" id="perMessageMenu"><button data-message-action="unread">Mark as unread</button><button data-message-action="star">Star</button><button data-message-action="archive">Archive</button><button data-message-action="delete">Delete</button><button data-message-action="block">Block senders</button><button data-message-action="filter">Filter messages like this</button><button data-message-action="raw">View raw message</button><button data-message-action="print">Download message copy</button></div></div></div><div class="reader-labels">${m.labels.map(l=>`<span class="label-chip">${esc(l)}</span>`).join('')}${m.muted?'<span class="label-chip">Muted</span>':''}</div><div class="message-body">${m.body}</div><div class="reply-box" id="replyBox"><strong>Reply to ${esc(m.sender)}</strong><div class="demo-note" style="margin-top:4px">Open composer</div></div>`; $('#replyBox').onclick=()=>openComposer(m.email,`Re: ${m.subject}`);$('#perMessageBtn').onclick=e=>{e.stopPropagation();$('#perMessageMenu').classList.toggle('open');};$('#perMessageMenu').onclick=e=>{const b=e.target.closest('[data-message-action]');if(b)handleMessageAction(b.dataset.messageAction,m);}; renderList();renderMessageTabs(); updateReaderStar(); refreshReaderMore(); if(reveal&&innerWidth<=760)content.classList.add('mobile-open'); }
     list.addEventListener('click',e=>{const sel=e.target.closest('[data-select-id]');if(sel){const id=Number(sel.dataset.selectId);sel.checked?selectedIds.add(id):selectedIds.delete(id);renderList();return;}const open=e.target.closest('[data-open]');if(open)return openMessage(Number(open.dataset.open));const q=e.target.closest('[data-quick]');if(!q)return;const item=q.closest('.mail-item'),m=messages.find(x=>x.id===Number(item.dataset.id)); if(q.dataset.quick==='archive'){m.folder='Archive';showToast('Message archived');}if(q.dataset.quick==='delete'){m.folder='Trash';showToast('Message moved to Trash');}if(q.dataset.quick==='read'){m.unread=!m.unread;showToast(m.unread?'Marked unread':'Marked read');}if(q.dataset.quick==='sender'){$('#searchInput').value=m.email;searchCriteria=null;showToast(`Searching messages from ${m.sender}`);}if(q.dataset.quick==='subject'){$('#searchInput').value=m.subject;searchCriteria=null;showToast('Searching by subject');}if(q.dataset.quick==='snooze'){pendingSnoozeId=m.id;setDefaultDate('#snoozeAt',24);openDialog('snoozeDialog');}renderList();e.stopPropagation();});
     $('#searchInput').addEventListener('input',()=>{searchCriteria=null;renderList();});
     $$('.filter-chip').forEach(b=>b.onclick=()=>{activeFilter=b.dataset.filter;$$('.filter-chip').forEach(x=>x.classList.toggle('active',x===b));renderList();});
@@ -1725,13 +2006,13 @@
     function renderFolderLabels(){ $('#folderLabels').innerHTML=labels.map((l,i)=>`<button class="folder-btn" data-label-filter="${esc(l)}"><i class="label-dot ${i%3===1?'blue':i%3===2?'rose':''}"></i>${esc(l)} <span>${messages.filter(m=>m.labels.includes(l)).length}</span></button>`).join(''); $$('[data-label-filter]').forEach(b=>b.onclick=()=>{activeLabel=b.dataset.labelFilter;activeFolder='Label';$('#folderTitle').textContent=b.dataset.labelFilter;renderList();$('#folders').classList.remove('open');}); }
     renderFolderLabels();
 
-    function cycleStar(m){m.star=m.star>=starLimit?0:m.star+1;renderList();updateReaderStar();}
+    function cycleStar(m){m.star=m.star>=starLimit?0:m.star+1;if(dmailHooks.afterStar)dmailHooks.afterStar(m);renderList();updateReaderStar();}
     function updateReaderStar(){const m=messages.find(x=>x.id===activeId);if(!m)return;$('#readerStar').innerHTML=m.star?`<span style="color:${starTypes[m.star-1][1]}">${starTypes[m.star-1][0]}</span>`:'☆';}
     $('#readerStar').onclick=()=>{const m=messages.find(x=>x.id===activeId);cycleStar(m);showToast(m.star?starTypes[m.star-1][2]:'Star removed');};
     $('#readerArchive').onclick=()=>moveCurrent('Archive','Message archived'); $('#readerDelete').onclick=()=>moveCurrent('Trash','Message moved to Trash');
-    $('#readerUnread').onclick=()=>{const m=messages.find(x=>x.id===activeId);m.unread=true;renderList();showToast('Marked unread');};
+    $('#readerUnread').onclick=()=>{const m=messages.find(x=>x.id===activeId);m.unread=true;if(dmailHooks.afterRead)dmailHooks.afterRead(m);renderList();showToast('Marked unread');};
     $('#readerSnooze').onclick=()=>{pendingSnoozeId=activeId;setDefaultDate('#snoozeAt',24);openDialog('snoozeDialog');};
-    function moveCurrent(folder,msg){const m=messages.find(x=>x.id===activeId);m.folder=folder;renderList();const first=getVisible()[0];if(first)openMessage(first.id,false);showToast(msg);}
+    function moveCurrent(folder,msg){const m=messages.find(x=>x.id===activeId);m.folder=folder;if(dmailHooks.afterMove)dmailHooks.afterMove(m,folder);renderList();const first=getVisible()[0];if(first)openMessage(first.id,false);showToast(msg);}
     function setDefaultDate(sel,hours){const d=new Date(Date.now()+hours*3600000);d.setMinutes(0,0,0);$(sel).value=new Date(d-d.getTimezoneOffset()*60000).toISOString().slice(0,16);}
     $$('.quick-snooze').forEach(b=>b.onclick=()=>setDefaultDate('#snoozeAt',Number(b.dataset.hours)));
     $('#confirmSnooze').onclick=()=>{const m=messages.find(x=>x.id===pendingSnoozeId);if(!m)return;const when=$('#snoozeAt').value;if(!when){showToast('Choose a return time');return;}m.folder='Snoozed';m.snoozeAt=when;m.preview=`Snoozed until ${when.replace('T',' ')}`;closeDialog('snoozeDialog');renderList();showToast('Message moved to Snoozed');};
@@ -1747,7 +2028,7 @@
     function blockSender(m){if(!blockedAddresses.includes(m.email))blockedAddresses.push(m.email);m.folder='Spam';renderBlocked();renderList();showToast(`${m.email} blocked and moved to Spam`);}
     function addSenderContact(m){if(!contacts.some(c=>c.email===m.email))contacts.push({name:m.sender,email:m.email});showToast('Sender added to contacts');}
     function prepareFilter(m){$$('[data-query]',adv).forEach(x=>x.value='');$('[data-query="from"]',adv).value=m.email;$('#searchScope').value='All Mail';$('#hasAttachment').checked=false;adv.classList.add('open');$('#advancedSearchBtn').setAttribute('aria-expanded','true');showToast('Filter search prepared');}
-    function handleMessageAction(action,m){$('#perMessageMenu')?.classList.remove('open');switch(action){case'unread':m.unread=!m.unread;renderList();showToast(m.unread?'Marked unread':'Marked read');break;case'star':m.star=m.star?0:1;renderList();updateReaderStar();showToast(m.star?'Star added':'Star removed');break;case'archive':moveCurrent('Archive','Message archived');break;case'delete':moveCurrent('Trash','Message moved to Trash');break;case'block':blockSender(m);break;case'filter':prepareFilter(m);break;case'raw':$('#rawMessage').textContent=rawText(m);openDialog('rawDialog');break;case'print':printReady(m);break;case'contact':addSenderContact(m);break;}}
+    function handleMessageAction(action,m){$('#perMessageMenu')?.classList.remove('open');switch(action){case'unread':m.unread=!m.unread;if(dmailHooks.afterRead)dmailHooks.afterRead(m);renderList();showToast(m.unread?'Marked unread':'Marked read');break;case'star':m.star=m.star?0:1;if(dmailHooks.afterStar)dmailHooks.afterStar(m);renderList();updateReaderStar();showToast(m.star?'Star added':'Star removed');break;case'archive':moveCurrent('Archive','Message archived');break;case'delete':moveCurrent('Trash','Message moved to Trash');break;case'block':blockSender(m);break;case'filter':prepareFilter(m);break;case'raw':$('#rawMessage').textContent=rawText(m);openDialog('rawDialog');break;case'print':printReady(m);break;case'contact':addSenderContact(m);break;}}
     function closeReaderMore(){readerMoreMenu.classList.remove('open');readerMore.setAttribute('aria-expanded','false');}
     readerMore.onclick=e=>{e.stopPropagation();const willOpen=!readerMoreMenu.classList.contains('open');closeReaderMore();if(willOpen){refreshReaderMore();readerMoreMenu.classList.add('open');readerMore.setAttribute('aria-expanded','true');readerMoreMenu.querySelector('[role="menuitem"]')?.focus();}};
     readerMoreMenu.onclick=e=>{e.stopPropagation();const b=e.target.closest('[data-reader-action]');if(!b)return;const m=messages.find(x=>x.id===activeId);if(!m)return;closeReaderMore();handleMessageAction(b.dataset.readerAction,m);};
@@ -1826,7 +2107,7 @@
     $('#appointmentBtn').onclick=()=>{bodyField.innerHTML+=`${bodyField.textContent?'<br><br>':''}<strong>Choose a time to meet</strong><br>Tue 22 Sep · 11:00<br>Wed 23 Sep · 14:30<br>Thu 24 Sep · 10:00`;bodyField.focus();};
     $('#confidentialBtn').onclick=()=>{if(!$('#confidentialBtn').hidden)openDialog('confidentialDialog');};$('#saveConfidential').onclick=()=>{confidential={enabled:true,expiry:$('#expirySelect').value,passcode:$('#passcodeSelect').value};$('#confidentialBadge').style.display='inline';$('#confidentialBtn').classList.add('active');closeDialog('confidentialDialog');showToast(`Confidential · expires in ${confidential.expiry}`);};
     function composeMessage(folder,timeLabel){const to=$('#toField').value.trim(),subject=$('#subjectField').value.trim()||'(no subject)';if(!to){showToast('Add a recipient first');$('#toField').focus();return null;}const msg={id:nextMessageId++,sender:'You',email:'roopa@example.com',to,initials:'RS',subject,preview:bodyField.textContent.trim().slice(0,90)||'Empty message',time:timeLabel||'Now',date:'2026-09-21',size:Math.max(1000,bodyField.innerHTML.length*8),unread:false,attachment:attachments.length>0,star:0,important:false,labels:folder==='Scheduled'?['Scheduled']:[],folder,body:`<p>${bodyField.innerHTML}</p>`,confidential:{...confidential}};messages.push(msg);savedFilters.filter(f=>f.enabled&&matchCriteria(msg,f.criteria)).forEach(f=>applyFilterActions(msg,f));return msg;}
-    $('#composerForm').onsubmit=e=>{e.preventDefault();const m=composeMessage('Sent');if(!m)return;closeComposer();selectFolder('Sent');showUndoToast('Message added to Sent',m);};
+    $('#composerForm').onsubmit=e=>{e.preventDefault();const m=composeMessage('Sent');if(!m)return;if(dmailHooks.afterSend)dmailHooks.afterSend(m);closeComposer();selectFolder('Sent');showUndoToast('Message added to Sent',m);};
     function showUndoToast(text,msg){const t=$('#toast');t.innerHTML=`<span>${esc(text)}</span><button type="button">Undo</button>`;t.classList.add('show');t.querySelector('button').onclick=()=>{const i=messages.indexOf(msg);if(i>-1)messages.splice(i,1);t.classList.remove('show');openComposer(msg.to,msg.subject,msg.preview);renderList();};clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),5000);}
     $('#sendMoreBtn').onclick=()=>$('#sendMenu').classList.toggle('open');$$('[data-schedule]').forEach(b=>b.onclick=()=>scheduleCurrent(b.dataset.schedule));$('#customScheduleBtn').onclick=()=>{setDefaultDate('#scheduleAt',24);openDialog('scheduleDialog');};$('#confirmSchedule').onclick=()=>{const v=$('#scheduleAt').value;if(!v){showToast('Choose a send time');return;}closeDialog('scheduleDialog');scheduleCurrent(v.replace('T',' '));};
     function scheduleCurrent(label){const m=composeMessage('Scheduled',label);if(!m)return;m.scheduledAt=label;m.preview=`Scheduled for ${label}`;closeComposer();selectFolder('Scheduled');showToast(`Scheduled for ${label}`);}
@@ -2051,9 +2332,382 @@
     document.addEventListener('pointerout',e=>{const card=e.target.closest(tiltSelector);if(card&&!card.contains(e.relatedTarget))resetTilt(card);});
     reducedMotion.addEventListener?.('change',()=>resetTilt(activeTilt));finePointer.addEventListener?.('change',()=>resetTilt(activeTilt));
 
+    // ---- Dejoiy Mail backend integration bridge (demo <-> connected mailbox) ----
+    const dmailHooks={beforeOpen:null,afterRead:null,afterStar:null,afterMove:null,afterSend:null};
+    const dmailDemoSnapshot=JSON.parse(JSON.stringify(messages));
+    window.__dmailBridge={
+      hooks:dmailHooks,
+      getActiveId(){return activeId;},
+      getMessages(){return messages;},
+      openMessage(id,reveal){openMessage(id,reveal);},
+      showToast,esc,
+      replaceMessages(arr){messages.length=0;arr.forEach(m=>messages.push(m));let mx=0;messages.forEach(m=>{const n=Number(m.id);if(n>mx)mx=n;});nextMessageId=mx+1;activeId=null;openTabIds=[];selectedIds.clear();renderToday();renderList();const f=getVisible()[0];if(f)openMessage(f.id,false);},
+      restoreDemo(){this.replaceMessages(JSON.parse(JSON.stringify(dmailDemoSnapshot)));},
+      renderAll(){renderToday();renderList();const f=getVisible()[0];if(f)openMessage(f.id,false);}
+    };
+
     renderToday();
     renderList();openMessage(1,false);
   })();
+  </script>
+  <script>
+/* ============ Dejoiy Mail — dmail-session.js : live-bundle backend integration ============
+   Boots in DEMO mode (the site's existing behavior is untouched).
+   - The mode pill in the mailbox header opens the sign-in overlay ("○ Demo"),
+     or signs out when connected ("● name").
+   - A stored session token is validated on boot; when it works the mailbox
+     switches to CONNECTED mode automatically.
+   - Connected mode: folders/messages come from /api/v1; read/star/move/send
+     sync back to the server. Demo-only features (filters, snooze, labels…)
+     keep working locally.
+   - Sign-out restores the demo mailbox exactly as it was.
+   Zero dependencies. No external URLs. */
+(function(){
+"use strict";
+
+function $(s,r){ return (r||document).querySelector(s); }
+function $$(s,r){ return Array.prototype.slice.call((r||document).querySelectorAll(s)); }
+function esc(v){ return String(v==null?"":v).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); }
+
+var bridge=null;
+function B(){ if(!bridge) bridge=window.__dmailBridge||null; return bridge; }
+function toast(t){ var b=B(); if(b) b.showToast(t); }
+
+/* ---------------- state ---------------- */
+var S={
+  mode:"demo",            // "demo" | "connected"
+  user:null, org:null,
+  lidSeq:1,
+  backendByLid:{},        // local numeric id -> backend message (list shape)
+  folderIdByKind:{},       // "inbox" -> uuid
+  identityEmail:null       // original header email, for restore on sign-out
+};
+
+/* ---------------- helpers ---------------- */
+function asArray(v){
+  if(!v) return [];
+  if(Array.isArray(v)) return v;
+  if(typeof v==="string"){
+    var s=v.trim();
+    if(!s) return [];
+    try{ var p=JSON.parse(s); if(Array.isArray(p)) return p; }catch(e){}
+    return s.split(",").map(function(x){return x.trim();}).filter(Boolean);
+  }
+  return [];
+}
+function parseAddr(v){
+  if(!v) return {name:"",email:""};
+  if(typeof v==="object") return {name:v.name||"",email:v.email||""};
+  var s=String(v).trim(), m=s.match(/^(.*)<([^<>]+)>\s*$/);
+  if(m) return {name:m[1].trim().replace(/^"|"$/g,""), email:m[2].trim()};
+  return {name:"",email:s};
+}
+function initialsOf(name,email){
+  var parts=String(name||"").trim().split(/\s+/).filter(Boolean);
+  if(parts.length>=2) return (parts[0][0]+parts[1][0]).toUpperCase();
+  if(parts.length===1) return parts[0].slice(0,2).toUpperCase();
+  return String(email||"?").trim().slice(0,2).toUpperCase()||"?";
+}
+function stripHtml(h){
+  var d=document.createElement("div"); d.innerHTML=String(h||"");
+  return d.textContent||"";
+}
+
+/* Map a backend message to the bundle's message shape.
+   Bundle ids are numeric in several places, so each server message gets a
+   local numeric id; the backend record is kept in S.backendByLid. */
+function mapMessage(b,bundleFolder){
+  var from=parseAddr(b.from);
+  var toList=asArray(b.to).map(parseAddr).filter(function(a){return a.email;});
+  var d=null;
+  try{ d=b.internalDate?new Date(b.internalDate):new Date(); }catch(e){ d=new Date(); }
+  if(!d||isNaN(d.getTime())) d=new Date();
+  var iso=d.toISOString();
+  var lid=S.lidSeq++;
+  S.backendByLid[lid]=b;
+  var senderName=from.name||(from.email?from.email.split("@")[0]:"Unknown");
+  var m={
+    id:lid,
+    sender:senderName,
+    email:from.email||"",
+    to:toList.map(function(a){return a.email;}).join(", "),
+    initials:initialsOf(from.name,from.email),
+    subject:b.subject||"(no subject)",
+    preview:b.snippet||"",
+    time:iso.slice(11,16),
+    date:iso.slice(0,10),
+    size:b.sizeBytes||0,
+    unread:!b.isRead,
+    attachment:!!b.hasAttachments,
+    star:b.isStarred?1:0,
+    important:false,
+    labels:[],
+    body:b.snippet?("<p>"+esc(b.snippet)+"</p>"):"<p></p>",
+    _needsBody:true
+  };
+  if(bundleFolder) m.folder=bundleFolder; /* undefined => Inbox */
+  return m;
+}
+
+/* ---------------- mode pill ---------------- */
+function setPill(connected){
+  var pill=$("#mode-pill"); if(!pill) return;
+  if(connected){
+    var label=(S.user&&(S.user.displayName||S.user.email))||"Connected";
+    pill.classList.add("on");
+    pill.textContent="● "+label;
+    pill.title="Connected to Dejoiy Mail — click to sign out";
+  }else{
+    pill.classList.remove("on");
+    pill.textContent="○ Demo";
+    pill.title="Demo preview — click to sign in to your mailbox";
+  }
+}
+
+function setIdentity(email){
+  var b=B(); if(!b) return;
+  var copy=$(".mailbox-identity-copy span:last-child")||$("#mailboxHeader .mailbox-identity-copy span");
+  var acct=$(".mailbox-account");
+  if(copy){
+    if(S.identityEmail===null) S.identityEmail=copy.textContent;
+    copy.textContent=email||S.identityEmail||"";
+  }
+  if(acct){
+    if(!acct.dataset.demo) acct.dataset.demo=acct.textContent;
+    acct.textContent=email?initialsOf("",email):(acct.dataset.demo||"RS");
+  }
+}
+
+/* ---------------- connected mailbox load ---------------- */
+var FOLDER_KINDS=[["inbox",undefined],["sent","Sent"],["drafts","Drafts"],["spam","Spam"],["trash","Trash"]];
+
+function loadConnected(done){
+  var b=B(); if(!b){ if(done)done(); return; }
+  S.backendByLid={}; S.lidSeq=1;
+  DmailApi.folders().then(function(folders){
+    S.folderIdByKind={};
+    (folders||[]).forEach(function(f){ if(f&&f.kind) S.folderIdByKind[f.kind]=f.id; });
+    var chain=Promise.resolve([]);
+    FOLDER_KINDS.forEach(function(pair){
+      chain=chain.then(function(all){
+        if(!S.folderIdByKind[pair[0]]) return all;
+        return DmailApi.messages(pair[0],{limit:50}).then(function(res){
+          ((res&&res.data)||[]).forEach(function(bm){ all.push(mapMessage(bm,pair[1])); });
+          return all;
+        }).catch(function(){ return all; });
+      });
+    });
+    return chain;
+  }).then(function(all){
+    b.replaceMessages(all);
+    setPill(true);
+    if(done)done();
+  }).catch(function(err){
+    toast("Could not load mailbox: "+((err&&err.message)||"server error"));
+    if(done)done();
+  });
+}
+
+function refreshConnected(announce){
+  if(S.mode!=="connected") return;
+  loadConnected(function(){ if(announce) toast("Mailbox refreshed"); });
+}
+
+/* ---------------- server-sync hooks ---------------- */
+function installHooks(){
+  var b=B(); if(!b||!b.hooks) return;
+  var H=b.hooks;
+
+  H.beforeOpen=function(m){
+    if(S.mode!=="connected"||!m||!m._needsBody) return;
+    var bm=S.backendByLid[m.id]; if(!bm) return;
+    m._needsBody=false;
+    DmailApi.message(bm.id).then(function(full){
+      var html=full.bodyHtml||
+        (full.bodyText?("<p>"+esc(full.bodyText).replace(/\n/g,"<br>")+"</p>"):m.body);
+      m.body=html;
+      if(b.getActiveId()===m.id) b.openMessage(m.id,false);
+    }).catch(function(){ m._needsBody=true; });
+  };
+
+  H.afterRead=function(m){
+    if(S.mode!=="connected"||!m) return;
+    var bm=S.backendByLid[m.id]; if(!bm) return;
+    DmailApi.patchMessage(bm.id,{isRead:!m.unread}).catch(function(){});
+  };
+
+  H.afterStar=function(m){
+    if(S.mode!=="connected"||!m) return;
+    var bm=S.backendByLid[m.id]; if(!bm) return;
+    DmailApi.patchMessage(bm.id,{isStarred:!!m.star}).catch(function(){});
+  };
+
+  H.afterMove=function(m,folder){
+    if(S.mode!=="connected"||!m) return;
+    var bm=S.backendByLid[m.id]; if(!bm) return;
+    var kindMap={Trash:"trash",Spam:"spam",Sent:"sent",Drafts:"drafts"};
+    var kind=kindMap[folder];
+    if(kind&&S.folderIdByKind[kind]){
+      DmailApi.patchMessage(bm.id,{folderId:S.folderIdByKind[kind]}).catch(function(){});
+    }else if(folder==="Trash"){
+      DmailApi.deleteMessage(bm.id).catch(function(){});
+    }else{
+      toast("That folder is not on the server yet — reloading mailbox");
+      refreshConnected(false);
+    }
+  };
+
+  H.afterSend=function(m){
+    if(S.mode!=="connected"||!m) return;
+    var toList=String(m.to||"").split(/[,;]/).map(function(s){return s.trim();}).filter(Boolean);
+    if(!toList.length) return;
+    var bodyHtml=m.body||"";
+    DmailApi.send({
+      to:toList,
+      subject:m.subject||"",
+      bodyText:stripHtml(bodyHtml),
+      bodyHtml:bodyHtml
+    }).then(function(){ refreshConnected(false); })
+     .catch(function(err){ toast("Send failed: "+((err&&err.message)||"server error")); });
+  };
+}
+
+/* ---------------- sign-in overlay ---------------- */
+function openLogin(notice){
+  var root=$("#login-root"); if(!root) return;
+  var needTotp=false, orgs=[], busy=false;
+
+  function showErr(t){
+    var e=$("#login-error");
+    if(e){ e.hidden=false; e.textContent=t; }
+  }
+  function render(){
+    root.innerHTML=
+    '<div class="login-wrap"><div class="login-card">'+
+      '<div class="login-brand"><span class="brand-mark lg">✉</span>'+
+      '<div><div class="login-title">Dejoiy&nbsp;<b>Mail</b></div>'+
+      '<div class="login-sub">Sign in to your mailbox</div></div></div>'+
+      (notice?'<div class="login-notice">'+esc(notice)+'</div>':"")+
+      '<div class="login-error" id="login-error" role="alert" hidden></div>'+
+      '<form id="login-form" novalidate>'+
+        '<div class="field"><label for="login-email">Email address</label>'+
+        '<input type="email" id="login-email" autocomplete="username" placeholder="you@yourcompany.com" required></div>'+
+        '<div class="field"><label for="login-pass">Password</label>'+
+        '<input type="password" id="login-pass" autocomplete="current-password" placeholder="••••••••" required></div>'+
+        '<div class="field" id="login-org-field"'+(orgs.length?"":" hidden")+'>'+
+          '<label for="login-org">Organization</label><select id="login-org">'+
+          orgs.map(function(o){return '<option value="'+esc(o.orgSlug)+'">'+esc(o.orgName)+'</option>';}).join("")+
+          '</select><div class="hint">This email belongs to more than one organization.</div></div>'+
+        '<div class="field" id="login-totp-field"'+(needTotp?"":" hidden")+'>'+
+          '<label for="login-totp">Two-factor code</label>'+
+          '<input type="text" id="login-totp" inputmode="numeric" autocomplete="one-time-code" placeholder="6-digit code" maxlength="6"></div>'+
+        '<button type="submit" class="login-btn" id="login-submit">Sign in</button>'+
+      '</form>'+
+      '<button type="button" class="login-demo" id="login-demo-btn">Continue with demo</button>'+
+      '<div class="login-foot">Dejoiy Mail · secure sign-in</div>'+
+    '</div></div>';
+
+    $("#login-demo-btn").onclick=function(){ root.innerHTML=""; };
+    $("#login-form").onsubmit=function(e){
+      e.preventDefault();
+      if(busy) return;
+      var email=$("#login-email").value.trim(), pw=$("#login-pass").value;
+      if(!email||!pw){ showErr("Enter your email and password."); return; }
+      busy=true; $("#login-submit").disabled=true;
+      var extra={};
+      if(needTotp) extra.totpCode=$("#login-totp").value.trim();
+      if(orgs.length) extra.orgSlug=$("#login-org").value;
+      DmailApi.login(email,pw,extra).then(function(data){
+        busy=false; onLoggedIn(data);
+      }).catch(function(err){
+        busy=false; $("#login-submit").disabled=false;
+        if(err&&err.code==="totp_required"){
+          needTotp=true; render();
+          showErr("Two-factor authentication is on — enter the 6-digit code.");
+          var t=$("#login-totp"); if(t) t.focus();
+        }else if(err&&err.code==="org_required"){
+          orgs=(err.details&&err.details.length)?err.details:[];
+          render(); showErr("Choose the organization to sign in to.");
+        }else{
+          showErr((err&&err.message)||"Sign-in failed. Try again.");
+        }
+      });
+    };
+    setTimeout(function(){ var em=$("#login-email"); if(em) em.focus(); },50);
+  }
+  render();
+}
+
+function onLoggedIn(data){
+  var root=$("#login-root"); if(root) root.innerHTML="";
+  S.mode="connected";
+  S.user=(data&&(data.user||data.me))||null;
+  S.org=(data&&data.org)||null;
+  setIdentity(S.user&&S.user.email);
+  loadConnected(function(){ toast("Signed in — mailbox connected"); });
+}
+
+function signOut(){
+  DmailApi.logout().catch(function(){});
+  S.mode="demo"; S.user=null; S.org=null;
+  S.backendByLid={}; S.folderIdByKind={}; S.lidSeq=1;
+  var b=B(); if(b) b.restoreDemo();
+  setIdentity(null);
+  setPill(false);
+  toast("Signed out — demo mailbox restored");
+}
+
+/* ---------------- boot ---------------- */
+function boot(){
+  if(!window.DmailApi) return;         /* api script missing: stay demo */
+  if(!B()) return;                     /* bridge missing: stay demo */
+  installHooks();
+  setPill(false);
+
+  var pill=$("#mode-pill");
+  if(pill){
+    pill.style.cursor="pointer";
+    pill.onclick=function(){
+      if(S.mode==="connected"){
+        var who=(S.user&&S.user.email)||"your mailbox";
+        if(window.confirm("Sign out of "+who+"?")) signOut();
+      }else{
+        openLogin("");
+      }
+    };
+  }
+
+  /* Refresh button: server reload in connected mode, demo behavior otherwise. */
+  var rb=$("#refreshBtn");
+  if(rb){
+    var demoRefresh=rb.onclick;
+    rb.onclick=function(e){
+      if(S.mode==="connected"){ if(e) e.preventDefault(); refreshConnected(true); }
+      else if(typeof demoRefresh==="function") demoRefresh.call(rb,e);
+    };
+  }
+
+  /* Stored session -> try silent sign-in. */
+  if(DmailApi.token){
+    DmailApi.me().then(function(me){
+      S.mode="connected";
+      S.user=(me&&(me.user||me))||null;
+      S.org=(me&&me.org)||null;
+      setIdentity(S.user&&S.user.email);
+      loadConnected(null);
+    }).catch(function(){
+      DmailApi.clearToken();
+    });
+  }
+}
+
+if(document.readyState==="loading"){
+  document.addEventListener("DOMContentLoaded",boot);
+}else{
+  boot();
+}
+})();
+
   </script>
 </body>
 </html>
