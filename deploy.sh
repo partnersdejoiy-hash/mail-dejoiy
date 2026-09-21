@@ -7,7 +7,8 @@ set -euo pipefail
 
 APP_DIR=/opt/dejoiy-mail/backend
 REPO=https://github.com/partnersdejoiy-hash/mail-dejoiy.git
-APP_PORT=4000
+# NOTE: port 4000 is taken by dejoiy-codeagent-api on shared boxes — use 4001.
+APP_PORT=4001
 PG_USER=dejoiy_mail
 PG_DB=dejoiy_mail
 
@@ -62,7 +63,7 @@ MAIL_FROM_DOMAIN=workmail.dejoiy.com
 BILLING_LIVE=false
 EOF
   chmod 600 "$APP_DIR/.env"
-  echo "SAVED_NEW_ENV=1"
+  NEW_ENV_SAVED=1
   echo "SEED_ADMIN_PASSWORD=${SEED_PASS}"
 else
   echo ".env already exists, keeping it"
@@ -71,7 +72,7 @@ fi
 echo "--- 4. migrate + seed ---"
 set -a; . ./.env; set +a
 npm run db:migrate
-if [ "${SAVED_NEW_ENV:-}" = "1" ]; then
+if [ "${NEW_ENV_SAVED:-}" = "1" ]; then
   npm run db:seed || echo "seed skipped/failed (may already be seeded)"
 fi
 
@@ -96,13 +97,15 @@ systemctl daemon-reload
 systemctl enable --now dejoiy-mail-api
 sleep 4
 
-echo "--- 6. health check ---"
-if curl -sf "http://127.0.0.1:${APP_PORT}/health"; then
+echo "--- 6. health check (must be OUR api: response contains \"ok\":true) ---"
+HEALTH_JSON=$(curl -sf "http://127.0.0.1:${APP_PORT}/health" || true)
+if echo "$HEALTH_JSON" | grep -q '"ok":true'; then
+  echo "$HEALTH_JSON"
   echo ""
-  echo "DEPLOY OK — API is running on 127.0.0.1:${APP_PORT}"
+  echo "DEPLOY OK — Dejoiy Mail API is running on 127.0.0.1:${APP_PORT}"
 else
-  echo ""
-  echo "HEALTH CHECK FAILED — showing recent logs:"
+  echo "got: $HEALTH_JSON"
+  echo "HEALTH CHECK FAILED — our API did not answer correctly. Recent logs:"
   journalctl -u dejoiy-mail-api --no-pager -n 25
   exit 1
 fi
