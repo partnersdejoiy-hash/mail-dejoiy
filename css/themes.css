@@ -1,0 +1,74 @@
+/* ============ Dejoiy Mail — themes.css : 24 themes + light/medium/dark ============
+   Every theme sets: --hdr1/--hdr2 (header gradient), --accent (+ink), --scenic (app backdrop).
+   Brightness sets surface/ink tokens. Custom uploaded photo: body.custom-bg overrides #bg. */
+
+body[data-brightness="light"]{
+  --surface:rgba(255,255,255,.88); --surface-2:rgba(244,246,251,.9); --surface-3:rgba(255,255,255,.96);
+  --ink:#1d2637; --ink-2:#4c5871; --ink-3:#8a94ab;
+  --line:rgba(20,30,55,.12); --hover:rgba(20,30,55,.05); --active:rgba(20,30,55,.09);
+}
+body[data-brightness="medium"]{
+  --surface:rgba(52,63,88,.88); --surface-2:rgba(44,54,76,.9); --surface-3:rgba(60,72,100,.92);
+  --ink:#f2f5fb; --ink-2:#c3cbdf; --ink-3:#93a0bb;
+  --line:rgba(255,255,255,.12); --hover:rgba(255,255,255,.06); --active:rgba(255,255,255,.12);
+}
+body[data-brightness="dark"]{
+  --surface:rgba(20,27,42,.86); --surface-2:rgba(28,37,56,.86); --surface-3:rgba(38,50,74,.9);
+  --ink:#eef2fa; --ink-2:#aeb9cf; --ink-3:#7c88a3;
+  --line:rgba(255,255,255,.09); --hover:rgba(255,255,255,.06); --active:rgba(255,255,255,.11);
+}
+
+/* ---------- 13 colour / gradient header themes ---------- */
+[data-theme="aol"]{--hdr1:#2f7cf6;--hdr2:#173a8f;--accent:#2f7cf6;--accent-ink:#fff;
+  --scenic:linear-gradient(135deg,#1d3260,#0c1526);}
+[data-theme="yellow"]{--hdr1:#f7b733;--hdr2:#d98a06;--accent:#e79b0b;--accent-ink:#231603;
+  --scenic:linear-gradient(135deg,#5b4517,#241a08);}
+[data-theme="highcontrast"]{--hdr1:#000;--hdr2:#000;--accent:#ffdf00;--accent-ink:#000;
+  --scenic:linear-gradient(135deg,#111,#000);}
+[data-theme="simple"]{--hdr1:#e8ecf3;--hdr2:#b9c3d6;--accent:#4a6fa5;--accent-ink:#fff;
+  --scenic:linear-gradient(135deg,#dfe5ef,#aeb8cc);}
+[data-theme="aim"]{--hdr1:#ffce00;--hdr2:#e33d2e;--accent:#e33d2e;--accent-ink:#fff;
+  --scenic:linear-gradient(135deg,#5c2c12,#1d0f06);}
+[data-theme="aoldotcom"]{--hdr1:#00a9e0;--hdr2:#005b96;--accent:#00a9e0;--accent-ink:#04283a;
+  --scenic:linear-gradient(135deg,#123f57,#081c29);}
+[data-theme="purple"]{--hdr1:#9b5cf6;--hdr2:#5b21b6;--accent:#8b5cf6;--accent-ink:#fff;
+  --scenic:linear-gradient(135deg,#3d2566,#150d26);}
+[data-theme="sunrise"]{--hdr1:#ffb35c;--hdr2:#f43f5e;--accent:#f97316;--accent-ink:#fff;
+  --scenic:linear-gradient(135deg,#6e2f3d,#241016);}
+[data-theme="aquagreen"]{--hdr1:#34d399;--hdr2:#047857;--accent:#10b981;--accent-ink:#04291d;
+  --scenic:linear-gradient(135deg,#144d3a,#081f17);}
+[data-theme="aquablue"]{--hdr1:#38bdf8;--hdr2:#0369a1;--accent:#0ea5e9;--accent-ink:#062f45;
+  --scenic:linear-gradient(135deg,#164e6b,#0a2230);}
+[data-theme="deeppurple"]{--hdr1:#6d28d9;--hdr2:#2e1065;--accent:#7c3aed;--accent-ink:#fff;
+  --scenic:linear-gradient(135deg,#2c1657,#100a20);}
+[data-theme="bluenight"]{--hdr1:#1e3a8a;--hdr2:#0b1533;--accent:#3b82f6;--accent-ink:#fff;
+  --scenic:linear-gradient(135deg,#0d1b3f,#050914);}
+[data-theme="darkgrey"]{--hdr1:#6b7280;--hdr2:#1f2937;--accent:#9ca3af;--accent-ink:#111827;
+  --scenic:linear-gradient(135deg,#333a45,#14171c);}
+
+/* ---------- 11 scenic themes (gradient art; drop photos in assets/themes/) ---------- */
+[data-theme="nightlandscape"]{--hdr1:#334155;--hdr2:#020617;--accent:#818cf8;--accent-ink:#0b0f24;
+  --scenic:radial-gradient(120% 90% at 80% 0%,#3b4a6b 0%,#141d33 45%,#05080f 100%);}
+[data-theme="roadtrip"]{--hdr1:#b45309;--hdr2:#451a03;--accent:#f59e0b;--accent-ink:#2a1502;
+  --scenic:linear-gradient(180deg,#3a2410 0%,#7c3f16 34%,#c2703d 52%,#2b1608 53%,#120903 100%);}
+[data-theme="sunsetaussie"]{--hdr1:#fb7185;--hdr2:#7c2d12;--accent:#fb923c;--accent-ink:#3a1503;
+  --scenic:linear-gradient(180deg,#2b1a3e 0%,#93386b 38%,#e0653a 62%,#f7b733 78%,#3a1c10 100%);}
+[data-theme="lighthouse"]{--hdr1:#0ea5e9;--hdr2:#0c2f4a;--accent:#38bdf8;--accent-ink:#082f49;
+  --scenic:linear-gradient(180deg,#0b2a44 0%,#155e86 45%,#1b3a52 60%,#0a1622 100%);}
+[data-theme="spring"]{--hdr1:#4ade80;--hdr2:#166534;--accent:#22c55e;--accent-ink:#052e12;
+  --scenic:radial-gradient(100% 80% at 20% 10%,#3f7d4e 0%,#1d4028 55%,#0b1a10 100%);}
+[data-theme="winter"]{--hdr1:#bae6fd;--hdr2:#475569;--accent:#7dd3fc;--accent-ink:#0c2c40;
+  --scenic:linear-gradient(180deg,#8fa8bf 0%,#d7e3ef 45%,#f4f8fb 60%,#9db4c8 100%);}
+[data-theme="summer"]{--hdr1:#fde047;--hdr2:#15803d;--accent:#eab308;--accent-ink:#3a2a02;
+  --scenic:linear-gradient(180deg,#2f9e5f 0%,#a3d65c 55%,#f2e394 78%,#2c7a4b 100%);}
+[data-theme="galaxy"]{--hdr1:#7c3aed;--hdr2:#0b0620;--accent:#a78bfa;--accent-ink:#1c1040;
+  --scenic:radial-gradient(90% 70% at 70% 20%,#4c1d95 0%,#1e1b4b 40%,#050310 100%);}
+[data-theme="fall"]{--hdr1:#f97316;--hdr2:#7c2d12;--accent:#fb923c;--accent-ink:#431407;
+  --scenic:linear-gradient(180deg,#7c2d12 0%,#c2410c 40%,#f59e0b 65%,#451a03 100%);}
+[data-theme="western"]{--hdr1:#d97706;--hdr2:#451a03;--accent:#fbbf24;--accent-ink:#451a03;
+  --scenic:linear-gradient(180deg,#a16207 0%,#eab308 35%,#92400e 60%,#290e03 100%);}
+[data-theme="sunset"]{--hdr1:#f43f5e;--hdr2:#4c1d95;--accent:#fb7185;--accent-ink:#4c0a18;
+  --scenic:linear-gradient(180deg,#312e81 0%,#9d3c6e 45%,#f97316 75%,#2b1030 100%);}
+
+/* custom uploaded photo */
+#bg.custom{background:var(--custom-bg) center/cover no-repeat}
