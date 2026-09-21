@@ -1,0 +1,108 @@
+;SOA
+
+$ORIGIN dejoiy.com.
+
+@   1800   IN     SOA     ns11.zns-53.com.   hostmaster.zohodns.com.   (
+                    2026020538 ;serial
+                    43200 ;refresh
+                    3600 ;retry
+                    1209600 ;expiry
+                    180 ;minimum
+
+                    )
+
+;Root Records
+;NS Records
+@  86400   IN  NS ns41.zns-53.net.
+@  86400   IN  NS ns31.zns-53.com.
+@  86400   IN  NS ns21.zns-53.net.
+@  86400   IN  NS ns11.zns-53.com.
+
+;A Records
+@  1800   IN  A  194.238.18.125
+
+;MX Records
+@  1800   IN  MX 10 mx.zoho.in.
+
+@  1800   IN  MX 50 mx3.zoho.in.
+
+@  1800   IN  MX 20 mx2.zoho.in.
+
+
+;TXT Records
+@  1800   IN  TXT "v=spf1 include:one.zoho.in ip4:178.104.228.157 -all"
+@  1800   IN  TXT "google-site-verification=hh60RtYPuESWicYwuS6yiDdbwYgUIKuDlQ5Ewx45Q_w"
+@  1800   IN  TXT "google-site-verification=IjXQET1A2iWSGM2kYCZL10IQrAFlJcF5kglPDaCpZkQ"
+@  1800   IN  TXT "resend-domain-verification=7962895a5fb97bb0e54209d2775c06c8"
+@  1800   IN  TXT "v=spf1 include:amazonses.com ~all"
+
+
+
+
+
+
+
+
+;Other Records
+;A Records
+joi.dejoiy.com.  1800   IN  A  178.104.228.157
+feedback.dejoiy.com.  1800   IN  A  178.104.228.157
+postal.dejoiy.com.  1800   IN  A  178.104.228.157
+rp.dejoiy.com.  1800   IN  A  178.104.228.157
+api-mail.dejoiy.com.  1800   IN  A  178.104.228.157
+track.dejoiy.com.  1800   IN  A  178.104.228.157
+desk.dejoiy.com.  1800   IN  A  178.104.228.157
+console.dejoiy.com.  1800   IN  A  178.104.228.157
+blog.dejoiy.com.  1800   IN  A  195.35.62.152
+www.dejoiy.com.  1800   IN  A  194.238.18.125
+auth.dejoiy.com.  1800   IN  A  178.104.228.157
+joitele.dejoiy.com.  1800   IN  A  178.104.228.157
+hub.dejoiy.com.  1800   IN  A  178.104.228.157
+app.shine.dejoiy.com.  1800   IN  A  178.104.228.157
+sellerhub.dejoiy.com.  1800   IN  A  194.238.18.125
+api.shine.dejoiy.com.  1800   IN  A  178.104.228.157
+marketplace.dejoiy.com.  1800   IN  A  92.249.46.129
+chat.dejoiy.com.  1800   IN  A  217.216.79.163
+docs.dejoiy.com.  1800   IN  A  217.216.79.163
+drive.dejoiy.com.  1800   IN  A  217.216.79.163
+daos.dejoiy.com.  1800   IN  A  178.104.228.157
+meet.dejoiy.com.  1800   IN  A  178.104.228.157
+office.dejoiy.com.  1800   IN  A  178.104.228.157
+
+;AAAA Records
+office.dejoiy.com.  1800   IN  AAAA  2a01:4f8:c0c:5aba::1
+
+;CNAME Records
+ftp.dejoiy.com.  1800   IN  CNAME  dejoiy.com.
+kaali.dejoiy.com.  1800   IN  CNAME  9c2762be4260715e.vercel-dns-017.com.
+bounce-zem.dejoiy.com.  1800   IN  CNAME  cluster89.zeptomail.in.
+vnwladl6nfye.dejoiy.com.  1800   IN  CNAME  gv-3ntcxmpiuvf7cj.dv.googlehosted.com.
+autodiscover.corp.dejoiy.com.  1800   IN  CNAME  mail.dejoiy.com.
+business.dejoiy.com.  1800   IN  CNAME  98ab329ed7ffa79e.vercel-dns-017.com.
+serveme.dejoiy.com.  1800   IN  CNAME  cc05bb6a93d82814.vercel-dns-017.com.
+mail.dejoiy.com.  1800   IN  CNAME  mail.cs.zohohost.in.
+joi-ai.dejoiy.com.  1800   IN  CNAME  65b0892338aadc3e.vercel-dns-017.com.
+internships.dejoiy.com.  1800   IN  CNAME  cname.vercel-dns.com.
+workforce.dejoiy.com.  1800   IN  CNAME  8cefb1cd0e18d80f.vercel-dns-017.com.
+
+;MX Records
+rp.dejoiy.com.  1800   IN  MX 10 postal.dejoiy.com.
+send.dejoiy.com.  1800   IN  MX 10 feedback-smtp.ap-northeast-1.amazonses.com.
+corp.dejoiy.com.  1800   IN  MX 10 mail.dejoiy.com.
+
+;DS Records
+@.dejoiy.com.  300   IN  DS 47235 13 2 dc81fc8e1a05a5956a65f5af69cfaa3003fe488ec31b9e2dc743c3be6c5542be
+@.dejoiy.com.  300   IN  DS 47235 13 1 6ff3db63a0ad8370c2c3fc75c7d0879e84c91156
+
+;TXT Records
+_vercel.dejoiy.com.  1800   IN  TXT "vc-domain-verify=internships.dejoiy.com,f236dd26fd289ef2ded5"
+default._bimi.dejoiy.com.  1800   IN  TXT "v=BIMI1; l=https://api-mail.dejoiy.com/static/bimi/dejoiy-bimi.svg;"
+rp.dejoiy.com.  1800   IN  TXT "v=spf1 ip4:178.104.228.157 -all"
+_dmarc.dejoiy.com.  1800   IN  TXT "v=DMARC1; p=none;"
+send.dejoiy.com.  1800   IN  TXT "v=spf1 include:amazonses.com ~all"
+b4960fdc-2e70-11f1-8476-056c747b400a._domainkey.corp.dejoiy.com.  1800   IN  TXT "v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA05vG4CbNauTIUUpmPTFKyyp8gWAABVRniXwogCg02u3PB8kXYZ/mjif7u0G9oGCUUM7BCgqLL6RCd9C3NWaGOonOQonoDHqt74OlT7KNGAg0+/spDWfcoLz1SxbcILXw9+shirNvNwoafhPQw/mTFRsxfXK9JIO9JPv2FMyE8lc7UZSZI1zocqt8E7p9HzHqJ" "Hsl28E80OoFJl2jWzZ+TKVP+2n4FlYmnJjEGH+m/tDR2UmQ4DXNmELlESEQ99IAzS3Z4xyLpcAFzeBtuQdtoTIOmzS+qjGjeQK+JShE5Do0h2jsXC87ap9G2xgG5jt630UnZD4ER81xgqMrpvkNmwIDAQAB"
+corp.dejoiy.com.  1800   IN  TXT "v=spf1 mx ip4:217.216.79.163 ~all"
+794a2958-2917-11f1-b699-e53f57eaf134._domainkey.workmail.dejoiy.com.  1800   IN  TXT "v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsNokU38O/rR4egtXGAe4A9LYClbU1JbAciCqeEdIVC65804C4rSElZy/FmrR9dXGUKoJsAg+Iqk1iRS/h9A/Wa9RRW+IySADu5vKI5lRmMI8cDIbhKK9JOjcR3/VR3QZ8yNns6Bkq8WmWouCUmyuAubgA9JUW8Lza0aU29ToRNfNzxeoXatFlyu7h1YO0ezY9" "H/nfZNAHJygIkEPC4xqHmFfjlwPkp/I5fozEwemdzaqHwg5n6kSZSRuYsonWjHSRBsfSZWNKHZTyJUTteMqX9UWc0SyEHFloNQhp7K7vqmyJVK3e+KRnnp6R5QZ2Kg7dbZflTDHYBfBIhWgx2P3sQIDAQAB"
+2318239._domainkey.dejoiy.com.  1800   IN  TXT "k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCh3A22ZXHSAO4WlPDIzaJxiB5DrwEwfuHux81gYLaBmlHZ+tIrWBPwjx+gnXx2xJ2yZMvjXCcopjMLeAFAzpS/uYQIH5/FNzkbIhKkHpQWZnp1KllzHIGZBXIQNFW8lhtzblyWbm1SQfWw1sPyzbbYITxkx51pYFQangQ6s0H4VQIDAQAB"
+zc60064974250._domainkey.dejoiy.com.  1800   IN  TXT "k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAr/Az/psrgsrE41/ryOJEpWeDIx43FhSSS5ScCayezujmVKoepVJ3wlE9PF50xiuvh6mGhZSd5EOMffPL9hZ/xdPcggNgmuUYkx4IijS+CSpspc7xJCqkDyrIJW1OWkI+HmxcZB5l7YiCoNQSrj64PmyTAmGH8g1jYLOqpYQNntRtL8RnNu5Ha2hU9O/L5LPXk3U+38OkGO" "BI3T1GhOlHaaAYnIwdGTQ/8PT1mhudXQDn669GkfvkS/j3Sj3xazHXA0ASwzEwjcX7GVmwyNa8K+YC7fKuLvtrWKOGL0ExiGWrlMc/vjSAtikA3DXdzkqhojQDsRX1mTyQwdwM8HpW/QIDAQAB"
+1533304067562._domainkey.dejoiy.com.  1800   IN  TXT "k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC2WziRpyeJP7bdYFhFv6Z7945a4zJ12k2GVvhltC6vWzMCY+Bi99VSun6AKeISXLOSJW2f65Ss7OUR2wu9pJPXNw6aAgQhOBj58hdu0HiXp9DCXP8kbu3+jJQagM3ssuFokK/9dVNYpuOd2vnHBVBo9cpd05oV8bLwTN3ZYV9I6wIDAQAB"
