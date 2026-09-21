@@ -1,4 +1,4 @@
-/* ============ Dejoiy Mail — filters.js : Gmail-style filter engine ============
+/* ============ Dejoiy Mail — filters.js : Dejoiy filter engine ============
    A filter has criteria (from/to/subject/words/size/date/attachment) and actions.
    Filters run on demand ("Run filters now") over the inbox, and on newly arrived mail. */
 (function(){
