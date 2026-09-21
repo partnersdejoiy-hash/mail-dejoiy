@@ -4,12 +4,12 @@
 
 const THEMES = [
   // 13 colour / gradient header themes
-  {id:"aol",        name:"AOL",            kind:"color"},
+  {id:"aol",        name:"Cobalt",         kind:"color"},
   {id:"yellow",     name:"Yellow",         kind:"color"},
   {id:"highcontrast",name:"High Contrast",kind:"color"},
   {id:"simple",     name:"Simple",         kind:"color"},
-  {id:"aim",        name:"AIM",            kind:"color"},
-  {id:"aoldotcom",  name:"AOL.com",        kind:"color"},
+  {id:"aim",        name:"Ember",          kind:"color"},
+  {id:"aoldotcom",  name:"Skyline",        kind:"color"},
   {id:"purple",     name:"Purple",         kind:"color"},
   {id:"sunrise",    name:"Sunrise",        kind:"color"},
   {id:"aquagreen",  name:"Aqua Green",     kind:"color"},
