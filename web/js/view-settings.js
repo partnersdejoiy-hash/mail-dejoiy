@@ -55,6 +55,10 @@ function renderThemes(body){
     <div class="btn-row"><label class="btn sm" style="cursor:pointer">Upload background<input type="file" id="st-upload" accept="image/*" class="sr"></label>
     ${p.customBg?`<button class="btn sm ghost" id="st-clear">Remove photo</button>`:""}
     ${p.customBg?`<span class="chip">✓ custom photo active</span>`:""}</div>
+    <div class="theme-sec">Brand logo</div>
+    <div class="btn-row"><label class="btn sm" style="cursor:pointer">Upload logo<input type="file" id="st-logo" accept="image/*" class="sr"></label>
+    ${p.customLogo?`<button class="btn sm ghost" id="st-logo-clear">Remove logo</button>`:""}
+    ${p.customLogo?`<img src="${p.customLogo}" alt="logo preview" style="height:28px;border-radius:6px;border:1px solid var(--line)">`:""}</div>
     <p class="hint" style="margin-top:10px;font-size:12px;color:var(--ink-3)">Themes apply instantly — no save button needed. Your choice is remembered on this device.</p></div>`;
   body.querySelectorAll("[data-b]").forEach(b=> b.addEventListener("click", ()=>{ Themes.setBrightness(b.dataset.b); renderThemes(body); }));
   body.querySelectorAll("[data-pick]").forEach(c2=> c2.addEventListener("click", ()=>{ Themes.set(c2.dataset.pick); renderThemes(body); }));
@@ -64,6 +68,12 @@ function renderThemes(body){
   });
   const clr = body.querySelector("#st-clear");
   if(clr) clr.addEventListener("click", ()=>{ Themes.clearCustom(); renderThemes(body); });
+  body.querySelector("#st-logo").addEventListener("change", ev=>{
+    const f = ev.target.files[0]; if(!f) return;
+    const r = new FileReader(); r.onload = ()=>{ p.customLogo=r.result; Store.save(); App.applyLogo(); renderThemes(body); }; r.readAsDataURL(f);
+  });
+  const clrL = body.querySelector("#st-logo-clear");
+  if(clrL) clrL.addEventListener("click", ()=>{ p.customLogo=""; Store.save(); App.applyLogo(); renderThemes(body); });
 }
 function themeSwatch(id){
   const m = {aol:"#2f7cf6",yellow:"#f7b733",highcontrast:"#111",simple:"#c9d2e2",aim:"#e33d2e",aoldotcom:"#00a9e0",
