@@ -21,7 +21,7 @@ function freshState(){
     blocked: ["winner@prize-lotto.xyz"],
     allowed: [],
     vacation: { on:false, subject:"Out of office", message:"Thanks for writing — I'm away and will reply when I'm back." },
-    prefs: { theme:"aol", brightness:"dark", customBg:"", sounds:true },
+    prefs: { theme:"aol", brightness:"dark", customBg:"", customLogo:"", sounds:true },
     admin: {
       org: "DEJOIY INDIA PRIVATE LIMITED",
       users: [
