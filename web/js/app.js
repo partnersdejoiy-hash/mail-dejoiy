@@ -38,6 +38,32 @@ const App = {
       else Views.today(el);
     }catch(err){ console.error(err); el.innerHTML = `<div class="empty-note">Something went wrong rendering this view. (${esc(err.message)})</div>`; }
     this.refreshNav();
+    this.applyTilt();
+  },
+
+  /* ---------- 3D tilt (v0.2) ---------- */
+  tiltInit(){
+    let cur=null;
+    document.addEventListener("pointermove", e=>{
+      const t = (e.target && e.target.closest) ? e.target.closest(".tilt-3d") : null;
+      if(t!==cur){ if(cur) cur.style.transform=""; cur=t; }
+      if(cur){
+        const r=cur.getBoundingClientRect();
+        const x=(e.clientX-r.left)/r.width-.5, y=(e.clientY-r.top)/r.height-.5;
+        cur.style.transform=`perspective(900px) rotateX(${(-y*7).toFixed(2)}deg) rotateY(${(x*9).toFixed(2)}deg) translateZ(6px)`;
+      }
+    }, {passive:true});
+    document.addEventListener("pointerout", ()=>{ if(cur){ cur.style.transform=""; cur=null; } }, true);
+  },
+  applyTilt(){
+    try{ viewEl().querySelectorAll(".card").forEach(c=>c.classList.add("tilt-3d")); }catch(_){}
+  },
+  /* brand logo uploaded from settings (v0.2) */
+  applyLogo(){
+    const mark=document.querySelector(".brand-mark"); if(!mark) return;
+    const logo=Store.state.prefs.customLogo;
+    if(logo){ if(!mark.dataset.logoApplied){ mark.dataset.logoApplied="1"; mark.innerHTML=`<img class="brand-logo" src="${logo}" alt="Dejoiy Mail logo">`; } }
+    else if(mark.dataset.logoApplied){ delete mark.dataset.logoApplied; mark.textContent="✉"; }
   },
 
   renderSearch(el, q){
@@ -257,6 +283,8 @@ const App = {
     });
     window.addEventListener("hashchange", ()=> this.parse());
     this.bindKeys();
+    this.tiltInit();
+    this.applyLogo();
     this.parse();
   }
 };
