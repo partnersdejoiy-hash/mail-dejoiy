@@ -39,41 +39,47 @@ Views.compose = function(el, arg){
   </div>`;
 
   const $ = id => el.querySelector("#"+id);
-  el.querySelector("#c-ccbtn").addEventListener("click", ()=>{
+  el.querySelector("#c-ccbtn").addEventListener("click", async ()=>{
     const r = el.querySelector("#c-ccrow"); r.style.display = r.style.display==="none"?"flex":"none";
   });
-  el.querySelectorAll("[data-fmt]").forEach(b=> b.addEventListener("click", ()=>{
+  el.querySelectorAll("[data-fmt]").forEach(b=> b.addEventListener("click", async ()=>{
     const c = b.dataset.fmt;
     if(c==="createLink"){ const u = prompt("Link URL:", "https://"); if(u) document.execCommand("createLink", false, u); }
     else document.execCommand(c, false, null);
     $("compose-body").focus();
   }));
-  el.querySelector("#c-files").addEventListener("change", ev=>{
+  el.querySelector("#c-files").addEventListener("change", async ev=>{
     [...ev.target.files].forEach(f=> attachments.push({name:f.name, size:fmtSize(f.size)}));
     renderAtt(); ev.target.value="";
   });
   function renderAtt(){
     el.querySelector("#c-attachlist").innerHTML = attachments.map((a,i)=>
       `<span class="attach-chip">📎 ${esc(a.name)} <span style="color:var(--ink-3)">${esc(a.size)}</span><button data-rmatt="${i}" aria-label="Remove">×</button></span>`).join("");
-    el.querySelectorAll("[data-rmatt]").forEach(x=> x.addEventListener("click", ()=>{ attachments.splice(+x.dataset.rmatt,1); renderAtt(); }));
+    el.querySelectorAll("[data-rmatt]").forEach(x=> x.addEventListener("click", async ()=>{ attachments.splice(+x.dataset.rmatt,1); renderAtt(); }));
   }
   const collect = ()=>({ to:$("c-to").value, cc:$("c-cc").value, subject:$("c-subj").value,
     body:$("compose-body").innerHTML, attachments:[...attachments] });
 
-  $("c-send").addEventListener("click", ()=>{
+  $("c-send").addEventListener("click", async ()=>{
     const d = collect();
     if(!d.to.trim()){ App.toast("Add at least one recipient first."); $("c-to").focus(); return; }
-    Mail.send(d);
-    if(draftId) Mail.deleteForever(draftId);
+    const button=$("c-send"); button.disabled=true;
+    try { await Mail.send(d); }
+    catch(error){ App.toast(error.message); button.disabled=false; return; }
+    if(draftId){ try{ await Mail.deleteForever(draftId); }catch(error){ App.toast("Message accepted, but draft cleanup failed. Refresh before retrying."); } }
     App.go("mail:sent"); App.toast("Message sent ✓"); App.refreshNav();
   });
-  $("c-savedraft").addEventListener("click", ()=>{
-    const em = Mail.saveDraft(Object.assign(collect(), {id:draftId})); draftId = em.id;
+  $("c-savedraft").addEventListener("click", async ()=>{
+    const button=$("c-savedraft"); button.disabled=true;
+    let em;
+    try{ em=await Mail.saveDraft(Object.assign(collect(), {id:draftId})); }
+    catch(error){ App.toast(error.message); button.disabled=false; return; }
+    button.disabled=false; draftId=em.id;
     $("c-status").textContent = "Draft saved " + new Date().toLocaleTimeString();
     App.toast("Draft saved."); App.refreshNav();
   });
-  $("c-discard").addEventListener("click", ()=>{
-    App.confirm("Discard this message?", ()=>{ if(draftId) Mail.deleteForever(draftId); App.go("mail:inbox"); });
+  $("c-discard").addEventListener("click", async ()=>{
+    App.confirm("Discard this message?", async ()=>{ if(draftId) await Mail.deleteForever(draftId); App.go("mail:inbox"); });
   });
   setTimeout(()=> $("c-to").focus(), 60);
 };

@@ -50,3 +50,11 @@ No build, no npm, no bundler. Just HTML + CSS + vanilla JS.
 The hard part of a mail product is deliverability (SPF/DKIM/DMARC, bounces, IP reputation)
 and multi-tenancy — not the UI. See `docs/ROADMAP.md` for the backend plan
 (WildDuck/Haraka/ZoneMTA + Rspamd, per the technical plan) and how `web/` plugs into it.
+
+## Zimbra integration (opt-in)
+
+A separate Python SOAP adapter can run this frontend against existing Zimbra mailboxes.
+See [docs/ZIMBRA.md](docs/ZIMBRA.md) for the verified 10.1.21 FOSS source/build recipe,
+run instructions, supported operations and current limits.
+The existing `backend/` Node/Postgres MVP remains separate and is not used by this adapter.
+Static hosting continues in demo mode. Live Zimbra acceptance testing is still required.
