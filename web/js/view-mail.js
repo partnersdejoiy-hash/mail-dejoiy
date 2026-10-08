@@ -44,7 +44,7 @@ Views.mail = function(el, folder){
   </div>`;
 
   /* ---- folder nav ---- */
-  el.querySelectorAll("[data-folder]").forEach(b=> b.addEventListener("click", ()=>{
+  el.querySelectorAll("[data-folder]").forEach(b=> b.addEventListener("click", async ()=>{
     ui.folder = b.dataset.folder; ui.sel.clear(); ui.activeTab = null;
     document.body.classList.remove("reader-open"); Views.mail(el, ui.folder); App.refreshNav();
   }));
@@ -70,17 +70,17 @@ Views.mail = function(el, folder){
     bindRows();
   };
   const bindRows = ()=>{
-    listEl.querySelectorAll("[data-check]").forEach(cb=> cb.addEventListener("click", ev=>{
+    listEl.querySelectorAll("[data-check]").forEach(cb=> cb.addEventListener("click", async ev=>{
       ev.stopPropagation();
       cb.checked ? ui.sel.add(cb.dataset.check) : ui.sel.delete(cb.dataset.check);
     }));
-    listEl.querySelectorAll("[data-star]").forEach(st=> st.addEventListener("click", ev=>{
-      ev.stopPropagation(); Mail.toggleStar(st.dataset.star); renderList(); App.refreshNav();
+    listEl.querySelectorAll("[data-star]").forEach(st=> st.addEventListener("click", async ev=>{
+      ev.stopPropagation(); await Mail.toggleStar(st.dataset.star); renderList(); App.refreshNav();
     }));
     listEl.querySelectorAll(".msg-row").forEach(row=> {
       const open = ()=> openTab(row.dataset.id);
-      row.addEventListener("click", ev=>{ if(ev.target.closest("input,button")) return; open(); });
-      row.addEventListener("keydown", ev=>{ if(ev.key==="Enter"){open();} });
+      row.addEventListener("click", async ev=>{ if(ev.target.closest("input,button")) return; open(); });
+      row.addEventListener("keydown", async ev=>{ if(ev.key==="Enter"){open();} });
     });
   };
   renderList();
@@ -88,31 +88,31 @@ Views.mail = function(el, folder){
   /* ---- toolbar ---- */
   const selIds = ()=> [...ui.sel];
   const needSel = ()=>{ if(!selIds().length){ App.toast("Select at least one message first."); return false; } return true; };
-  el.querySelector("#sel-all").addEventListener("change", ev=>{
+  el.querySelector("#sel-all").addEventListener("change", async ev=>{
     ui.sel.clear();
     if(ev.target.checked) Mail.list(ui.folder).forEach(e=>ui.sel.add(e.id));
     renderList();
   });
-  el.querySelector("#tb-refresh").addEventListener("click", ()=>{ const em = Mail.checkMail(); renderList(); App.refreshNav();
+  el.querySelector("#tb-refresh").addEventListener("click", async ()=>{ const em = await Mail.checkMail(); renderList(); App.refreshNav();
     App.toast(em.folder==="inbox" ? "New mail: "+em.subject : "New mail filtered."); });
-  el.querySelector("#tb-archive").addEventListener("click", ()=>{ if(!needSel())return; Mail.archive(selIds()); ui.sel.clear(); renderList(); App.refreshNav(); App.toast("Archived."); });
-  el.querySelector("#tb-spam").addEventListener("click", ()=>{ if(!needSel())return; Mail.spam(selIds()); ui.sel.clear(); renderList(); App.refreshNav(); App.toast("Reported as spam."); });
-  el.querySelector("#tb-trash").addEventListener("click", ()=>{ if(!needSel())return; Mail.trash(selIds()); ui.sel.clear(); renderList(); App.refreshNav(); App.toast("Moved to Trash."); });
-  el.querySelector("#tb-read").addEventListener("click", ()=>{ if(!needSel())return;
+  el.querySelector("#tb-archive").addEventListener("click", async ()=>{ if(!needSel())return; await Mail.archive(selIds()); ui.sel.clear(); renderList(); App.refreshNav(); App.toast("Archived."); });
+  el.querySelector("#tb-spam").addEventListener("click", async ()=>{ if(!needSel())return; await Mail.spam(selIds()); ui.sel.clear(); renderList(); App.refreshNav(); App.toast("Reported as spam."); });
+  el.querySelector("#tb-trash").addEventListener("click", async ()=>{ if(!needSel())return; await Mail.trash(selIds()); ui.sel.clear(); renderList(); App.refreshNav(); App.toast("Moved to Trash."); });
+  el.querySelector("#tb-read").addEventListener("click", async ()=>{ if(!needSel())return;
     const anyUnread = selIds().some(id=>!Mail.get(id).read);
-    selIds().forEach(id=>Mail.setRead(id, anyUnread)); ui.sel.clear(); renderList(); App.refreshNav(); });
-  el.querySelector("#tb-label").addEventListener("click", ev=>{
+    await Promise.all(selIds().map(id=>Mail.setRead(id, anyUnread))); ui.sel.clear(); renderList(); App.refreshNav(); });
+  el.querySelector("#tb-label").addEventListener("click", async ev=>{
     if(!needSel())return;
-    App.menu(ev.currentTarget, ["work","personal","finance","design"].map(l=>({label:"🏷️ "+l, fn:()=>{
-      Mail.addLabel(selIds(), l); ui.sel.clear(); renderList(); App.toast("Labelled "+l+"."); }})));
+    App.menu(ev.currentTarget, ["work","personal","finance","design"].map(l=>({label:"🏷️ "+l, fn:async ()=>{
+      await Mail.addLabel(selIds(), l); ui.sel.clear(); renderList(); App.toast("Labelled "+l+"."); }})));
   });
 
   /* ---- tabs + reader ---- */
   const tabsEl = el.querySelector("#msg-tabs"), readerEl = el.querySelector("#reader"), barEl = el.querySelector("#reader-bar");
-  function openTab(id){
+  async function openTab(id){
     if(!ui.tabs.includes(id)) ui.tabs.push(id);
     ui.activeTab = id;
-    Mail.setRead(id, true);
+    await Mail.setRead(id, true);
     renderTabs(); renderReader(); renderList(); App.refreshNav();
     document.body.classList.add("reader-open");
   }
@@ -127,11 +127,11 @@ Views.mail = function(el, folder){
       return `<div class="msg-tab ${ui.activeTab===id?"active":""}" data-tab="${id}">
         <span style="overflow:hidden;text-overflow:ellipsis">${esc(e.subject)}</span>
         <button class="t-x" data-xtab="${id}" aria-label="Close tab">×</button></div>`; }).join("");
-    tabsEl.querySelectorAll("[data-tab]").forEach(t=> t.addEventListener("click", ev=>{
+    tabsEl.querySelectorAll("[data-tab]").forEach(t=> t.addEventListener("click", async ev=>{
       if(ev.target.closest("[data-xtab]")) return;
-      ui.activeTab = t.dataset.tab; Mail.setRead(ui.activeTab, true); renderTabs(); renderReader(); renderList();
+      ui.activeTab = t.dataset.tab; await Mail.setRead(ui.activeTab, true); renderTabs(); renderReader(); renderList();
     }));
-    tabsEl.querySelectorAll("[data-xtab]").forEach(x=> x.addEventListener("click", ev=>{ ev.stopPropagation(); closeTab(x.dataset.xtab); }));
+    tabsEl.querySelectorAll("[data-xtab]").forEach(x=> x.addEventListener("click", async ev=>{ ev.stopPropagation(); closeTab(x.dataset.xtab); }));
   }
   function renderReader(){
     const id = ui.activeTab, e = id && Mail.get(id);
@@ -163,11 +163,11 @@ Views.mail = function(el, folder){
     b("r-reply").addEventListener("click", ()=> App.go("compose:reply:"+id));
     b("r-replyall").addEventListener("click", ()=> App.go("compose:replyall:"+id));
     b("r-fwd").addEventListener("click", ()=> App.go("compose:forward:"+id));
-    b("r-archive").addEventListener("click", ()=>{ Mail.archive(id); closeTab(id); renderList(); App.refreshNav(); App.toast("Archived."); });
-    b("r-spam").addEventListener("click", ()=>{ Mail.spam(id); closeTab(id); renderList(); App.refreshNav(); App.toast("Reported as spam."); });
-    b("r-trash").addEventListener("click", ()=>{ Mail.trash(id); closeTab(id); renderList(); App.refreshNav(); App.toast("Moved to Trash."); });
-    b("r-star").addEventListener("click", ()=>{ Mail.toggleStar(id); renderReader(); renderList(); App.refreshNav(); });
-    b("r-unread").addEventListener("click", ()=>{ Mail.setRead(id, false); closeTab(id); renderList(); App.refreshNav(); });
+    b("r-archive").addEventListener("click", async ()=>{ await Mail.archive(id); closeTab(id); renderList(); App.refreshNav(); App.toast("Archived."); });
+    b("r-spam").addEventListener("click", async ()=>{ await Mail.spam(id); closeTab(id); renderList(); App.refreshNav(); App.toast("Reported as spam."); });
+    b("r-trash").addEventListener("click", async ()=>{ await Mail.trash(id); closeTab(id); renderList(); App.refreshNav(); App.toast("Moved to Trash."); });
+    b("r-star").addEventListener("click", async ()=>{ await Mail.toggleStar(id); renderReader(); renderList(); App.refreshNav(); });
+    b("r-unread").addEventListener("click", async ()=>{ await Mail.setRead(id, false); closeTab(id); renderList(); App.refreshNav(); });
     b("r-print").addEventListener("click", ()=> window.print());
   }
   renderTabs(); renderReader();

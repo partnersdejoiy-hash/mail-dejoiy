@@ -44,7 +44,7 @@ const App = {
   /* ---------- 3D tilt (v0.2) ---------- */
   tiltInit(){
     let cur=null;
-    document.addEventListener("pointermove", e=>{
+    document.addEventListener("pointermove", async e=>{
       const t = (e.target && e.target.closest) ? e.target.closest(".tilt-3d") : null;
       if(t!==cur){ if(cur) cur.style.transform=""; cur=t; }
       if(cur){
@@ -53,7 +53,7 @@ const App = {
         cur.style.transform=`perspective(900px) rotateX(${(-y*7).toFixed(2)}deg) rotateY(${(x*9).toFixed(2)}deg) translateZ(6px)`;
       }
     }, {passive:true});
-    document.addEventListener("pointerout", ()=>{ if(cur){ cur.style.transform=""; cur=null; } }, true);
+    document.addEventListener("pointerout", async ()=>{ if(cur){ cur.style.transform=""; cur=null; } }, true);
   },
   applyTilt(){
     try{ viewEl().querySelectorAll(".card").forEach(c=>c.classList.add("tilt-3d")); }catch(_){}
@@ -74,10 +74,10 @@ const App = {
           <div class="m-main"><div class="m-top"><span class="m-from">${esc(e.from.name)}</span><span class="m-date">${fmtDate(e.date)}</span></div>
           <div class="m-subj">${esc(e.subject)}</div><div class="m-snip">${esc(Mail.folderName(e.folder))}</div></div></div>`).join("")+`</div>`
       : `<div class="empty-note">No messages matched “${esc(q)}”.</div>`}`;
-    el.querySelectorAll("[data-sr]").forEach(r2=> r2.addEventListener("click", ()=>{
+    el.querySelectorAll("[data-sr]").forEach(r2=> r2.addEventListener("click", async ()=>{
       const e = Mail.get(r2.dataset.sr);
       this.ui.folder = e.folder; this.go("mail:"+e.folder);
-      setTimeout(()=>{ const ui=this.ui; if(ui._mail) ui._mail.openTab(e.id); }, 80);
+      setTimeout(async ()=>{ const ui=this.ui; if(ui._mail) ui._mail.openTab(e.id); }, 80);
     }));
   },
 
@@ -94,17 +94,17 @@ const App = {
       const badge = r==="mail:inbox" && c.unread ? `<span class="n-count">${c.unread}</span>` : "";
       return `<button class="nav-item ${active?"active":""}" data-nav="${r}"><span class="n-ico">${ico}</span>${label}${badge}</button>`;
     }).join("");
-    nav.querySelectorAll("[data-nav]").forEach(b=> b.addEventListener("click", ()=>{
+    nav.querySelectorAll("[data-nav]").forEach(b=> b.addEventListener("click", async ()=>{
       this.ui.search=""; document.getElementById("global-search").value="";
       this.go(b.dataset.nav); document.body.classList.remove("nav-open");
     }));
     const bn = document.getElementById("bottomnav");
-    const items = [["today","🏠","Today"],["mail:inbox","📥","Mail"],["compose:new","✎","Compose"],["calendar","📅","Cal"],["chat","💬","Chat"]];
+    const items = Live.enabled ? [["mail:inbox","📥","Mail"],["compose:new","✎","Compose"],["settings","⚙️","Settings"]] : [["today","🏠","Today"],["mail:inbox","📥","Mail"],["compose:new","✎","Compose"],["calendar","📅","Cal"],["chat","💬","Chat"]];
     bn.innerHTML = items.map(([r,ico,label])=>{
       const active = this.route===(r.includes(":")?r.split(":")[0]:r);
       return `<button data-nav="${r}" class="${active?"active":""}"><span class="b-ico">${ico}</span>${label}</button>`;
     }).join("");
-    bn.querySelectorAll("[data-nav]").forEach(b=> b.addEventListener("click", ()=>{ this.go(b.dataset.nav); }));
+    bn.querySelectorAll("[data-nav]").forEach(b=> b.addEventListener("click", async ()=>{ this.go(b.dataset.nav); }));
     const st = Mail.storage();
     document.getElementById("storage-fill").style.width = st.pct+"%";
     document.getElementById("storage-label").textContent = `${st.used} MB of ${(st.total/1024).toFixed(0)} GB used`;
@@ -119,12 +119,12 @@ const App = {
       <div class="dlg-body">${body}</div>
       ${actions&&actions.length?`<div class="dlg-foot">${actions.map((a,i)=>`<button class="btn ${a.primary?"primary":""}" data-act="${i}">${esc(a.label)}</button>`).join("")}</div>`:""}
     </div></div>`;
-    const close = ()=>{ root.innerHTML=""; document.removeEventListener("keydown", escHandler); };
-    const escHandler = e=>{ if(e.key==="Escape") close(); };
+    const close = async ()=>{ root.innerHTML=""; document.removeEventListener("keydown", escHandler); };
+    const escHandler = async e=>{ if(e.key==="Escape") close(); };
     document.addEventListener("keydown", escHandler);
-    root.querySelector(".dlg-back").addEventListener("click", e=>{ if(e.target.classList.contains("dlg-back")) close(); });
+    root.querySelector(".dlg-back").addEventListener("click", async e=>{ if(e.target.classList.contains("dlg-back")) close(); });
     root.querySelector("#dlg-x").addEventListener("click", close);
-    (actions||[]).forEach((a,i)=> root.querySelector(`[data-act="${i}"]`).addEventListener("click", ()=>{
+    (actions||[]).forEach((a,i)=> root.querySelector(`[data-act="${i}"]`).addEventListener("click", async ()=>{
       const r = a.fn && a.fn(); if(r!==false) close();
     }));
     this.closeDialog = close;
@@ -137,8 +137,8 @@ const App = {
   },
   promptDialog(title, label, initial, fn){
     this.dialog({title, body:`<div class="field"><label>${esc(label)}</label><input type="text" id="pd-inp" value="${esc(initial||"")}"></div>`,
-      actions:[{label:"Cancel"},{label:"OK", primary:true, fn:()=>{ fn(document.getElementById("pd-inp").value); }}]});
-    document.getElementById("pd-inp").addEventListener("keydown", e=>{
+      actions:[{label:"Cancel"},{label:"OK", primary:true, fn:async ()=>{ fn(document.getElementById("pd-inp").value); }}]});
+    document.getElementById("pd-inp").addEventListener("keydown", async e=>{
       if(e.key==="Enter"){ fn(e.target.value); this.closeDialog(); } });
   },
   menu(anchor, items){
@@ -149,8 +149,8 @@ const App = {
     m.style.top = Math.min(innerHeight-220, r.bottom+6)+"px";
     m.style.left = Math.max(8, Math.min(innerWidth-220, r.left))+"px";
     document.body.appendChild(m);
-    m.querySelectorAll("[data-mi]").forEach(b=> b.addEventListener("click", ()=>{ m.remove(); items[+b.dataset.mi].fn(); }));
-    const away = e=>{ if(!m.contains(e.target)){ m.remove(); document.removeEventListener("click", away); } };
+    m.querySelectorAll("[data-mi]").forEach(b=> b.addEventListener("click", async ()=>{ m.remove(); items[+b.dataset.mi].fn(); }));
+    const away = async e=>{ if(!m.contains(e.target)){ m.remove(); document.removeEventListener("click", away); } };
     setTimeout(()=>document.addEventListener("click", away), 10);
   },
 
@@ -158,7 +158,7 @@ const App = {
   toast(msg){
     const t = document.createElement("div"); t.className="toast"; t.textContent = msg;
     const root = document.getElementById("toast-root"); root.appendChild(t);
-    setTimeout(()=>{ t.style.opacity="0"; t.style.transition="opacity .3s"; setTimeout(()=>t.remove(), 320); }, 2600);
+    setTimeout(async ()=>{ t.style.opacity="0"; t.style.transition="opacity .3s"; setTimeout(()=>t.remove(), 320); }, 2600);
   },
   sound(kind){
     if(!Store.state.prefs.sounds) return;
@@ -189,7 +189,7 @@ const App = {
         <div class="field"><label>Before</label><input type="date" id="as-before"></div>
       </div>`,
       actions:[{label:"Close"},
-        {label:"Create filter from this", fn:()=>{
+        {label:"Create filter from this", fn:async ()=>{
           const f = Filters.blank();
           f.name = "Search-based filter";
           ["from","to","subject"].forEach(k=> f.criteria[k]=document.getElementById("as-"+k).value.trim());
@@ -201,7 +201,7 @@ const App = {
           Store.state.filters.push(f); Store.save(); this.closeDialog();
           this.go("settings:filters"); this.toast("Filter created — edit its actions, then save.");
         }},
-        {label:"Search", primary:true, fn:()=>{
+        {label:"Search", primary:true, fn:async ()=>{
           const v = id=>document.getElementById("as-"+id).value.trim();
           const results = Mail.advancedSearch({from:v("from"),to:v("to"),subject:v("subj"),has:v("has"),hasnt:v("hasnt"),
             attach:!!v("att"), after:v("after"), before:v("before")});
@@ -216,17 +216,17 @@ const App = {
           <div class="m-main"><div class="m-top"><span class="m-from">${esc(e.from.name)}</span><span class="m-date">${fmtDate(e.date)}</span></div>
           <div class="m-subj">${esc(e.subject)}</div><div class="m-snip">${esc(Mail.folderName(e.folder))}</div></div></div>`).join("")+`</div>`
       : `<div class="empty-note">No messages matched.</div>`}`;
-    el.querySelectorAll("[data-sr]").forEach(r2=> r2.addEventListener("click", ()=>{
+    el.querySelectorAll("[data-sr]").forEach(r2=> r2.addEventListener("click", async ()=>{
       const e = Mail.get(r2.dataset.sr);
       this.ui.folder = e.folder; this.go("mail:"+e.folder);
-      setTimeout(()=>{ if(this.ui._mail) this.ui._mail.openTab(e.id); }, 80);
+      setTimeout(async ()=>{ if(this.ui._mail) this.ui._mail.openTab(e.id); }, 80);
     }));
     this.refreshNav();
   },
 
   /* ---------------- keyboard ---------------- */
   bindKeys(){
-    document.addEventListener("keydown", e=>{
+    document.addEventListener("keydown", async e=>{
       const t = e.target, typing = t && (t.tagName==="INPUT"||t.tagName==="TEXTAREA"||t.isContentEditable);
       if(e.key==="Escape"){ this.closeDialog(); return; }
       if(typing) return;
@@ -240,17 +240,17 @@ const App = {
         if(k==="j") ui._mail.moveSel(1);
         else if(k==="k") ui._mail.moveSel(-1);
         else if(k==="x" && ui.activeTab){ const id=ui.activeTab; ui.sel.has(id)?ui.sel.delete(id):ui.sel.add(id); ui._mail.renderList(); }
-        else if(k==="s" && ui.activeTab){ Mail.toggleStar(ui.activeTab); ui._mail.renderList(); this.refreshNav(); }
-        else if(k==="e" && ui.activeTab){ Mail.archive(ui.activeTab); ui._mail.closeTab(ui.activeTab); ui._mail.renderList(); this.refreshNav(); }
-        else if(k==="#" && ui.activeTab){ Mail.trash(ui.activeTab); ui._mail.closeTab(ui.activeTab); ui._mail.renderList(); this.refreshNav(); }
+        else if(k==="s" && ui.activeTab){ await Mail.toggleStar(ui.activeTab); ui._mail.renderList(); this.refreshNav(); }
+        else if(k==="e" && ui.activeTab){ await Mail.archive(ui.activeTab); ui._mail.closeTab(ui.activeTab); ui._mail.renderList(); this.refreshNav(); }
+        else if(k==="#" && ui.activeTab){ await Mail.trash(ui.activeTab); ui._mail.closeTab(ui.activeTab); ui._mail.renderList(); this.refreshNav(); }
         else if(k==="r" && ui.activeTab){ this.go("compose:reply:"+ui.activeTab); }
         else if(k==="f" && ui.activeTab){ this.go("compose:forward:"+ui.activeTab); }
       }
     });
     const gs = document.getElementById("global-search");
-    gs.addEventListener("input", ()=>{ this.ui.search = gs.value;
+    gs.addEventListener("input", async ()=>{ this.ui.search = gs.value;
       if(this.route==="mail" && this.ui._mail) this.ui._mail.renderList(); });
-    gs.addEventListener("keydown", e=>{
+    gs.addEventListener("keydown", async e=>{
       if(e.key==="Enter"){ const q = gs.value.trim(); if(q) this.go("search:"+encodeURIComponent(q)); }
     });
   },
@@ -259,8 +259,8 @@ const App = {
   init(){
     Themes.apply();
     document.getElementById("compose-btn").addEventListener("click", ()=> this.go("compose:new"));
-    document.getElementById("check-mail-btn").addEventListener("click", ()=>{
-      const em = Mail.checkMail(); this.refreshNav();
+    document.getElementById("check-mail-btn").addEventListener("click", async ()=>{
+      const em = await Mail.checkMail(); this.refreshNav();
       if(this.route==="mail" && this.ui._mail) this.ui._mail.renderList();
       this.toast(em.folder==="inbox" ? "📬 New mail: "+em.subject : "New mail arrived (filtered).");
     });
@@ -270,15 +270,15 @@ const App = {
     document.getElementById("adv-search-btn").addEventListener("click", ()=> this.advSearch());
     document.getElementById("menu-btn").addEventListener("click", ()=> document.body.classList.toggle("nav-open"));
     document.getElementById("side-scrim").addEventListener("click", ()=> document.body.classList.remove("nav-open"));
-    document.getElementById("brand-home").addEventListener("click", ()=> this.go("today"));
-    document.getElementById("account-btn").addEventListener("click", ev=>{
+    document.getElementById("brand-home").addEventListener("click", ()=> this.go(Live.enabled?"mail:inbox":"today"));
+    document.getElementById("account-btn").addEventListener("click", async ev=>{
       const u = Store.state.user;
       this.menu(ev.currentTarget, [
         {label:`👤 ${u.name} — ${u.email}`, fn:()=>this.go("settings:general")},
         {label:"🎨 Themes", fn:()=>Themes.openPicker()},
         {label:"⚙️ Settings", fn:()=>this.go("settings")},
         {sep:true},
-        {label:"↩ Sign out (demo)", fn:()=>this.toast("Demo build — there is no server session to sign out of.")}
+        {label:Live.enabled?"↩ Sign out":"↩ Sign out (demo)", fn:async ()=>{if(Live.enabled)await Live.logout();else this.toast("Demo build — there is no server session to sign out of.");}}
       ]);
     });
     window.addEventListener("hashchange", ()=> this.parse());
@@ -290,5 +290,5 @@ const App = {
 };
 
 window.App = App;
-document.addEventListener("DOMContentLoaded", ()=> App.init());
+document.addEventListener("DOMContentLoaded", async ()=>{await Live.boot(); App.init();});
 })();

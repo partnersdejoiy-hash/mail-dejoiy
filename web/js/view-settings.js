@@ -8,12 +8,15 @@ const TABS = [
 ];
 
 Views.settings = function(el, tab){
-  tab = tab || "general";
+  const live = window.Live?.enabled;
+  tab = tab || (live ? "themes" : "general");
+  if (live && !["themes", "shortcuts"].includes(tab)) tab = "themes";
   const s = Store.state;
   el.innerHTML = `
     <div class="view-head"><h1>Settings</h1></div>
+    ${live ? '<p class="hint">Appearance and keyboard shortcuts are available. Account settings, filters and vacation replies are not connected yet.</p>' : ""}
     <div class="set-layout">
-      <div class="set-tabs">${TABS.map(([id,l])=>`<button data-stab="${id}" class="${tab===id?"on":""}">${l}</button>`).join("")}</div>
+      <div class="set-tabs">${TABS.filter(([id])=>!live || ["themes","shortcuts"].includes(id)).map(([id,l])=>`<button data-stab="${id}" class="${tab===id?"on":""}">${l}</button>`).join("")}</div>
       <div class="set-body" id="set-body"></div>
     </div>`;
   el.querySelectorAll("[data-stab]").forEach(b=> b.addEventListener("click", ()=> Views.settings(el, b.dataset.stab)));

@@ -3,7 +3,9 @@
 **Dejoiy Mail** (short: **D-mail**) — a fast, beautiful, multi-tenant webmail app for companies:
 custom domains, per-user pricing, and a best-in-class interface with 24 themes.
 
-> **Status (v0.1):** This repo currently holds the **complete, working front-end source code**
+> **Deployment:** Dmail is installed with a Zimbra FOSS 10.1.21 backend on Contabo. Real local mail and browser tests passed; external delivery and corporate DNS acceptance remain pending. See [deployment notes](docs/CONTABO.md).
+
+> **Static/demo mode (v0.1):** This repo currently holds the **complete, working front-end source code**
 > (`web/`). It runs with zero dependencies and zero build step — open `web/index.html`
 > or serve the folder with any static server. The demo mailbox runs locally in the
 > browser (localStorage); the real mail backend (SMTP/IMAP, deliverability, multi-tenancy)
@@ -50,3 +52,11 @@ No build, no npm, no bundler. Just HTML + CSS + vanilla JS.
 The hard part of a mail product is deliverability (SPF/DKIM/DMARC, bounces, IP reputation)
 and multi-tenancy — not the UI. See `docs/ROADMAP.md` for the backend plan
 (WildDuck/Haraka/ZoneMTA + Rspamd, per the technical plan) and how `web/` plugs into it.
+
+## Zimbra integration (opt-in)
+
+A separate Python SOAP adapter can run this frontend against existing Zimbra mailboxes.
+See [docs/ZIMBRA.md](docs/ZIMBRA.md) for the verified 10.1.21 FOSS source/build recipe,
+run instructions, supported operations and current limits.
+The existing `backend/` Node/Postgres MVP remains separate and is not used by this adapter.
+Static hosting continues in demo mode. Local Zimbra acceptance is verified; external send/receive and DNS acceptance remain required.
