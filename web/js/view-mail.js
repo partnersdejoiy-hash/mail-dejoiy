@@ -156,7 +156,7 @@ Views.mail = function(el, folder){
         <div style="font-size:12px;color:var(--ink-3)">to ${(e.to||[]).map(esc).join(", ")} · ${fmtDate(e.date)}</div></div>
         <div style="margin-left:auto">${(e.labels||[]).map(l=>`<span class="lbl">${esc(l)}</span>`).join(" ")}</div>
       </div>
-      ${(e.attachments||[]).length ? `<div style="margin-bottom:12px">${e.attachments.map(a=>`<span class="attach-chip">📎 ${esc(a.name)} <span style="color:var(--ink-3)">${esc(a.size)}</span></span>`).join("")}</div>`:""}
+      ${(e.attachments||[]).length ? `<div style="margin-bottom:12px">${e.attachments.map(a=>window.Live?.enabled && a.mid && a.part?`<a class="attach-chip" href="/api/attachment?mid=${encodeURIComponent(a.mid)}&amp;part=${encodeURIComponent(a.part)}&amp;name=${encodeURIComponent(a.name)}" download>📎 ${esc(a.name)} <span style="color:var(--ink-3)">${esc(a.size)} bytes</span></a>`:`<span class="attach-chip">📎 ${esc(a.name)} <span style="color:var(--ink-3)">${esc(a.size)}</span></span>`).join("")}</div>`:""}
       <div class="r-body">${e.body}</div>`;
     const b = id2 => barEl.querySelector("#"+id2);
     const back = b("r-back"); if(back) back.addEventListener("click", ()=> document.body.classList.remove("reader-open"));

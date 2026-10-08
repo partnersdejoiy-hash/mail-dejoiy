@@ -31,18 +31,23 @@ Open exactly `http://localhost:8080`, then use an existing Zimbra mailbox login.
 - Zimbra authentication, expiring server-side sessions, logout.
 - HttpOnly/SameSite cookies, Secure cookies for HTTPS, origin validation and CSRF tokens on mutations.
 - Mailbox refresh: latest 50 messages across folders, with escaped text bodies; original HTML is not executed.
-- Send and save draft through SOAP; recipient validation; text-only content.
+- Send and save draft through SOAP; recipient validation; plain and sanitized HTML content.
+- Attachment upload/send/draft/download, safe rich-text formatting, Gmail typo validation and atomic removal of a sent draft.
+- Real contacts, sender display/signature settings and vacation automatic-reply preferences.
+- Independent Dejoiy Mail Admin at `/admin`, using a separate upstream-authorized session for mailbox/domain provisioning, status and password management.
 - Read/unread, star, importance, move, archive folder creation, trash and permanent deletion.
 - Live mailbox state stays in memory; real message bodies and auth tokens are not written to localStorage.
 - Server errors stop send success messages. No automatic send retries.
 
 ## Current limits
 
-This is a first integration, not a production mail platform. Latest-50 counts and search apply only to loaded messages; older/custom-folder messages are not fully browsable. Attachment upload/download and rich HTML rendering are pending; attempts to send/save attachments fail explicitly. Empty Trash applies only to loaded trash messages. Labels, filters, contacts/calendar/chat/notes, account settings (appearance and keyboard shortcuts remain available), storage quota, provisioning and billing are not connected; their demo screens are blocked in live mode. Theme picker remains available.
+Mailbox pages contain 50 messages; Load more fetches older messages. Counts and search cover loaded messages. Empty Trash clears the whole upstream Trash folder. Attachment uploads total at most 15 MB, with 20 files; downloads are limited to 25 MB. Rich text keeps supported formatting while removing scripts, tracking images and unsafe links. Custom folders, labels, filters, calendar/chat/notes, storage quota, role changes and billing remain unconnected; their demo features are blocked in live mode. The existing Node/Postgres backend remains separate.
+
+Configure `ZIMBRA_ADMIN_URL` with the private HTTPS admin origin (normally port 7071) to enable `/admin`. The browser never connects to that private endpoint. Administration requires a valid mailbox session, CSRF validation and a separate administrator password check. Admin tokens remain server-side and expire within 15 minutes. Do not open port 7071 publicly. Creating domains does not modify DNS.
 
 Set `SESSION_DB=/var/lib/dmail/sessions.sqlite` for persistent sessions in a service-owned directory with mode 0700. The SQLite file uses mode 0600 and contains sensitive upstream tokens; protect backups accordingly. Without this variable, sessions remain in memory and a restart logs users out. Rate limits remain per process; enforce IP-based login limits at the reverse proxy. This server is intended for initial single-process integration behind a reverse proxy, not horizontal production scaling. Login uses Zimbra credentials and does not reuse the existing Node backend's 2FA/RBAC. Zimbra account suspension/expiry is enforced upstream on calls. Browser logout revokes the adapter session; the upstream token remains only until expiry and is no longer retained by the adapter.
 
-The 11 Python tests and 4 JavaScript adapter tests pass. Live headless Chromium verified Dmail login, inbox, compose/send and settings against the installed Zimbra backend.
+The 27 Python tests and 5 JavaScript adapter tests pass. Live headless Chromium verified Dejoiy Mail login, inbox, compose/send and settings against the installed backend. See CONTABO.md for the current deployment and acceptance evidence.
 
 Real login, local SMTP ingress/self-delivery, mail mutations, drafts, session persistence and authenticated SMTP/IMAP have been verified. External send/receive and public DKIM/DMARC acceptance remain pending. SOAP responses and HTTP security are covered by mocked tests:
 

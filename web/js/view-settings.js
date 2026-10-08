@@ -9,14 +9,13 @@ const TABS = [
 
 Views.settings = function(el, tab){
   const live = window.Live?.enabled;
-  tab = tab || (live ? "themes" : "general");
-  if (live && !["themes", "shortcuts"].includes(tab)) tab = "themes";
+  tab = tab || "general";
+  if (live && !["general", "themes", "vacation", "shortcuts"].includes(tab)) tab = "general";
   const s = Store.state;
   el.innerHTML = `
     <div class="view-head"><h1>Settings</h1></div>
-    ${live ? '<p class="hint">Appearance and keyboard shortcuts are available. Account settings, filters and vacation replies are not connected yet.</p>' : ""}
     <div class="set-layout">
-      <div class="set-tabs">${TABS.filter(([id])=>!live || ["themes","shortcuts"].includes(id)).map(([id,l])=>`<button data-stab="${id}" class="${tab===id?"on":""}">${l}</button>`).join("")}</div>
+      <div class="set-tabs">${TABS.filter(([id])=>!live || ["general","themes","vacation","shortcuts"].includes(id)).map(([id,l])=>`<button data-stab="${id}" class="${tab===id?"on":""}">${l}</button>`).join("")}</div>
       <div class="set-body" id="set-body"></div>
     </div>`;
   el.querySelectorAll("[data-stab]").forEach(b=> b.addEventListener("click", ()=> Views.settings(el, b.dataset.stab)));
@@ -31,11 +30,16 @@ function renderGeneral(body){
   body.innerHTML = `<div class="card"><h3>⚙️ General</h3>
     <div class="grid c2">
       <div class="field"><label>Display name</label><input type="text" id="sg-name" value="${esc(u.name)}"></div>
-      <div class="field"><label>Email address</label><input type="email" id="sg-email" value="${esc(u.email)}"></div>
+      <div class="field"><label>Email address</label><input type="email" id="sg-email" value="${esc(u.email)}" ${window.Live?.enabled?'readonly':''}></div>
     </div>
     <div class="field"><label>Signature (added to new messages)</label><textarea id="sg-sig" rows="4">${esc(u.signature)}</textarea></div>
     <div class="btn-row"><button class="btn primary" id="sg-save">Save changes</button></div></div>`;
-  body.querySelector("#sg-save").addEventListener("click", ()=>{
+  body.querySelector("#sg-save").addEventListener("click", async ()=>{
+    if(window.Live?.enabled){
+      const button=body.querySelector('#sg-save');button.disabled=true;
+      const name=body.querySelector('#sg-name').value.trim(),signature=body.querySelector('#sg-sig').value;
+      try{await Live.request('preferences',{op:'profile',name,signature});u.name=name;u.signature=signature;App.refreshNav();App.toast('Settings saved.');}catch(error){App.toast(error.message);}finally{button.disabled=false;}return;
+    }
     u.name = body.querySelector("#sg-name").value.trim() || u.name;
     u.email = body.querySelector("#sg-email").value.trim() || u.email;
     u.signature = body.querySelector("#sg-sig").value;
@@ -162,6 +166,14 @@ function filterDialog(f, done){
 /* ---------- vacation ---------- */
 function renderVacation(body){
   const v = Store.state.vacation;
+  if(window.Live?.enabled){
+    body.innerHTML=`<form class="card"><h3>🏖️ Vacation responder</h3><div class="check-row"><input id="sv-live-on" type="checkbox" ${v.on?'checked':''}><label for="sv-live-on">Enable automatic replies</label></div><div class="field"><label for="sv-live-message">Reply message</label><textarea id="sv-live-message" rows="5" maxlength="8192">${esc(v.message||'')}</textarea></div><p class="hint">Your mail server sends automatic replies while this is enabled.</p><p role="alert"></p><button class="btn primary">Save</button></form>`;
+    body.querySelector('form').addEventListener('submit',async event=>{
+      event.preventDefault();const form=event.currentTarget;const button=form.querySelector('button');button.disabled=true;
+      const on=form.querySelector('input').checked,message=form.querySelector('textarea').value;
+      try{await Live.request('preferences',{op:'vacation',on,message});v.on=on;v.message=message;App.toast('Vacation responder saved.');}catch(error){form.querySelector('[role=alert]').textContent=error.message;}finally{button.disabled=false;}
+    });return;
+  }
   body.innerHTML = `<div class="card"><h3>🏖️ Vacation responder</h3>
     <div class="check-row" style="margin-bottom:10px"><button class="pill-toggle" role="switch" aria-checked="${v.on}" id="sv-on"></button>
       <b>Vacation responder ${v.on?"is ON":"is OFF"}</b></div>

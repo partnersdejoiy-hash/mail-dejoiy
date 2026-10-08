@@ -5,10 +5,16 @@ const Live={enabled:!!window.DEJOIY_LIVE,csrf:'',more:false,
   async request(path,data){
     const response=await fetch('/api/'+path,{method:data===undefined?'GET':'POST',credentials:'same-origin',headers:data===undefined?{}:{'Content-Type':'application/json','X-CSRF-Token':this.csrf},body:data===undefined?undefined:JSON.stringify(data)});
     const result=await response.json();
-    if(!response.ok){ if(response.status===401&&!['login','session'].includes(path)) location.reload(); throw new Error(result.error||'Mail request failed'); }
+    if(!response.ok){ if(response.status===401&&!['login','session'].includes(path)&&!path.startsWith('admin')) location.reload(); throw new Error(result.error||'Mail request failed'); }
     return result;
   },
-  async sync(){const result=await this.request('mail'); Store.state.emails=result.emails; this.more=result.more; return {folder:'inbox',subject:'Mailbox refreshed'};},
+  async sync(offset=0){
+    const result=await this.request(offset?'mail?offset='+offset:'mail');
+    Store.state.emails=offset?[...new Map([...Store.state.emails,...result.emails].map(m=>[m.id,m])).values()]:result.emails;
+    this.more=result.more;this.nextOffset=result.nextOffset;
+    if(this.note){this.note.querySelector('span').textContent=`Connected mailbox · ${Store.state.emails.length} messages loaded`;this.note.querySelector('button').hidden=!this.more;}
+    return {folder:'inbox',subject:'Mailbox refreshed'};
+  },
   async boot(){
     if(!this.enabled)return;
     let prefs=Store.state.prefs;
@@ -18,6 +24,7 @@ const Live={enabled:!!window.DEJOIY_LIVE,csrf:'',more:false,
     let session;
     try{session=await this.request('session');}catch(_){session=await this.login();}
     this.csrf=session.csrf; Store.state.user=session.user;
+    try{const prefs=await this.request('preferences');Store.state.user.name=prefs.name||Store.state.user.name;Store.state.user.signature=prefs.signature;Store.state.vacation=prefs.vacation;}catch(e){alert(e.message+' Account preferences could not be loaded.');}
     try{await this.sync();}catch(e){alert(e.message+' Use Refresh to retry.');}
     this.install();
   },
@@ -25,7 +32,7 @@ const Live={enabled:!!window.DEJOIY_LIVE,csrf:'',more:false,
     const config=await this.request('config');
     return new Promise(resolve=>{
       const layer=document.createElement('div'); layer.className='live-login';
-      layer.innerHTML=`<form class="card"><h1>Dmail</h1><p>Sign in to your business mailbox</p><label>Email<input name="email" type="email" autocomplete="username" required></label><label>Password<input name="password" type="password" autocomplete="current-password" required></label><p role="alert"></p><button class="btn primary" ${config.configured?'':'disabled'}>Sign in</button><small>${config.configured?'':'Mail server setup is pending. Ask your administrator to configure it.'}</small></form>`;
+      layer.innerHTML=`<form class="card"><h1>${location.pathname.startsWith('/admin')?'Dejoiy Mail Admin':'Dejoiy Mail'}</h1><p>Sign in to your business mailbox</p><label>Email<input name="email" type="email" autocomplete="username" required></label><label>Password<input name="password" type="password" autocomplete="current-password" required></label><p role="alert"></p><button class="btn primary" ${config.configured?'':'disabled'}>Sign in</button><small>${config.configured?'':'Mail server setup is pending. Ask your administrator to configure it.'}</small></form>`;
       document.body.appendChild(layer); const form=layer.querySelector('form');
       form.addEventListener('submit',async e=>{e.preventDefault(); const button=form.querySelector('button'); button.disabled=true;
         try{const result=await this.request('login',{email:form.elements.email.value,password:form.elements.password.value});form.reset();layer.remove();resolve(result);}
@@ -34,7 +41,7 @@ const Live={enabled:!!window.DEJOIY_LIVE,csrf:'',more:false,
     });
   },
   install(){
-    App.NAV=App.NAV.filter(([route])=>['mail:inbox','settings'].includes(route));
+    App.NAV=App.NAV.filter(([route])=>['mail:inbox','contacts','admin','settings'].includes(route));
     const local={}; for(const name of ['setRead','toggleStar','toggleImportant','moveTo','deleteForever'])local[name]=Mail[name].bind(Mail);
     let queue=Promise.resolve();
     const mutate=(data,apply)=>{const job=queue.then(async()=>{await this.request('action',data);apply();App.refreshNav();if(App.route==='mail')App.render();});queue=job.catch(()=>{});return job;};
@@ -44,22 +51,27 @@ const Live={enabled:!!window.DEJOIY_LIVE,csrf:'',more:false,
     Mail.toggleImportant=id=>{const value=!Mail.get(id).important;return mutate({ids:[id],op:'important',value},()=>{Mail.get(id).important=value;});};
     Mail.moveTo=(value,folder)=>mutate({ids:ids(value),op:'move',folder},()=>local.moveTo(value,folder));
     Mail.deleteForever=value=>mutate({ids:ids(value),op:'delete'},()=>local.deleteForever(value));
-    Mail.emptyTrash=()=>{const selected=Store.state.emails.filter(e=>e.folder==='trash').map(e=>e.id);return selected.length?Mail.deleteForever(selected):Promise.resolve();};
+    Mail.emptyTrash=()=>mutate({op:'empty_trash'},()=>{Store.state.emails=Store.state.emails.filter(e=>e.folder!=='trash');});
     Mail.addLabel=()=>{throw new Error('Server labels are not connected yet.');};
-    Mail.checkMail=async()=>{const result=await this.sync();App.render();if(this.more)App.toast('Showing the latest 50 messages; search and counts cover this loaded window.');return result;};
+    Mail.checkMail=async()=>{const result=await this.sync();App.render();if(this.more)App.toast('More messages are available. Use Load more to include them in search and counts.');return result;};
     Mail.send=async data=>{const result=await this.request('send',data);try{await this.sync();}catch(_){App.toast('Message accepted; refresh the mailbox to see it.');}return result;};
     Mail.saveDraft=async data=>{const result=await this.request('draft',data);try{await this.sync();}catch(_){App.toast('Draft accepted; refresh the mailbox to see it.');}return result;};
     Mail.storage=()=>({used:'—',total:'—',pct:0});
     const original=App.render.bind(App);
     App.render=function(){
-      if(['admin','calendar','contacts','notes','chat','today'].includes(this.route)){
+      if(['calendar','notes','chat','today'].includes(this.route)){
         document.getElementById('view').innerHTML='<div class="empty-note">This feature is not connected to your business mailbox yet. <a href="#/mail:inbox">Open Mail</a></div>';this.refreshNav();return;
       }original();
     };
-    App.route='mail';location.hash='#/mail:inbox';
+    const adminRoute=location.pathname.startsWith('/admin') || location.hash==='#/admin';
+    App.route=adminRoute?'admin':'mail';location.hash=adminRoute?'#/admin':'#/mail:inbox';
     window.addEventListener('unhandledrejection',e=>{e.preventDefault();App.toast(e.reason?.message||'Mail operation failed');});
     document.body.classList.add('live-mode');
-    const note=document.createElement('div');note.className='live-note';note.textContent='Connected mailbox · latest 50 messages · text-only mail · attachment upload pending';document.getElementById('view').before(note);
+    const note=document.createElement('div');note.className='live-note';
+    note.innerHTML=`<span>Connected mailbox · ${Store.state.emails.length} messages loaded</span> <button class="btn sm" ${this.more?'':'hidden'}>Load more</button>`;
+    this.note=note;
+    note.querySelector('button').addEventListener('click',async event=>{const button=event.currentTarget;button.disabled=true;try{await this.sync(this.nextOffset);App.refreshNav();if(App.route==='mail'||App.route==='search')App.render();}catch(e){App.toast(e.message);}finally{button.disabled=false;}});
+    document.getElementById('view').before(note);
   },
   async logout(){await this.request('logout',{});location.reload();}
 };

@@ -24,7 +24,7 @@ Before changing configuration again, take a new root-only backup. Do not blindly
 
 ## Dmail HTTPS and service
 
-Repository: `/opt/mail-dejoiy`, branch `feat/zimbra-10.1-integration`.
+Repository: `/opt/mail-dejoiy`, branch `fix/dejoiy-mail-completion`.
 URL: `https://mail.dejoiy.com`. nginx owns ports 80/443.
 Service: `dmail.service`, user `dmail`, loopback listener `127.0.0.1:8080`.
 Configuration: `/etc/dmail/adapter.env` (0600). Sessions: `/var/lib/dmail/sessions.sqlite` (0600, directory 0700).
@@ -80,11 +80,21 @@ For mail failures inspect `/var/log/zimbra.log`, `/opt/zimbra/log/mailbox.log` a
 Do not rerun the installer against an existing mailbox installation without reviewing state and taking a consistent backup.
 The initial `/etc` archive does not back up mailboxes. Add and test a separate consistent Zimbra mail/LDAP backup before business use.
 
-## Feature limits
+## Customer interface and administration
 
-Latest 50 messages only; search, counts and Empty Trash operate on that loaded window. Text-only send/render. Attachments cannot be uploaded or downloaded.
-Custom folders, server labels/filters, contacts, calendar, chat, notes, account settings, quotas, provisioning and billing are not connected.
-Appearance preferences persist separately in browser storage; message data and tokens never enter browser storage. Appearance and shortcuts remain accessible. Admin demo screens are blocked. Node stub delivery is not used.
+The existing repository frontend is served at `https://mail.dejoiy.com` with Dejoiy Mail branding. The independent administration page is `https://mail.dejoiy.com/admin`. Sign in with an administrator mailbox, then verify its password to obtain a separate, server-side administration session, limited to 15 minutes. Normal mailbox credentials cannot authorize administration. No shared administrator password is stored in the adapter environment.
+
+Set `ZIMBRA_ADMIN_URL=https://mail.dejoiy.com:7071` in `/etc/dmail/adapter.env`. The endpoint stays private; public port 7071 remains blocked. Administration supports real mailbox creation, lock/reactivation, password reset, domain listing and domain creation. Self-locking is rejected. Creating a domain does not publish public DNS records. Upstream permissions govern all operations. Product screens do not display backend vendor branding; original upstream licence notices and source references remain preserved.
+
+Mail supports attachment upload/send/save/download, sanitized rich text, reply/forward, read/star/importance, moves, drafts and deletion. Attachments may total 15 MB, with up to 20 files; downloads are capped at 25 MB. nginx and the adapter accept up to 22 MB to allow JSON/base64 overhead. Sending an edited draft removes it atomically through the upstream `did` attribute. Failed sends retain the composer. Submission to the mail server does not guarantee delivery to the recipient; later rejections appear as bounce messages.
+
+The observed Gmail failure on 2026-10-08 was SMTP `550 5.1.1`: the recipient mailbox did not exist. The address contained an invalid character in its Gmail username. Validation now catches that typo before submission and preserves valid `+tag` addresses. Outbound port 25 was reachable in that observed transaction. Missing public DKIM/DMARC records are a separate unresolved deliverability issue.
+
+Mailbox pages load 50 messages at a time. **Load more** fetches older messages; search and counts cover loaded messages. Empty Trash clears the whole server Trash folder. Contacts create/edit/delete/import/export are connected to the real address book. General settings persist the sender display name and signature; vacation settings configure actual upstream automatic replies. Themes and keyboard shortcuts remain available.
+
+Custom folders, labels/filters, calendar, chat, notes, storage quotas, role changes and billing are not connected. Appearance preferences persist separately in browser storage; mailbox/contact content and auth tokens never enter browser storage. Node stub delivery is not used. Do not present the unconnected apps as completed features.
+
+Configuration/application backup before these changes: `/opt/zimbra-build/backups/mail-ui-20261008-113045/` (root-only). Evidence: `operations/completion-admin-results.json` and `operations/completion-browser-results.json`. The former verifies temporary mailbox/domain creation, locking, password reset/reactivation and cleanup; the latter verifies browser administration and attachment/draft/send/download flows. These tests use local mailboxes; external recipient acceptance remains pending.
 
 ## Exact installation and repairs
 

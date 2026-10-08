@@ -15,7 +15,8 @@ Views.compose = function(el, arg){
   if(!draft.body && Store.state.user.signature)
     draft.body = `<br><br><div style="color:var(--ink-2)">--<br>${esc(Store.state.user.signature).replace(/\n/g,"<br>")}</div>`;
 
-  let attachments = [];
+  let attachments = draftId ? [...(Mail.get(draftId)?.attachments||[])] : mode==='forward' && window.Live?.enabled ? [...(Mail.get(srcId)?.attachments||[])] : [];
+  let pendingFiles=0;
   el.innerHTML = `
   <div class="compose">
     <div class="compose-head"><span>✎</span> ${mode==="new"?"New message":mode[0].toUpperCase()+mode.slice(1)} <span class="sp"></span>
@@ -49,8 +50,18 @@ Views.compose = function(el, arg){
     $("compose-body").focus();
   }));
   el.querySelector("#c-files").addEventListener("change", async ev=>{
-    [...ev.target.files].forEach(f=> attachments.push({name:f.name, size:fmtSize(f.size)}));
-    renderAtt(); ev.target.value="";
+    const files=[...ev.target.files];ev.target.value="";
+    if(!window.Live?.enabled){files.forEach(f=>attachments.push({name:f.name,size:fmtSize(f.size)}));renderAtt();return;}
+    if(attachments.length+files.length>20){App.toast('Select up to 20 attachments.');return;}
+    if(attachments.reduce((sum,a)=>sum+(a.bytes||Number(a.size)||0),0)+files.reduce((sum,f)=>sum+f.size,0)>15*1024*1024){App.toast('Attachments must total 15 MB or less.');return;}
+    pendingFiles++;$("c-send").disabled=true;$("c-savedraft").disabled=true;
+    try{
+      const added=await Promise.all(files.map(file=>new Promise((resolve,reject)=>{
+        const reader=new FileReader();reader.onerror=()=>reject(new Error('Could not read the attachment. Select it again.'));
+        reader.onload=()=>resolve({name:file.name,size:fmtSize(file.size),bytes:file.size,type:file.type||'application/octet-stream',data:String(reader.result).split(',')[1]});reader.readAsDataURL(file);
+      })));
+      attachments.push(...added);renderAtt();
+    }catch(error){App.toast(error.message);}finally{pendingFiles--;if(!pendingFiles){$("c-send").disabled=false;$("c-savedraft").disabled=false;}}
   });
   function renderAtt(){
     el.querySelector("#c-attachlist").innerHTML = attachments.map((a,i)=>
@@ -61,15 +72,18 @@ Views.compose = function(el, arg){
     body:$("compose-body").innerHTML, attachments:[...attachments] });
 
   $("c-send").addEventListener("click", async ()=>{
+    if(pendingFiles)return;
     const d = collect();
+    if(window.Live?.enabled && draftId)d.id=draftId;
     if(!d.to.trim()){ App.toast("Add at least one recipient first."); $("c-to").focus(); return; }
     const button=$("c-send"); button.disabled=true;
     try { await Mail.send(d); }
     catch(error){ App.toast(error.message); button.disabled=false; return; }
-    if(draftId){ try{ await Mail.deleteForever(draftId); }catch(error){ App.toast("Message accepted, but draft cleanup failed. Refresh before retrying."); } }
-    App.go("mail:sent"); App.toast("Message sent ✓"); App.refreshNav();
+    if(draftId && !window.Live?.enabled){ try{ await Mail.deleteForever(draftId); }catch(error){ App.toast("Message accepted, but draft cleanup failed. Refresh before retrying."); } }
+    App.go("mail:sent"); App.toast(window.Live?.enabled?"Message submitted to the mail server ✓":"Message sent ✓"); App.refreshNav();
   });
   $("c-savedraft").addEventListener("click", async ()=>{
+    if(pendingFiles)return;
     const button=$("c-savedraft"); button.disabled=true;
     let em;
     try{ em=await Mail.saveDraft(Object.assign(collect(), {id:draftId})); }
@@ -81,6 +95,7 @@ Views.compose = function(el, arg){
   $("c-discard").addEventListener("click", async ()=>{
     App.confirm("Discard this message?", async ()=>{ if(draftId) await Mail.deleteForever(draftId); App.go("mail:inbox"); });
   });
+  renderAtt();
   setTimeout(()=> $("c-to").focus(), 60);
 };
 
