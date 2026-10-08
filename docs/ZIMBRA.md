@@ -41,7 +41,7 @@ Open exactly `http://localhost:8080`, then use an existing Zimbra mailbox login.
 
 ## Current limits
 
-Mailbox pages contain 50 messages; Load more fetches older messages. Counts and search cover loaded messages. Empty Trash clears the whole upstream Trash folder. Attachment uploads total at most 15 MB, with 20 files; downloads are limited to 25 MB. Rich text keeps supported formatting while removing scripts, tracking images and unsafe links. Custom folders, labels, filters, calendar/chat/notes, storage quota, role changes and billing remain unconnected; their demo features are blocked in live mode. The existing Node/Postgres backend remains separate.
+Mailbox pages contain 50 messages; Load more fetches older messages. Counts and search cover loaded messages. Empty Trash clears the whole upstream Trash folder. Attachment uploads total at most 15 MB, with 20 files; downloads are limited to 25 MB. Rich text keeps supported formatting while removing scripts, tracking images and unsafe links. Custom folders, filters, calendar/chat/notes, storage quota, role changes and billing remain unconnected; their demo features are blocked in live mode. The existing Node/Postgres backend remains separate.
 
 Configure `ZIMBRA_ADMIN_URL` with the private HTTPS admin origin (normally port 7071) to enable `/admin`. The browser never connects to that private endpoint. Administration requires a valid mailbox session, CSRF validation and a separate administrator password check. Admin tokens remain server-side and expire within 15 minutes. Do not open port 7071 publicly. Creating domains does not modify DNS.
 

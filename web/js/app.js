@@ -190,6 +190,7 @@ const App = {
       </div>`,
       actions:[{label:"Close"},
         {label:"Create filter from this", fn:async ()=>{
+          if(window.Live?.enabled){this.toast('Server filters are not connected yet.');return;}
           const f = Filters.blank();
           f.name = "Search-based filter";
           ["from","to","subject"].forEach(k=> f.criteria[k]=document.getElementById("as-"+k).value.trim());

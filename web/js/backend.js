@@ -42,7 +42,7 @@ const Live={enabled:!!window.DEJOIY_LIVE,csrf:'',more:false,
   },
   install(){
     App.NAV=App.NAV.filter(([route])=>['mail:inbox','contacts','admin','settings'].includes(route));
-    const local={}; for(const name of ['setRead','toggleStar','toggleImportant','moveTo','deleteForever'])local[name]=Mail[name].bind(Mail);
+    const local={}; for(const name of ['setRead','toggleStar','toggleImportant','moveTo','deleteForever','addLabel'])local[name]=Mail[name].bind(Mail);
     let queue=Promise.resolve();
     const mutate=(data,apply)=>{const job=queue.then(async()=>{await this.request('action',data);apply();App.refreshNav();if(App.route==='mail')App.render();});queue=job.catch(()=>{});return job;};
     const ids=value=>Array.isArray(value)?value:[value];
@@ -52,7 +52,7 @@ const Live={enabled:!!window.DEJOIY_LIVE,csrf:'',more:false,
     Mail.moveTo=(value,folder)=>mutate({ids:ids(value),op:'move',folder},()=>local.moveTo(value,folder));
     Mail.deleteForever=value=>mutate({ids:ids(value),op:'delete'},()=>local.deleteForever(value));
     Mail.emptyTrash=()=>mutate({op:'empty_trash'},()=>{Store.state.emails=Store.state.emails.filter(e=>e.folder!=='trash');});
-    Mail.addLabel=()=>{throw new Error('Server labels are not connected yet.');};
+    Mail.addLabel=(value,label)=>mutate({ids:ids(value),op:'label',label},()=>local.addLabel(value,label));
     Mail.checkMail=async()=>{const result=await this.sync();App.render();if(this.more)App.toast('More messages are available. Use Load more to include them in search and counts.');return result;};
     Mail.send=async data=>{const result=await this.request('send',data);try{await this.sync();}catch(_){App.toast('Message accepted; refresh the mailbox to see it.');}return result;};
     Mail.saveDraft=async data=>{const result=await this.request('draft',data);try{await this.sync();}catch(_){App.toast('Draft accepted; refresh the mailbox to see it.');}return result;};

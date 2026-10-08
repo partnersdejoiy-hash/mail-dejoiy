@@ -35,6 +35,7 @@ class AdapterTests(unittest.TestCase):
         responses=[z.ET.fromstring('<GetFolderResponse xmlns="urn:zimbraMail"><folder id="1"/></GetFolderResponse>'),z.ET.fromstring('<SearchResponse xmlns="urn:zimbraMail" more="1"><m id="11"/></SearchResponse>'),z.ET.fromstring('<GetMsgResponse xmlns="urn:zimbraMail"><m id="11" l="2" d="12" f="u"><e t="f" a="a@b.com"/><su>Hello</su><mp ct="text/plain"><content>&lt;img src=x onerror=alert(1)&gt;</content></mp></m></GetMsgResponse>')]
         client.call=Mock(side_effect=responses); result=client.messages('token')
         self.assertEqual(client.call.call_args_list[1].args[0].find('{urn:zimbraMail}query').text, 'is:anywhere')
+        self.assertEqual(client.call.call_args_list[2].args[0][0].get('html'),'1')
         self.assertIn('&lt;img',result['emails'][0]['body']);self.assertTrue(result['more']);self.assertFalse(result['emails'][0]['read'])
     def test_send_escapes_and_uses_authenticated_sender(self):
         client=z.Zimbra('https://mail.example.com');client.call=Mock(return_value=z.ET.fromstring('<SendMsgResponse xmlns="urn:zimbraMail"><m id="42"/></SendMsgResponse>'))

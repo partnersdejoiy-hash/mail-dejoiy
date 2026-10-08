@@ -186,7 +186,7 @@ class Zimbra:
             display=safe_html(rich) if rich is not None else html.escape(value).replace('\n','<br>')
             flags=m.get('f',''); attachments=[{'name':p.get('filename'),'size':p.get('s',''),'mid':m.get('id'),'part':p.get('part')} for p in m.iter('{'+MAIL+'}mp') if p.get('filename')]
             subject=m.find('{'+MAIL+'}su')
-            result.append({'id':m.get('id'),'from':{'name':sender.get('p') or sender.get('a','') if sender is not None else '', 'email':sender.get('a','') if sender is not None else ''},'to':[e.get('a','') for e in addresses if e.get('t')=='t'],'cc':[e.get('a','') for e in addresses if e.get('t')=='c'],'subject':subject.text or '' if subject is not None else '', 'body':display,'folder':reverse.get(m.get('l'),'other'),'read':'u' not in flags,'starred':'f' in flags,'important':'+' in flags or '!' in flags,'date':int(m.get('d','0')),'labels':[],'hasAttachment':bool(attachments),'attachments':attachments})
+            result.append({'id':m.get('id'),'from':{'name':sender.get('p') or sender.get('a','') if sender is not None else '', 'email':sender.get('a','') if sender is not None else ''},'to':[e.get('a','') for e in addresses if e.get('t')=='t'],'cc':[e.get('a','') for e in addresses if e.get('t')=='c'],'subject':subject.text or '' if subject is not None else '', 'body':display,'folder':reverse.get(m.get('l'),'other'),'read':'u' not in flags,'starred':'f' in flags,'important':'+' in flags or '!' in flags,'date':int(m.get('d','0')),'labels':[label for label in m.get('tn','').split(',') if label],'hasAttachment':bool(attachments),'attachments':attachments})
         return {'emails':result,'more':more,'limit':50,'offset':offset,'nextOffset':offset+len(out.findall('{'+MAIL+'}m'))}
     def write_message(self, token, data, draft=False):
         request=node(MAIL,'SaveDraftRequest' if draft else 'SendMsgRequest')
@@ -274,6 +274,13 @@ class Zimbra:
             if folder not in folders: raise APIError('Unknown folder')
             attrs.update(op='move',l=folders[folder])
         elif op in ('read','star','important'): attrs['op']=('' if data.get('value') else '!')+{'read':'read','star':'flag','important':'priority'}[op]
+        elif op=='label':
+            label=str(data.get('label','')).strip()
+            if not label or len(label)>64 or ',' in label or any(ord(c)<32 for c in label): raise APIError('Enter a label of up to 64 characters without commas.')
+            tags=self.call(node(MAIL,'GetTagRequest'),token)
+            if not any(tag.get('name')==label for tag in tags.findall('{'+MAIL+'}tag')):
+                r=node(MAIL,'CreateTagRequest');r.append(node(MAIL,'tag',{'name':label}));self.call(r,token)
+            attrs.update(op='tag',tn=label)
         elif op=='delete': attrs['op']='delete'
         else: raise APIError('Unsupported operation')
         r=node(MAIL,'MsgActionRequest'); r.append(node(MAIL,'action',attrs)); self.call(r,token)
