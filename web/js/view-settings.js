@@ -51,13 +51,14 @@ function renderGeneral(body){
 function renderThemes(body){
   const p = Store.state.prefs;
   const cell = t => `<div class="theme-cell ${p.theme===t.id&&!p.customBg?"sel":""}" data-pick="${t.id}" role="button" tabindex="0">
-    <div class="theme-sw" style="background:${Themes.ALL.indexOf(t)>=0?themeSwatch(t.id):"#333"}"></div>
+    <div class="theme-sw" style="background:${Themes.preview(t.id)}"></div>
     <div class="theme-nm">${esc(t.name)} ${p.theme===t.id&&!p.customBg?"✓":""}</div></div>`;
   body.innerHTML = `<div class="card"><h3>🎨 Themes</h3>
     <div class="field"><label>Brightness — independent of theme</label>
       <div class="seg">${["light","medium","dark"].map(b=>`<button data-b="${b}" class="${p.brightness===b?"on":""}">${b[0].toUpperCase()+b.slice(1)}</button>`).join("")}</div></div>
+    <div class="theme-sec">Photo backgrounds</div><div class="theme-grid photo-grid">${Themes.ALL.filter(t=>t.kind==="photo").map(cell).join("")}</div>
     <div class="theme-sec">Colour themes</div><div class="theme-grid">${Themes.ALL.filter(t=>t.kind==="color").map(cell).join("")}</div>
-    <div class="theme-sec">Scenic themes</div><div class="theme-grid">${Themes.ALL.filter(t=>t.kind==="scenic").map(cell).join("")}</div>
+    <div class="theme-sec">Illustrated gradients</div><div class="theme-grid">${Themes.ALL.filter(t=>t.kind==="scenic").map(cell).join("")}</div>
     <div class="theme-sec">Your photo</div>
     <div class="btn-row"><label class="btn sm" style="cursor:pointer">Upload background<input type="file" id="st-upload" accept="image/*" class="sr"></label>
     ${p.customBg?`<button class="btn sm ghost" id="st-clear">Remove photo</button>`:""}
@@ -68,7 +69,7 @@ function renderThemes(body){
     ${p.customLogo?`<img src="${p.customLogo}" alt="logo preview" style="height:28px;border-radius:6px;border:1px solid var(--line)">`:""}</div>
     <p class="hint" style="margin-top:10px;font-size:12px;color:var(--ink-3)">Themes apply instantly — no save button needed. Your choice is remembered on this device.</p></div>`;
   body.querySelectorAll("[data-b]").forEach(b=> b.addEventListener("click", ()=>{ Themes.setBrightness(b.dataset.b); renderThemes(body); }));
-  body.querySelectorAll("[data-pick]").forEach(c2=> c2.addEventListener("click", ()=>{ Themes.set(c2.dataset.pick); renderThemes(body); }));
+  body.querySelectorAll("[data-pick]").forEach(c2=> { const pick=()=>{Themes.set(c2.dataset.pick);renderThemes(body);};c2.addEventListener("click",pick);c2.addEventListener("keydown",event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();pick();}}); });
   body.querySelector("#st-upload").addEventListener("change", ev=>{
     const f = ev.target.files[0]; if(!f) return;
     const r = new FileReader(); r.onload = ()=>{ Themes.setCustom(r.result); renderThemes(body); }; r.readAsDataURL(f);
@@ -83,7 +84,7 @@ function renderThemes(body){
   if(clrL) clrL.addEventListener("click", ()=>{ p.customLogo=""; Store.save(); App.applyLogo(); renderThemes(body); });
 }
 function themeSwatch(id){
-  const m = {aol:"#2f7cf6",yellow:"#f7b733",highcontrast:"#111",simple:"#c9d2e2",aim:"#e33d2e",aoldotcom:"#00a9e0",
+  const m = {pearl:"#6654c0",aol:"#2f7cf6",yellow:"#f7b733",highcontrast:"#111",simple:"#c9d2e2",aim:"#e33d2e",aoldotcom:"#00a9e0",
     purple:"#9b5cf6",sunrise:"#ff9a56",aquagreen:"#34d399",aquablue:"#38bdf8",deeppurple:"#6d28d9",
     bluenight:"#1e3a8a",darkgrey:"#6b7280",nightlandscape:"linear-gradient(135deg,#3b4a6b,#05080f)",
     roadtrip:"linear-gradient(135deg,#7c3f16,#120903)",sunsetaussie:"linear-gradient(135deg,#93386b,#f7b733)",

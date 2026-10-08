@@ -1,22 +1,12 @@
 # Theme backgrounds
 
-The 11 scenic themes currently use pure-CSS gradient art (see `css/themes.css`),
-so the app works with zero image files.
+Six photo themes are defined in `web/js/themes.js`: Forest, Alpine peaks,
+Ocean breeze, Woodland light, Mountain lake, and Desert dunes. They currently
+use explicit image URLs from Unsplash, with 1920px wallpapers and 420px previews.
+Photos are fetched by the browser, not proxied through the mail backend.
+Availability and appearance could not be tested in the restricted workspace.
 
-To use real photos: drop JPGs here named exactly
+The older eleven scenic presets are CSS artwork and are labelled Illustrated
+gradients. Custom photo uploads are supported and stored in browser preferences.
 
-```
-theme-nightlandscape.jpg   theme-roadtrip.jpg      theme-sunsetaussie.jpg
-theme-lighthouse.jpg       theme-spring.jpg        theme-winter.jpg
-theme-summer.jpg           theme-galaxy.jpg        theme-fall.jpg
-theme-western.jpg          theme-sunset.jpg
-```
-
-then add to `css/themes.css`, e.g.:
-
-```css
-[data-theme="galaxy"]{ --scenic: url("../assets/themes/theme-galaxy.jpg") center/cover; }
-```
-
-Users can also upload their own photo from the theme picker (stored in the
-browser via localStorage) — no files needed for that.
+The Unsplash photo identifiers are retained in `PHOTO_THEMES` for provenance.

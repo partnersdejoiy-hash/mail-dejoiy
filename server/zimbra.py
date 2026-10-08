@@ -159,6 +159,12 @@ class Zimbra:
         out=self.call(r); token=out.find('{'+ACCOUNT+'}authToken'); lifetime=out.find('{'+ACCOUNT+'}lifetime')
         if token is None or not token.text: raise APIError('Login failed',401)
         return token.text, min(int(lifetime.text)/1000 if lifetime is not None else 3600,3600)
+    def capabilities(self, token):
+        response=self.call(node(ACCOUNT,'GetInfoRequest',{'sections':'attrs'}),token)
+        attrs={a.get('name') or a.get('n'):a.text or '' for a in response.findall('.//{'+ACCOUNT+'}attr')}
+        global_admin=attrs.get('zimbraIsAdminAccount')=='TRUE'
+        delegated=attrs.get('zimbraIsDelegatedAdminAccount')=='TRUE'
+        return {'isAdmin':global_admin or delegated,'canManageRoles':global_admin}
     def folder_map(self, token):
         r=node(MAIL,'GetFolderRequest'); r.append(node(MAIL,'folder',{'l':'1'})); out=self.call(r,token)
         mapping=dict(FOLDERS)
@@ -186,7 +192,7 @@ class Zimbra:
             display=safe_html(rich) if rich is not None else html.escape(value).replace('\n','<br>')
             flags=m.get('f',''); attachments=[{'name':p.get('filename'),'size':p.get('s',''),'mid':m.get('id'),'part':p.get('part')} for p in m.iter('{'+MAIL+'}mp') if p.get('filename')]
             subject=m.find('{'+MAIL+'}su')
-            result.append({'id':m.get('id'),'from':{'name':sender.get('p') or sender.get('a','') if sender is not None else '', 'email':sender.get('a','') if sender is not None else ''},'to':[e.get('a','') for e in addresses if e.get('t')=='t'],'cc':[e.get('a','') for e in addresses if e.get('t')=='c'],'subject':subject.text or '' if subject is not None else '', 'body':display,'folder':reverse.get(m.get('l'),'other'),'read':'u' not in flags,'starred':'f' in flags,'important':'+' in flags or '!' in flags,'date':int(m.get('d','0')),'labels':[label for label in m.get('tn','').split(',') if label],'hasAttachment':bool(attachments),'attachments':attachments})
+            result.append({'id':m.get('id'),'conversationId':m.get('cid') or m.get('id'),'messageId':m.get('mid') or '', 'inReplyTo':m.get('irt') or '', 'from':{'name':sender.get('p') or sender.get('a','') if sender is not None else '', 'email':sender.get('a','') if sender is not None else ''},'to':[e.get('a','') for e in addresses if e.get('t')=='t'],'cc':[e.get('a','') for e in addresses if e.get('t')=='c'],'subject':subject.text or '' if subject is not None else '', 'body':display,'folder':reverse.get(m.get('l'),'other'),'read':'u' not in flags,'starred':'f' in flags,'important':'+' in flags or '!' in flags,'date':int(m.get('d','0')),'labels':[label for label in m.get('tn','').split(',') if label],'hasAttachment':bool(attachments),'attachments':attachments})
         return {'emails':result,'more':more,'limit':50,'offset':offset,'nextOffset':offset+len(out.findall('{'+MAIL+'}m'))}
     def write_message(self, token, data, draft=False):
         request=node(MAIL,'SaveDraftRequest' if draft else 'SendMsgRequest')
@@ -205,6 +211,10 @@ class Zimbra:
                     raise APIError('Check the Gmail recipient address for a typo. Gmail usernames use letters, numbers and dots; +tags are supported.')
                 m.append(node(MAIL,'e',{'t':{'to':'t','cc':'c','bcc':'b'}[kind],'a':address}))
         if not draft and not any(e.get('t')=='t' for e in m): raise APIError('Add a recipient')
+        in_reply_to=data.get('inReplyTo')
+        if in_reply_to:
+            if not isinstance(in_reply_to,str) or len(in_reply_to)>998 or not re.fullmatch(r'<[^<>\s]+>',in_reply_to): raise APIError('Invalid reply reference.')
+            m.set('irt',in_reply_to)
         m.append(node(MAIL,'su',text=str(data.get('subject',''))))
         body=str(data.get('body',''))
         alternative=node(MAIL,'mp',{'ct':'multipart/alternative'})
@@ -357,13 +367,25 @@ class Admin(Zimbra):
             accounts.append({'id':account.get('id'),'email':account.get('name'),
                 'name':a.get('displayName') or account.get('name'),
                 'status':a.get('zimbraAccountStatus','active'),
-                'role':'Admin' if a.get('zimbraIsAdminAccount')=='TRUE' or a.get('zimbraIsDelegatedAdminAccount')=='TRUE' else 'User',
+                'role':'Admin' if a.get('zimbraIsAdminAccount')=='TRUE' else 'Delegated Admin' if a.get('zimbraIsDelegatedAdminAccount')=='TRUE' else 'User',
+                'aliases':[v.text for v in account.findall('{'+ADMIN+'}a') if v.get('n')=='zimbraMailAlias' and v.text],
                 'quota':a.get('zimbraMailQuota','0')})
         return {'users':accounts,'domains':[{'id':d.get('id'),'domain':d.get('name'),
             'status':attributes(d).get('zimbraDomainStatus','active')}
             for d in domains.findall('{'+ADMIN+'}domain')]}
     def action(self, token, data, actor):
         op=data.get('op')
+        def require_global_admin():
+            request=node(ADMIN,'GetAccountRequest')
+            request.append(node(ADMIN,'account',{'by':'name'},actor))
+            response=self.call(request,token)
+            account=response.find('{'+ADMIN+'}account')
+            if account is None or not any(a.get('n')=='zimbraIsAdminAccount' and a.text=='TRUE' for a in account.findall('{'+ADMIN+'}a')):
+                raise APIError('Only a full administrator can assign administrator roles.',403)
+        def account_role():
+            role=data.get('role','User')
+            if role not in ('User','Admin'): raise APIError('Select a valid mailbox role.')
+            return role
         def password():
             value=data.get('password')
             if not isinstance(value,str) or not 1<=len(value)<=4096:
@@ -373,17 +395,20 @@ class Admin(Zimbra):
             email=str(data.get('email','')).strip().lower()
             if not re.fullmatch(r'[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+',email) or len(email)>320:
                 raise APIError('Enter a valid mailbox email address.')
+            role=account_role()
+            if role=='Admin': require_global_admin()
             r=node(ADMIN,'CreateAccountRequest')
             r.append(node(ADMIN,'name',text=email)); r.append(node(ADMIN,'password',text=password()))
             name=str(data.get('name','')).strip()
             if not name or len(name)>200: raise APIError('Enter a display name of up to 200 characters.')
             r.append(node(ADMIN,'a',{'n':'displayName'},name))
+            r.append(node(ADMIN,'a',{'n':'zimbraIsAdminAccount'},'TRUE' if role=='Admin' else 'FALSE'))
         elif op=='create_domain':
             name=str(data.get('domain','')).strip().lower()
             if len(name)>253 or not re.fullmatch(r'(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}',name):
                 raise APIError('Enter a valid domain name.')
             r=node(ADMIN,'CreateDomainRequest'); r.append(node(ADMIN,'name',text=name))
-        elif op in ('status','password'):
+        elif op in ('status','password','role','quota','add_alias','remove_alias'):
             ident=str(data.get('id',''))
             if not re.fullmatch(r'[a-fA-F0-9-]{36}',ident): raise APIError('Invalid mailbox selection.')
             lookup=node(ADMIN,'GetAccountRequest')
@@ -397,6 +422,23 @@ class Admin(Zimbra):
                     raise APIError('You cannot lock your own administrator mailbox.')
                 r=node(ADMIN,'ModifyAccountRequest'); r.append(node(ADMIN,'id',text=ident))
                 r.append(node(ADMIN,'a',{'n':'zimbraAccountStatus'},status))
+            elif op=='role':
+                role=account_role()
+                if account.get('name','').lower()==actor.lower(): raise APIError('You cannot change your own administrator role.')
+                require_global_admin()
+                r=node(ADMIN,'ModifyAccountRequest');r.append(node(ADMIN,'id',text=ident))
+                r.append(node(ADMIN,'a',{'n':'zimbraIsAdminAccount'},'TRUE' if role=='Admin' else 'FALSE'))
+                r.append(node(ADMIN,'a',{'n':'zimbraIsDelegatedAdminAccount'},'FALSE'))
+            elif op=='quota':
+                quota=data.get('quotaMB')
+                if isinstance(quota,bool) or not isinstance(quota,int) or not 0<=quota<=10485760: raise APIError('Quota must be a whole number from 0 to 10485760 MB; 0 means unlimited.')
+                r=node(ADMIN,'ModifyAccountRequest');r.append(node(ADMIN,'id',text=ident))
+                r.append(node(ADMIN,'a',{'n':'zimbraMailQuota'},str(quota*1024*1024)))
+            elif op in ('add_alias','remove_alias'):
+                alias=str(data.get('alias','')).strip().lower()
+                if len(alias)>320 or not re.fullmatch(r'[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+',alias): raise APIError('Enter a valid alias email address.')
+                r=node(ADMIN,'AddAccountAliasRequest' if op=='add_alias' else 'RemoveAccountAliasRequest')
+                r.append(node(ADMIN,'id',text=ident));r.append(node(ADMIN,'alias',text=alias))
             else:
                 r=node(ADMIN,'SetPasswordRequest'); r.append(node(ADMIN,'id',text=ident))
                 r.append(node(ADMIN,'newPassword',text=password()))
@@ -431,7 +473,9 @@ class Handler(SimpleHTTPRequestHandler):
             try:
                 if self.path=='/api/config': return self.reply(200,{'mode':'live','configured':bool(self.server.zimbra)})
                 _,s=self.session()
-                if self.path=='/api/session': return self.reply(200,{'user':s['user'],'csrf':s['csrf']})
+                if self.path=='/api/session':
+                    capabilities=self.server.zimbra.capabilities(s['token'])
+                    return self.reply(200,{'user':{**s['user'],**capabilities},'csrf':s['csrf']})
                 if self.path=='/api/mail': return self.reply(200,self.server.zimbra.messages(s['token']))
                 if self.path=='/api/contacts': return self.reply(200,self.server.zimbra.contacts(s['token']))
                 if self.path=='/api/preferences': return self.reply(200,self.server.zimbra.preferences(s['token']))
@@ -493,6 +537,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if not email or len(email)>320 or not password or len(password)>4096: raise APIError('Enter an email and password')
                 token,lifetime=self.server.zimbra.login(email,password)
                 s={'token':token,'expires':time.time()+lifetime,'csrf':secrets.token_urlsafe(32),'user':{'email':email,'name':email.split('@')[0],'signature':''}}
+                s['user'].update(self.server.zimbra.capabilities(token))
                 sid=secrets.token_urlsafe(32)
                 with LOCK:
                     for key in list(SESSIONS):

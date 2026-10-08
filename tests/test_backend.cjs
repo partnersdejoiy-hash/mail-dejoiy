@@ -1,6 +1,6 @@
 const test=require('node:test');const assert=require('node:assert/strict');const vm=require('node:vm');const fs=require('node:fs');const path=require('node:path');
 function setup(){
- const context={window:{DEJOIY_LIVE:true,addEventListener(){}},document:{body:{classList:{add(){}}},createElement(){return {querySelector(){return {addEventListener(){}}}}},getElementById(){return {before(){}}}},location:{pathname:'/',hash:'',reload(){context.reloaded=true}},Store:{state:{emails:[]}},Mail:{get(){return {read:false,starred:false}},setRead(){context.changed=true},toggleStar(){},toggleImportant(){},moveTo(){context.changed=true},deleteForever(){context.changed=true},addLabel(){context.changed=true}},App:{NAV:[['mail:inbox'],['settings'],['admin']],route:'compose',render(){},refreshNav(){},toast(){}},fetch:async()=>({ok:true,status:200,json:async()=>({ok:true})})};
+ const context={window:{DEJOIY_LIVE:true,addEventListener(){}},document:{body:{classList:{add(){}}},createElement(){return {querySelector(){return {addEventListener(){}}}}},getElementById(){return {before(){},appendChild(){}}}},location:{pathname:'/',hash:'',reload(){context.reloaded=true}},Store:{state:{emails:[]}},Mail:{get(){return {read:false,starred:false}},setRead(){context.changed=true},toggleStar(){},toggleImportant(){},moveTo(){context.changed=true},deleteForever(){context.changed=true},addLabel(){context.changed=true}},App:{NAV:[['mail:inbox'],['settings'],['admin']],route:'compose',render(){},refreshNav(){},toast(){}},fetch:async()=>({ok:true,status:200,json:async()=>({ok:true})})};
  vm.createContext(context);vm.runInContext(fs.readFileSync(path.join(__dirname,'../web/js/backend.js'),'utf8'),context);context.live=context.window.Live;return context;
 }
 test('missing initial session opens login instead of reloading forever',async()=>{
@@ -23,4 +23,10 @@ test('send failure propagates instead of reporting success',async()=>{
 test('administrator login rejection does not reload the mailbox session',async()=>{
  const c=setup();c.fetch=async()=>({ok:false,status:401,json:async()=>({error:'Administrator sign-in failed'})});
  await assert.rejects(c.live.request('admin/login',{password:'bad'}),/Administrator/);assert.equal(c.reloaded,undefined);
+});
+test('ordinary mailboxes do not receive admin navigation',()=>{
+ const c=setup();c.Store.state.user={isAdmin:false};c.live.install();assert.equal(c.App.NAV.some(([route])=>route==='admin'),false);
+});
+test('server-confirmed admins retain admin navigation',()=>{
+ const c=setup();c.Store.state.user={isAdmin:true};c.live.install();assert.equal(c.App.NAV.some(([route])=>route==='admin'),true);
 });

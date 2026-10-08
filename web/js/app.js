@@ -5,7 +5,7 @@
 const viewEl = ()=> document.getElementById("view");
 
 const App = {
-  route: "today", arg: null,
+  route: "mail", arg: null,
   ui: { folder:"inbox", search:"", sel:new Set(), tabs:[], activeTab:null },
 
   /* ---------------- routing ---------------- */
@@ -13,15 +13,17 @@ const App = {
     location.hash = "#/" + route;
   },
   parse(){
-    const h = (location.hash||"#/today").replace(/^#\//,"");
+    const h = (location.hash||"#/mail:inbox").replace(/^#\//,"");
     const i = h.indexOf(":");
     this.route = i<0 ? h : h.slice(0,i);
     this.arg = i<0 ? null : h.slice(i+1);
+    if(this.route === "search" && this.arg){ try { this.arg=decodeURIComponent(this.arg); } catch(_) {} }
     this.render();
   },
   render(){
     document.body.classList.remove("nav-open","reader-open","chat-open");
     const el = viewEl(), r = this.route, a = this.arg;
+    el.dataset.route=r;
     window.scrollTo(0,0); el.scrollTop = 0;
     document.getElementById("global-search").value = this.ui.search || "";
     try{
@@ -38,7 +40,7 @@ const App = {
       else Views.today(el);
     }catch(err){ console.error(err); el.innerHTML = `<div class="empty-note">Something went wrong rendering this view. (${esc(err.message)})</div>`; }
     this.refreshNav();
-    this.applyTilt();
+
   },
 
   /* ---------- 3D tilt (v0.2) ---------- */
@@ -89,14 +91,16 @@ const App = {
   ],
   refreshNav(){
     const c = Mail.counts(), nav = document.getElementById("main-nav");
-    nav.innerHTML = this.NAV.map(([r,ico,label])=>{
+    const icons={inbox:'inbox',starred:'star',drafts:'draft',sent:'sent',archive:'archive',spam:'spam',trash:'trash',unread:'unread',attach:'paperclip',important:'important',contacts:'contacts',admin:'shield',settings:'settings',today:'home',calendar:'calendar',notes:'note',chat:'chat'};
+    const entries=[...Mail.FOLDERS.map(f=>['mail:'+f.id,Icons.get(icons[f.id]),f.name]),...Mail.SMART.filter(f=>f.id!=='starredv').map(f=>['mail:'+f.id,Icons.get(icons[f.id]),f.name]),...this.NAV.filter(([r])=>!r.startsWith('mail:')).map(([r,ico,label])=>[r,Icons.get(icons[r]),label])];
+    nav.innerHTML = entries.map(([r,ico,label],index)=>{
       const active = this.route===(r.includes(":")?r.split(":")[0]:r) && (!r.includes(":") || this.ui.folder===r.split(":")[1]);
       const badge = r==="mail:inbox" && c.unread ? `<span class="n-count">${c.unread}</span>` : "";
-      return `<button class="nav-item ${active?"active":""}" data-nav="${r}"><span class="n-ico">${ico}</span>${label}${badge}</button>`;
+      return `${index===7?'<div class="nav-sep">Views</div>':index===10?'<div class="nav-sep">Workspace</div>':''}<button class="nav-item ${active?"active":""}" data-nav="${r}"><span class="n-ico">${ico}</span>${label}${badge}</button>`;
     }).join("");
     nav.querySelectorAll("[data-nav]").forEach(b=> b.addEventListener("click", async ()=>{
       this.ui.search=""; document.getElementById("global-search").value="";
-      this.go(b.dataset.nav); document.body.classList.remove("nav-open");
+      this.ui.activeTab=null; this.ui.quickFilter="all"; this.ui.sel.clear(); this.go(b.dataset.nav); document.body.classList.remove("nav-open");
     }));
     const bn = document.getElementById("bottomnav");
     const items = Live.enabled ? [["mail:inbox","📥","Mail"],["compose:new","✎","Compose"],["settings","⚙️","Settings"]] : [["today","🏠","Today"],["mail:inbox","📥","Mail"],["compose:new","✎","Compose"],["calendar","📅","Cal"],["chat","💬","Chat"]];
@@ -109,6 +113,7 @@ const App = {
     document.getElementById("storage-fill").style.width = st.pct+"%";
     document.getElementById("storage-label").textContent = `${st.used} MB of ${(st.total/1024).toFixed(0)} GB used`;
     document.getElementById("account-btn").textContent = initials(Store.state.user.name);
+    document.getElementById("account-label").textContent = Store.state.user.name.split(" ")[0];
   },
 
   /* ---------------- dialogs ---------------- */
@@ -259,6 +264,10 @@ const App = {
   /* ---------------- init ---------------- */
   init(){
     Themes.apply();
+    for(const [id,icon] of Object.entries({'check-mail-btn':'refresh','theme-btn':'palette','shortcuts-btn':'help','search-submit-btn':'search','menu-btn':'menu','settings-btn':'settings'}))document.getElementById(id).innerHTML=Icons.get(icon);
+    document.getElementById('compose-btn').innerHTML=Icons.get('compose')+' Compose';
+    document.getElementById('search-submit-btn').addEventListener('click',()=>{const q=document.getElementById('global-search').value.trim();if(q)this.go('search:'+encodeURIComponent(q));});
+    document.getElementById('brand-home').addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();this.go('mail:inbox');}});
     document.getElementById("compose-btn").addEventListener("click", ()=> this.go("compose:new"));
     document.getElementById("check-mail-btn").addEventListener("click", async ()=>{
       const em = await Mail.checkMail(); this.refreshNav();
@@ -271,7 +280,7 @@ const App = {
     document.getElementById("adv-search-btn").addEventListener("click", ()=> this.advSearch());
     document.getElementById("menu-btn").addEventListener("click", ()=> document.body.classList.toggle("nav-open"));
     document.getElementById("side-scrim").addEventListener("click", ()=> document.body.classList.remove("nav-open"));
-    document.getElementById("brand-home").addEventListener("click", ()=> this.go(Live.enabled?"mail:inbox":"today"));
+    document.getElementById("brand-home").addEventListener("click", ()=> this.go("mail:inbox"));
     document.getElementById("account-btn").addEventListener("click", async ev=>{
       const u = Store.state.user;
       this.menu(ev.currentTarget, [
@@ -284,7 +293,7 @@ const App = {
     });
     window.addEventListener("hashchange", ()=> this.parse());
     this.bindKeys();
-    this.tiltInit();
+
     this.applyLogo();
     this.parse();
   }

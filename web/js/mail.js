@@ -33,10 +33,30 @@ const Mail = {
           : all.filter(e=>e.folder===folder);
     const q = (App.ui.search||"").trim().toLowerCase();
     if(q) r = r.filter(e => (e.subject+" "+e.from.name+" "+e.from.email+" "+strip(e.body)).toLowerCase().includes(q));
-    return r.sort((a,b)=>b.date-a.date);
+    const sort=Store.state.prefs.mailSort||'dateDesc';
+    return r.sort((a,b)=>sort==='dateAsc'?a.date-b.date:sort==='sender'?a.from.name.localeCompare(b.from.name):sort==='subject'?a.subject.localeCompare(b.subject):b.date-a.date);
   },
 
   get(id){ return Store.state.emails.find(e=>e.id===id); },
+  threadList(folder){
+    const groups=new Map();
+    for(const message of this.list(folder)){
+      const id=String(message.conversationId||message.id);
+      if(!groups.has(id))groups.set(id,[]);
+      groups.get(id).push(message);
+    }
+    return [...groups].map(([id,messages])=>{
+      const ordered=[...messages].sort((a,b)=>a.date-b.date),latest=ordered.at(-1),senders=[...new Set(ordered.map(m=>m.from?.name||m.from?.email).filter(Boolean))];
+      return {id,conversationId:id,messages:ordered,latest,ids:ordered.map(m=>m.id),subject:latest.subject,from:{name:senders.join(', '),email:latest.from?.email||''},date:latest.date,read:ordered.every(m=>m.read),unreadCount:ordered.filter(m=>!m.read).length,starred:ordered.every(m=>m.starred),hasAttachment:ordered.some(m=>m.hasAttachment),important:ordered.some(m=>m.important),labels:[...new Set(ordered.flatMap(m=>m.labels||[]))],count:ordered.length};
+    }).sort((a,b)=>Store.state.prefs.mailSort==='dateAsc'?a.date-b.date:Store.state.prefs.mailSort==='sender'?a.from.name.localeCompare(b.from.name):Store.state.prefs.mailSort==='subject'?a.subject.localeCompare(b.subject):b.date-a.date);
+  },
+  getThread(id){
+    const messages=Store.state.emails.filter(m=>String(m.conversationId||m.id)===String(id));
+    if(!messages.length)return null;
+    messages.sort((a,b)=>a.date-b.date);
+    const latest=messages[messages.length-1],senders=[...new Set(messages.map(m=>m.from?.name||m.from?.email).filter(Boolean))];
+    return {...latest,id:String(id),conversationId:String(id),latest,messages,ids:messages.map(m=>m.id),from:{...latest.from,name:senders.join(', ')},count:messages.length,unreadCount:messages.filter(m=>!m.read).length,read:messages.every(m=>m.read),starred:messages.every(m=>m.starred),hasAttachment:messages.some(m=>m.hasAttachment)};
+  },
 
   counts(){
     const all = Store.state.emails, c = {};
@@ -45,7 +65,7 @@ const Mail = {
     return c;
   },
 
-  setRead(id, read){ const e=this.get(id); if(e){ e.read = read!==false; Store.save(); } },
+  setRead(id, read){ const messages=(Array.isArray(id)?id:[id]).map(key=>this.get(key)).filter(Boolean);for(const e of messages)e.read=read!==false;if(messages.length)Store.save(); },
   toggleStar(id){ const e=this.get(id); if(e){ e.starred=!e.starred; Store.save(); } return e && e.starred; },
   toggleImportant(id){ const e=this.get(id); if(e){ e.important=!e.important; Store.save(); } },
 
@@ -53,10 +73,10 @@ const Mail = {
     (Array.isArray(ids)?ids:[ids]).forEach(id=>{ const e=this.get(id); if(e) e.folder=folder; });
     Store.save();
   },
-  trash(ids){ this.moveTo(ids, "trash"); },
-  archive(ids){ this.moveTo(ids, "archive"); },
-  spam(ids){ this.moveTo(ids, "spam"); },
-  notSpam(ids){ this.moveTo(ids, "inbox"); },
+  trash(ids){ return this.moveTo(ids, "trash"); },
+  archive(ids){ return this.moveTo(ids, "archive"); },
+  spam(ids){ return this.moveTo(ids, "spam"); },
+  notSpam(ids){ return this.moveTo(ids, "inbox"); },
   deleteForever(ids){
     const set = new Set(Array.isArray(ids)?ids:[ids]);
     Store.state.emails = Store.state.emails.filter(e=>!set.has(e.id));
@@ -100,7 +120,7 @@ const Mail = {
     const me = Store.state.user.email;
     const to = [e.from.email];
     const cc = all ? (e.cc||[]).concat((e.to||[]).filter(t=>t!==me && t!==e.from.email)) : [];
-    return { to: to.join(", "), cc:[...new Set(cc)].join(", "),
+    return { to: to.join(", "), cc:[...new Set(cc)].join(", "), inReplyTo:e.messageId||"",
       subject: (/^re:/i.test(e.subject)?e.subject:"Re: "+e.subject),
       body: `<br><br><div style="color:var(--ink-2);border-left:3px solid var(--line);padding-left:10px">On ${new Date(e.date).toLocaleString()}, ${esc(e.from.name)} wrote:<br>${e.body}</div>` };
   },

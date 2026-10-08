@@ -2,7 +2,17 @@
 (function(){
 "use strict";
 
+const PHOTO_THEMES = [
+  {id:'forest',name:'Forest',photo:'photo-1441974231531-c6227db76b6e',accent:'#357959'},
+  {id:'mountains',name:'Alpine peaks',photo:'photo-1464822759023-fed622ff2c3b',accent:'#526e8a'},
+  {id:'coast',name:'Ocean breeze',photo:'photo-1475924156734-496f6cac6ec1',accent:'#197884'},
+  {id:'woodland',name:'Woodland light',photo:'photo-1448375240586-882707db888b',accent:'#5b754b'},
+  {id:'alpine',name:'Mountain lake',photo:'photo-1470770841072-f978cf4d019e',accent:'#497674'},
+  {id:'desert',name:'Desert dunes',photo:'photo-1509316785289-025f5b846b35',accent:'#ac704c'}
+].map(t=>({...t,kind:'photo',image:`https://images.unsplash.com/${t.photo}?auto=format&fit=crop&w=1920&q=85`}));
 const THEMES = [
+  ...PHOTO_THEMES,
+  {id:"pearl", name:"Pearl", kind:"color"},
   // 13 colour / gradient header themes
   {id:"aol",        name:"Cobalt",         kind:"color"},
   {id:"yellow",     name:"Yellow",         kind:"color"},
@@ -31,6 +41,7 @@ const THEMES = [
   {id:"sunset",     name:"Sunset",         kind:"scenic"}
 ];
 const THEME_CSS = {
+  pearl:"#6654c0",
   aol:"#2f7cf6", yellow:"#f7b733", highcontrast:"#111111", simple:"#c9d2e2", aim:"#e33d2e",
   aoldotcom:"#00a9e0", purple:"#9b5cf6", sunrise:"#ff9a56", aquagreen:"#34d399", aquablue:"#38bdf8",
   deeppurple:"#6d28d9", bluenight:"#1e3a8a", darkgrey:"#6b7280",
@@ -44,13 +55,20 @@ const THEME_CSS = {
 
 const Themes = {
   ALL: THEMES,
+  preview(id){const t=THEMES.find(t=>t.id===id);return t?.image?`url('${t.image.replace('w=1920','w=420')}') center/cover`:THEME_CSS[id]||'#666';},
   get current(){ return Store.state.prefs.theme; },
 
   apply(){
     const p = Store.state.prefs;
     document.documentElement.dataset.theme = p.theme;
     document.documentElement.dataset.brightness = p.brightness;
+    document.documentElement.dataset.scenic = String(!!p.customBg || THEMES.some(t=>t.id===p.theme && ["scenic","photo"].includes(t.kind)));
+    const photo=PHOTO_THEMES.find(t=>t.id===p.theme);
+    document.documentElement.dataset.photoTheme=String(!!photo||!!p.customBg);
+    for(const key of ['--accent','--accent-ink'])document.documentElement.style?.removeProperty(key);
+    if(photo){document.documentElement.style?.setProperty('--accent',photo.accent);document.documentElement.style?.setProperty('--accent-ink','#fff');}
     const bg = document.getElementById("bg");
+    bg.style.backgroundImage=photo&&!p.customBg?`url("${photo.image}")`:'';
     if(p.customBg){ bg.classList.add("custom"); bg.style.setProperty("--custom-bg", "url('"+p.customBg+"')"); }
     else { bg.classList.remove("custom"); bg.style.removeProperty("--custom-bg"); }
   },
@@ -84,9 +102,10 @@ const Themes = {
     const p = Store.state.prefs;
     const cell = t => `
       <div class="theme-cell ${p.theme===t.id && !p.customBg ? "sel":""}" data-theme-pick="${t.id}" role="button" tabindex="0" aria-label="${esc(t.name)} theme">
-        <div class="theme-sw" style="background:${THEME_CSS[t.id]}"></div>
+        <div class="theme-sw" style="background:${this.preview(t.id)}"></div>
         <div class="theme-nm">${esc(t.name)} ${p.theme===t.id && !p.customBg ? "✓":""}</div>
       </div>`;
+    const photos = THEMES.filter(t=>t.kind==="photo").map(cell).join("");
     const colors = THEMES.filter(t=>t.kind==="color").map(cell).join("");
     const scenic = THEMES.filter(t=>t.kind==="scenic").map(cell).join("");
     const body = `
@@ -94,8 +113,9 @@ const Themes = {
         <div class="seg" id="pk-bright">
           ${["light","medium","dark"].map(b=>`<button data-b="${b}" class="${p.brightness===b?"on":""}">${b[0].toUpperCase()+b.slice(1)}</button>`).join("")}
         </div></div>
+      <div class="theme-sec">Photo backgrounds</div><div class="theme-grid photo-grid">${photos}</div>
       <div class="theme-sec">Colour themes</div><div class="theme-grid">${colors}</div>
-      <div class="theme-sec">Scenic themes</div><div class="theme-grid">${scenic}</div>
+      <div class="theme-sec">Illustrated gradients</div><div class="theme-grid">${scenic}</div>
       <div class="theme-sec">Your photo</div>
       <div class="btn-row">
         <label class="btn sm" style="cursor:pointer">Upload background<input type="file" id="pk-upload" accept="image/*" class="sr"></label>

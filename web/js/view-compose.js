@@ -3,11 +3,11 @@
 "use strict";
 
 Views.compose = function(el, arg){
-  let draft = {to:"", cc:"", subject:"", body:""}, draftId = null, mode = "new", srcId = null;
+  let draft = {to:"", cc:"", inReplyTo:"", subject:"", body:""}, draftId = null, mode = "new", srcId = null;
   if(arg && arg!=="new"){
     const [m, id] = arg.split(":");
     mode = m; srcId = id;
-    if(m==="draft"){ const e = Mail.get(id); if(e){ draftId=id; draft={to:(e.to||[]).join(", "),cc:(e.cc||[]).join(", "),subject:e.subject,body:e.body}; } }
+    if(m==="draft"){ const e = Mail.get(id); if(e){ draftId=id; draft={to:(e.to||[]).join(", "),cc:(e.cc||[]).join(", "),inReplyTo:"",subject:e.subject,body:e.body}; } }
     else if(m==="reply"){ const d = Mail.replyDraft(id); if(d) draft=d; }
     else if(m==="replyall"){ const d = Mail.replyDraft(id, true); if(d) draft=d; }
     else if(m==="forward"){ const d = Mail.forwardDraft(id); if(d) draft=d; }
@@ -19,7 +19,7 @@ Views.compose = function(el, arg){
   let pendingFiles=0;
   el.innerHTML = `
   <div class="compose">
-    <div class="compose-head"><span>✎</span> ${mode==="new"?"New message":mode[0].toUpperCase()+mode.slice(1)} <span class="sp"></span>
+    <div class="compose-head"><span>${Icons.get("compose")}</span> ${mode==="new"?"New message":mode[0].toUpperCase()+mode.slice(1)} <span class="sp"></span>
       <button class="btn sm ghost" id="c-discard">Discard</button></div>
     <div class="c-row"><span class="c-lab">To</span><input id="c-to" type="text" value="${esc(draft.to)}" placeholder="name@example.com" autocomplete="off">
       <button class="btn sm ghost" id="c-ccbtn">Cc</button></div>
@@ -28,12 +28,12 @@ Views.compose = function(el, arg){
     <div class="fmt-bar" role="toolbar" aria-label="Formatting">
       ${[["bold","B"],["italic","I"],["underline","U"],["strikeThrough","S"],["insertUnorderedList","• List"],["insertOrderedList","1. List"],["createLink","🔗"]].map(([c,l])=>`<button class="icon-btn sm" data-fmt="${c}" title="${c}"><b>${l}</b></button>`).join("")}
       <span style="flex:1"></span>
-      <label class="icon-btn sm" title="Attach files" style="cursor:pointer">📎<input type="file" id="c-files" multiple class="sr"></label>
+      <label class="icon-btn sm" title="Attach files" style="cursor:pointer">${Icons.get("paperclip")}<input type="file" id="c-files" multiple class="sr"></label>
     </div>
     <div id="compose-body" contenteditable="true" data-ph="Write your message…">${draft.body}</div>
     <div id="c-attachlist" style="padding:0 18px"></div>
     <div class="compose-foot">
-      <button class="btn primary" id="c-send">Send ➤</button>
+      <button class="btn primary" id="c-send">Send ${Icons.get("sent")}</button>
       <button class="btn" id="c-savedraft">Save draft</button>
       <span style="margin-left:auto;font-size:12px;color:var(--ink-3)" id="c-status"></span>
     </div>
@@ -69,7 +69,7 @@ Views.compose = function(el, arg){
     el.querySelectorAll("[data-rmatt]").forEach(x=> x.addEventListener("click", async ()=>{ attachments.splice(+x.dataset.rmatt,1); renderAtt(); }));
   }
   const collect = ()=>({ to:$("c-to").value, cc:$("c-cc").value, subject:$("c-subj").value,
-    body:$("compose-body").innerHTML, attachments:[...attachments] });
+    body:$("compose-body").innerHTML, inReplyTo:draft.inReplyTo||"", attachments:[...attachments] });
 
   $("c-send").addEventListener("click", async ()=>{
     if(pendingFiles)return;

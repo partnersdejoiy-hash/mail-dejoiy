@@ -32,17 +32,24 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(caught.exception.status,401)
     def test_mail_body_cannot_inject_html(self):
         client=z.Zimbra('https://mail.example.com')
-        responses=[z.ET.fromstring('<GetFolderResponse xmlns="urn:zimbraMail"><folder id="1"/></GetFolderResponse>'),z.ET.fromstring('<SearchResponse xmlns="urn:zimbraMail" more="1"><m id="11"/></SearchResponse>'),z.ET.fromstring('<GetMsgResponse xmlns="urn:zimbraMail"><m id="11" l="2" d="12" f="u"><e t="f" a="a@b.com"/><su>Hello</su><mp ct="text/plain"><content>&lt;img src=x onerror=alert(1)&gt;</content></mp></m></GetMsgResponse>')]
+        responses=[z.ET.fromstring('<GetFolderResponse xmlns="urn:zimbraMail"><folder id="1"/></GetFolderResponse>'),z.ET.fromstring('<SearchResponse xmlns="urn:zimbraMail" more="1"><m id="11"/></SearchResponse>'),z.ET.fromstring('<GetMsgResponse xmlns="urn:zimbraMail"><m id="11" cid="700" mid="&lt;original@example.com&gt;" irt="&lt;parent@example.com&gt;" l="2" d="12" f="u"><e t="f" a="a@b.com"/><su>Hello</su><mp ct="text/plain"><content>&lt;img src=x onerror=alert(1)&gt;</content></mp></m></GetMsgResponse>')]
         client.call=Mock(side_effect=responses); result=client.messages('token')
         self.assertEqual(client.call.call_args_list[1].args[0].find('{urn:zimbraMail}query').text, 'is:anywhere')
         self.assertEqual(client.call.call_args_list[2].args[0][0].get('html'),'1')
-        self.assertIn('&lt;img',result['emails'][0]['body']);self.assertTrue(result['more']);self.assertFalse(result['emails'][0]['read'])
+        self.assertIn('&lt;img',result['emails'][0]['body']);self.assertEqual(result['emails'][0]['conversationId'],'700');self.assertEqual(result['emails'][0]['messageId'],'<original@example.com>');self.assertEqual(result['emails'][0]['inReplyTo'],'<parent@example.com>');self.assertTrue(result['more']);self.assertFalse(result['emails'][0]['read'])
     def test_send_escapes_and_uses_authenticated_sender(self):
         client=z.Zimbra('https://mail.example.com');client.call=Mock(return_value=z.ET.fromstring('<SendMsgResponse xmlns="urn:zimbraMail"><m id="42"/></SendMsgResponse>'))
         out=client.write_message('token',{'to':'a@b.com','subject':'A & B','body':'<b>Hello</b><script>bad()</script>'})
         request=client.call.call_args.args[0]
         self.assertEqual(out['id'],'42');self.assertEqual(request.find('.//{urn:zimbraMail}content').text,'Hello')
         self.assertEqual(len(request.findall('.//{urn:zimbraMail}e')),1)
+    def test_reply_preserves_the_upstream_message_thread_reference(self):
+        client=z.Zimbra('https://mail.example.com');client.call=Mock(return_value=z.ET.fromstring('<SendMsgResponse xmlns="urn:zimbraMail"><m id="42"/></SendMsgResponse>'))
+        client.write_message('token',{'to':'a@b.com','subject':'Re: hello','body':'reply','inReplyTo':'<parent@example.com>'})
+        self.assertEqual(client.call.call_args.args[0].find('.//{urn:zimbraMail}m').get('irt'),'<parent@example.com>')
+        client.call.reset_mock()
+        with self.assertRaises(z.APIError):client.write_message('token',{'to':'a@b.com','inReplyTo':'reply\r\nBcc: attacker@example.com'})
+        client.call.assert_not_called()
     def test_attachment_rejected_instead_of_silent_loss(self):
         client=z.Zimbra('https://mail.example.com')
         with self.assertRaises(z.APIError):client.write_message('t',{'to':'a@b.com','attachments':[{'name':'file.pdf'}]})
@@ -138,6 +145,7 @@ class HTTPTests(unittest.TestCase):
         cls.server=z.ThreadingHTTPServer(('127.0.0.1',0),z.Handler)
         cls.url='http://127.0.0.1:'+str(cls.server.server_port);cls.server.app_origin=cls.url;cls.server.attempts={}
         cls.server.zimbra=Mock();cls.server.zimbra.login.return_value=('private-token',3600);cls.server.zimbra.messages.return_value={'emails':[]};cls.server.zimbra.write_message.return_value={'id':'42'}
+        cls.server.zimbra.capabilities.return_value={'isAdmin':True,'canManageRoles':True}
         cls.server.admin=Mock();cls.server.admin.login.return_value=('private-admin-token',900);cls.server.admin.overview.return_value={'users':[],'domains':[]};cls.server.admin.action.return_value={'ok':True}
         cls.server.zimbra.contacts.return_value={'contacts':[]};cls.server.zimbra.contact_action.return_value={'id':'12','ok':True}
         cls.server.zimbra.preferences.return_value={'name':'Test','signature':'','vacation':{'on':False,'message':''}};cls.server.zimbra.save_preferences.return_value={'ok':True}
