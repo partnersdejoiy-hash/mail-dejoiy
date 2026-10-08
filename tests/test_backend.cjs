@@ -30,3 +30,8 @@ test('ordinary mailboxes do not receive admin navigation',()=>{
 test('server-confirmed admins retain admin navigation',()=>{
  const c=setup();c.Store.state.user={isAdmin:true};c.live.install();assert.equal(c.App.NAV.some(([route])=>route==='admin'),true);
 });
+test('marking a conversation read sends flat message IDs to the server',async()=>{
+ const c=setup();c.live.csrf='csrf-token';c.live.install();let payload;
+ c.fetch=async(url,options)=>{payload=JSON.parse(options.body);return {ok:true,status:200,json:async()=>({ok:true})};};
+ await c.Mail.setRead(['message-1','message-2'],true);assert.deepEqual(payload.ids,['message-1','message-2']);assert.equal(payload.op,'read');
+});

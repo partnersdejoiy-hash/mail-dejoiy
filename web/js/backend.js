@@ -49,7 +49,7 @@ const Live={enabled:!!window.DEJOIY_LIVE,csrf:'',more:false,
     let queue=Promise.resolve();
     const mutate=(data,apply)=>{const job=queue.then(async()=>{await this.request('action',data);apply();App.refreshNav();if(App.route==='mail')App.render();});queue=job.catch(()=>{});return job;};
     const ids=value=>Array.isArray(value)?value:[value];
-    Mail.setRead=(id,value=true)=>Mail.get(id)?.read===(value!==false)?Promise.resolve():mutate({ids:[id],op:'read',value:value!==false},()=>local.setRead(id,value));
+    Mail.setRead=(id,value=true)=>{const messageIds=(Array.isArray(id)?id:[id]).filter(messageId=>Mail.get(messageId));const next=value!==false;if(!messageIds.length||messageIds.every(messageId=>Mail.get(messageId).read===next))return Promise.resolve();return mutate({ids:messageIds,op:'read',value:next},()=>local.setRead(messageIds,next));};
     Mail.toggleStar=id=>{const value=!Mail.get(id).starred;return mutate({ids:[id],op:'star',value},()=>{Mail.get(id).starred=value;});};
     Mail.toggleImportant=id=>{const value=!Mail.get(id).important;return mutate({ids:[id],op:'important',value},()=>{Mail.get(id).important=value;});};
     Mail.moveTo=(value,folder)=>mutate({ids:ids(value),op:'move',folder},()=>local.moveTo(value,folder));
