@@ -14,7 +14,9 @@ cd "$build_dir/zm-build"
 # Resolve the newest available tag at or below the selected release.
 tags="$version"
 for ((patch=20;patch>=0;patch--)); do tags+=",10.1.$patch"; done
+for ((patch=13;patch>=0;patch--)); do tags+=",10.0.$patch"; done
+tags+=",10.0.0-GA"
 ENV_CACHE_CLEAR_FLAG=true ./build.pl \
   --git-default-tag="$tags" --build-release-no="$version" \
-  --build-type=FOSS --build-release=LIBERTY --build-release-candidate=GA \
+  --build-type=FOSS --build-release=DAFFODIL --build-release-candidate=GA \
   --build-thirdparty-server=files.zimbra.com --no-interactive

@@ -6,6 +6,9 @@ import re
 import secrets
 import time
 import threading
+import sqlite3
+import ipaddress
+from collections.abc import MutableMapping
 import urllib.request
 import urllib.error
 import urllib.parse
@@ -19,6 +22,28 @@ SOAP = 'http://www.w3.org/2003/05/soap-envelope'
 MAIL = 'urn:zimbraMail'
 ACCOUNT = 'urn:zimbraAccount'
 FOLDERS = {'inbox':'2','sent':'5','drafts':'6','spam':'4','trash':'3'}
+class SessionStore(MutableMapping):
+    """Private SQLite token store; parent directory must be owned by the service."""
+    def __init__(self, path):
+        self.db = sqlite3.connect(path, check_same_thread=False)
+        os.chmod(path, 0o600)
+        self.db.execute('CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, data TEXT NOT NULL)')
+        self.db.commit()
+    def __getitem__(self, key):
+        row = self.db.execute('SELECT data FROM sessions WHERE id=?', (key,)).fetchone()
+        if row is None: raise KeyError(key)
+        return json.loads(row[0])
+    def __setitem__(self, key, value):
+        self.db.execute('INSERT OR REPLACE INTO sessions VALUES (?, ?)', (key, json.dumps(value)))
+        self.db.commit()
+    def __delitem__(self, key):
+        if key not in self: raise KeyError(key)
+        self.db.execute('DELETE FROM sessions WHERE id=?', (key,)); self.db.commit()
+    def __iter__(self):
+        return iter([row[0] for row in self.db.execute('SELECT id FROM sessions')])
+    def __len__(self):
+        return self.db.execute('SELECT COUNT(*) FROM sessions').fetchone()[0]
+
 SESSIONS = {}
 LOCK = threading.Lock()
 ROOT = Path(__file__).resolve().parent.parent / 'web'
@@ -97,7 +122,7 @@ class Zimbra:
     def messages(self, token):
         folders=self.folder_map(token); reverse={v:k for k,v in folders.items()}; result=[]; more=False
         r=node(MAIL,'SearchRequest',{'types':'message','limit':'50','sortBy':'dateDesc'})
-        r.append(node(MAIL,'query',text='in:anywhere'))
+        r.append(node(MAIL,'query',text='is:anywhere'))
         out=self.call(r,token); more=out.get('more')=='1'
         for summary in out.findall('{'+MAIL+'}m'):
             req=node(MAIL,'GetMsgRequest'); req.append(node(MAIL,'m',{'id':summary.get('id'),'read':'0'}))
@@ -113,7 +138,7 @@ class Zimbra:
             if value is None: value=plain(next((v for t,v in bodies if t=='text/html'),''))
             flags=m.get('f',''); attachments=[{'name':p.get('filename'),'size':p.get('s','')} for p in m.iter('{'+MAIL+'}mp') if p.get('filename')]
             subject=m.find('{'+MAIL+'}su')
-            result.append({'id':m.get('id'),'from':{'name':sender.get('p') or sender.get('a','') if sender is not None else '', 'email':sender.get('a','') if sender is not None else ''},'to':[e.get('a','') for e in addresses if e.get('t')=='t'],'cc':[e.get('a','') for e in addresses if e.get('t')=='c'],'subject':subject.text or '' if subject is not None else '', 'body':html.escape(value).replace('\n','<br>'),'folder':reverse.get(m.get('l'),'other'),'read':'u' not in flags,'starred':'f' in flags,'important':'!' in flags,'date':int(m.get('d','0')),'labels':[],'hasAttachment':bool(attachments),'attachments':attachments})
+            result.append({'id':m.get('id'),'from':{'name':sender.get('p') or sender.get('a','') if sender is not None else '', 'email':sender.get('a','') if sender is not None else ''},'to':[e.get('a','') for e in addresses if e.get('t')=='t'],'cc':[e.get('a','') for e in addresses if e.get('t')=='c'],'subject':subject.text or '' if subject is not None else '', 'body':html.escape(value).replace('\n','<br>'),'folder':reverse.get(m.get('l'),'other'),'read':'u' not in flags,'starred':'f' in flags,'important':'+' in flags or '!' in flags,'date':int(m.get('d','0')),'labels':[],'hasAttachment':bool(attachments),'attachments':attachments})
         return {'emails':result,'more':more,'limit':50}
     def write_message(self, token, data, draft=False):
         if data.get('attachments'): raise APIError('Attachment upload is not implemented yet; remove attachments before sending or saving.')
@@ -196,6 +221,8 @@ class Handler(SimpleHTTPRequestHandler):
                         attempts[key]=[t for t in attempts[key] if t>now-60]
                         if not attempts[key]: del attempts[key]
                     key=self.client_address[0]
+                    if ipaddress.ip_address(key).is_loopback and self.headers.get('X-Real-IP'):
+                        key=str(ipaddress.ip_address(self.headers['X-Real-IP']))
                     if len(attempts.get(key,[]))>=10: raise APIError('Too many login attempts; wait one minute',429)
                     attempts.setdefault(key,[]).append(now)
                 email=str(data.get('email','')).strip(); password=str(data.get('password',''))
@@ -204,6 +231,8 @@ class Handler(SimpleHTTPRequestHandler):
                 s={'token':token,'expires':time.time()+lifetime,'csrf':secrets.token_urlsafe(32),'user':{'email':email,'name':email.split('@')[0],'signature':''}}
                 sid=secrets.token_urlsafe(32)
                 with LOCK:
+                    for key in list(SESSIONS):
+                        if SESSIONS[key]['expires'] <= time.time(): del SESSIONS[key]
                     if len(SESSIONS)>=1000: raise APIError('Session capacity reached',503)
                     old=SimpleCookie(); old.load(self.headers.get('Cookie','')); oldsid=old.get('dejoiy_session')
                     if oldsid: SESSIONS.pop(oldsid.value,None)
@@ -224,6 +253,9 @@ class Handler(SimpleHTTPRequestHandler):
         except Exception: self.reply(502,{'error':'Mail operation failed. Try again later.'})
 
 def serve():
+    global SESSIONS
+    if os.environ.get('SESSION_DB'):
+        SESSIONS = SessionStore(os.environ['SESSION_DB'])
     port=int(os.environ.get('PORT','8080')); origin=os.environ.get('APP_ORIGIN',f'http://localhost:{port}')
     parsed=urllib.parse.urlsplit(origin)
     if parsed.scheme!='https' and parsed.hostname not in ('localhost','127.0.0.1'):

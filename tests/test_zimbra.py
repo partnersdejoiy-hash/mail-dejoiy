@@ -1,4 +1,5 @@
 import sys
+import tempfile
 import json
 import threading
 import unittest
@@ -33,6 +34,7 @@ class AdapterTests(unittest.TestCase):
         client=z.Zimbra('https://mail.example.com')
         responses=[z.ET.fromstring('<GetFolderResponse xmlns="urn:zimbraMail"><folder id="1"/></GetFolderResponse>'),z.ET.fromstring('<SearchResponse xmlns="urn:zimbraMail" more="1"><m id="11"/></SearchResponse>'),z.ET.fromstring('<GetMsgResponse xmlns="urn:zimbraMail"><m id="11" l="2" d="12" f="u"><e t="f" a="a@b.com"/><su>Hello</su><mp ct="text/plain"><content>&lt;img src=x onerror=alert(1)&gt;</content></mp></m></GetMsgResponse>')]
         client.call=Mock(side_effect=responses); result=client.messages('token')
+        self.assertEqual(client.call.call_args_list[1].args[0].find('{urn:zimbraMail}query').text, 'is:anywhere')
         self.assertIn('&lt;img',result['emails'][0]['body']);self.assertTrue(result['more']);self.assertFalse(result['emails'][0]['read'])
     def test_send_escapes_and_uses_authenticated_sender(self):
         client=z.Zimbra('https://mail.example.com');client.call=Mock(return_value=z.ET.fromstring('<SendMsgResponse xmlns="urn:zimbraMail"><m id="42"/></SendMsgResponse>'))
@@ -48,6 +50,20 @@ class AdapterTests(unittest.TestCase):
         with self.assertRaises(z.APIError):client.action('t',{'ids':['1,2'],'op':'delete'})
         client.action('t',{'ids':['1'],'op':'read','value':False})
         self.assertEqual(client.call.call_args.args[0][0].get('op'),'!read')
+
+class SessionTests(unittest.TestCase):
+    def test_restart_and_delete(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = str(Path(directory)/'sessions.sqlite')
+            store = z.SessionStore(path)
+            store['opaque-id'] = {'token':'private', 'expires':123}
+            store.db.close()
+            store = z.SessionStore(path)
+            self.assertEqual(store['opaque-id']['token'], 'private')
+            self.assertEqual(Path(path).stat().st_mode & 0o777, 0o600)
+            del store['opaque-id']
+            self.assertEqual(len(store), 0)
+            store.db.close()
 
 class HTTPTests(unittest.TestCase):
     @classmethod

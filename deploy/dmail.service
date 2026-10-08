@@ -1,0 +1,22 @@
+[Unit]
+Description=Dmail Zimbra SOAP adapter
+After=network-online.target
+Wants=network-online.target
+[Service]
+User=dmail
+Group=dmail
+WorkingDirectory=/opt/mail-dejoiy
+EnvironmentFile=/etc/dmail/adapter.env
+ExecStart=/usr/bin/python3 /opt/mail-dejoiy/server/zimbra.py
+Restart=on-failure
+RestartSec=3
+StateDirectory=dmail
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/dmail
+[Install]
+WantedBy=multi-user.target

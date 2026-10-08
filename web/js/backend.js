@@ -11,9 +11,10 @@ const Live={enabled:!!window.DEJOIY_LIVE,csrf:'',more:false,
   async sync(){const result=await this.request('mail'); Store.state.emails=result.emails; this.more=result.more; return {folder:'inbox',subject:'Mailbox refreshed'};},
   async boot(){
     if(!this.enabled)return;
-    const prefs=Store.state.prefs;
+    let prefs=Store.state.prefs;
+    try { prefs=JSON.parse(localStorage.getItem('dejoiy-live-prefs')) || prefs; } catch (_) {}
     Store.state={version:1,user:{name:'',email:'',signature:''},emails:[],contacts:[],events:[],todos:[],notes:[],chats:{},filters:[],blocked:[],allowed:[],vacation:{on:false},prefs,admin:{org:'',users:[],domains:[]},poolIdx:0};
-    Store.save=()=>{}; Store.reset=()=>location.reload();
+    Store.save=()=>{try{localStorage.setItem('dejoiy-live-prefs',JSON.stringify(Store.state.prefs));}catch(_){}}; Store.reset=()=>location.reload();
     let session;
     try{session=await this.request('session');}catch(_){session=await this.login();}
     this.csrf=session.csrf; Store.state.user=session.user;
@@ -24,7 +25,7 @@ const Live={enabled:!!window.DEJOIY_LIVE,csrf:'',more:false,
     const config=await this.request('config');
     return new Promise(resolve=>{
       const layer=document.createElement('div'); layer.className='live-login';
-      layer.innerHTML=`<form class="card"><h1>Dejoiy Mail</h1><p>Sign in to your business mailbox</p><label>Email<input name="email" type="email" autocomplete="username" required></label><label>Password<input name="password" type="password" autocomplete="current-password" required></label><p role="alert"></p><button class="btn primary" ${config.configured?'':'disabled'}>Sign in</button><small>${config.configured?'':'Mail server setup is pending. Ask your administrator to configure it.'}</small></form>`;
+      layer.innerHTML=`<form class="card"><h1>Dmail</h1><p>Sign in to your business mailbox</p><label>Email<input name="email" type="email" autocomplete="username" required></label><label>Password<input name="password" type="password" autocomplete="current-password" required></label><p role="alert"></p><button class="btn primary" ${config.configured?'':'disabled'}>Sign in</button><small>${config.configured?'':'Mail server setup is pending. Ask your administrator to configure it.'}</small></form>`;
       document.body.appendChild(layer); const form=layer.querySelector('form');
       form.addEventListener('submit',async e=>{e.preventDefault(); const button=form.querySelector('button'); button.disabled=true;
         try{const result=await this.request('login',{email:form.elements.email.value,password:form.elements.password.value});form.reset();layer.remove();resolve(result);}
@@ -33,6 +34,7 @@ const Live={enabled:!!window.DEJOIY_LIVE,csrf:'',more:false,
     });
   },
   install(){
+    App.NAV=App.NAV.filter(([route])=>['mail:inbox','settings'].includes(route));
     const local={}; for(const name of ['setRead','toggleStar','toggleImportant','moveTo','deleteForever'])local[name]=Mail[name].bind(Mail);
     let queue=Promise.resolve();
     const mutate=(data,apply)=>{const job=queue.then(async()=>{await this.request('action',data);apply();App.refreshNav();if(App.route==='mail')App.render();});queue=job.catch(()=>{});return job;};
@@ -50,7 +52,7 @@ const Live={enabled:!!window.DEJOIY_LIVE,csrf:'',more:false,
     Mail.storage=()=>({used:'—',total:'—',pct:0});
     const original=App.render.bind(App);
     App.render=function(){
-      if(['admin','settings','calendar','contacts','notes','chat','today'].includes(this.route)){
+      if(['admin','calendar','contacts','notes','chat','today'].includes(this.route)){
         document.getElementById('view').innerHTML='<div class="empty-note">This feature is not connected to your business mailbox yet. <a href="#/mail:inbox">Open Mail</a></div>';this.refreshNav();return;
       }original();
     };

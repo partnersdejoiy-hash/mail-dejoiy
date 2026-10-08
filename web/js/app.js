@@ -99,7 +99,7 @@ const App = {
       this.go(b.dataset.nav); document.body.classList.remove("nav-open");
     }));
     const bn = document.getElementById("bottomnav");
-    const items = [["today","🏠","Today"],["mail:inbox","📥","Mail"],["compose:new","✎","Compose"],["calendar","📅","Cal"],["chat","💬","Chat"]];
+    const items = Live.enabled ? [["mail:inbox","📥","Mail"],["compose:new","✎","Compose"],["settings","⚙️","Settings"]] : [["today","🏠","Today"],["mail:inbox","📥","Mail"],["compose:new","✎","Compose"],["calendar","📅","Cal"],["chat","💬","Chat"]];
     bn.innerHTML = items.map(([r,ico,label])=>{
       const active = this.route===(r.includes(":")?r.split(":")[0]:r);
       return `<button data-nav="${r}" class="${active?"active":""}"><span class="b-ico">${ico}</span>${label}</button>`;
@@ -270,7 +270,7 @@ const App = {
     document.getElementById("adv-search-btn").addEventListener("click", ()=> this.advSearch());
     document.getElementById("menu-btn").addEventListener("click", ()=> document.body.classList.toggle("nav-open"));
     document.getElementById("side-scrim").addEventListener("click", ()=> document.body.classList.remove("nav-open"));
-    document.getElementById("brand-home").addEventListener("click", ()=> this.go("today"));
+    document.getElementById("brand-home").addEventListener("click", ()=> this.go(Live.enabled?"mail:inbox":"today"));
     document.getElementById("account-btn").addEventListener("click", async ev=>{
       const u = Store.state.user;
       this.menu(ev.currentTarget, [

@@ -12,7 +12,7 @@ Checked on 2026-10-07 UTC:
 - Its `instructions/FOSS_repo_list.pl` includes `zm-mailbox` and related components. Not every component has a `10.1.21` tag; the build script supplies descending fallback tags as demonstrated by the upstream build documentation.
 - Core source: https://github.com/Zimbra/zm-mailbox ; SOAP protocol documentation: `store/docs/soap.txt`.
 
-A source tag is not a prebuilt, validated installation. Run `bash scripts/build-zimbra-foss.sh` on a separate VM with the build dependencies documented by upstream. The script builds FOSS and preserves upstream files. A full binary build has not been run in this workspace. Install the resulting package on a supported OS, configure domains/mailboxes, HTTPS, MX, SPF, DKIM and DMARC, and perform a live acceptance test before offering paid mail.
+A source tag is not a prebuilt, validated installation. Run `bash scripts/build-zimbra-foss.sh` on a separate VM with the build dependencies documented by upstream. The script builds FOSS and preserves upstream files. A full FOSS build and host installation completed on the Contabo server; see [CONTABO.md](CONTABO.md) for exact artifacts, runtime repairs, verified local acceptance and pending external delivery. Install the resulting package on a supported OS, configure domains/mailboxes, HTTPS, MX, SPF, DKIM and DMARC, and perform a live acceptance test before offering paid mail.
 
 ## Run the connected frontend
 
@@ -28,7 +28,7 @@ Open exactly `http://localhost:8080`, then use an existing Zimbra mailbox login.
 
 ## Implemented
 
-- Zimbra authentication, expiring server-memory sessions, logout.
+- Zimbra authentication, expiring server-side sessions, logout.
 - HttpOnly/SameSite cookies, Secure cookies for HTTPS, origin validation and CSRF tokens on mutations.
 - Mailbox refresh: latest 50 messages across folders, with escaped text bodies; original HTML is not executed.
 - Send and save draft through SOAP; recipient validation; text-only content.
@@ -38,13 +38,13 @@ Open exactly `http://localhost:8080`, then use an existing Zimbra mailbox login.
 
 ## Current limits
 
-This is a first integration, not a production mail platform. Latest-50 counts and search apply only to loaded messages; older/custom-folder messages are not fully browsable. Attachment upload/download and rich HTML rendering are pending; attempts to send/save attachments fail explicitly. Empty Trash applies only to loaded trash messages. Labels, filters, contacts/calendar/chat/notes, account settings, storage quota, provisioning and billing are not connected; their demo screens are blocked in live mode. Theme picker remains available.
+This is a first integration, not a production mail platform. Latest-50 counts and search apply only to loaded messages; older/custom-folder messages are not fully browsable. Attachment upload/download and rich HTML rendering are pending; attempts to send/save attachments fail explicitly. Empty Trash applies only to loaded trash messages. Labels, filters, contacts/calendar/chat/notes, account settings (appearance and keyboard shortcuts remain available), storage quota, provisioning and billing are not connected; their demo screens are blocked in live mode. Theme picker remains available.
 
-Sessions and rate limits are per process; restarting logs users out. This server is intended for initial single-process integration behind a reverse proxy, not horizontal production scaling. Login uses Zimbra credentials and does not reuse the existing Node backend's 2FA/RBAC. Zimbra account suspension/expiry is enforced upstream on calls. Browser logout revokes the adapter session; the upstream token remains only until expiry and is no longer retained by the adapter.
+Set `SESSION_DB=/var/lib/dmail/sessions.sqlite` for persistent sessions in a service-owned directory with mode 0700. The SQLite file uses mode 0600 and contains sensitive upstream tokens; protect backups accordingly. Without this variable, sessions remain in memory and a restart logs users out. Rate limits remain per process; enforce IP-based login limits at the reverse proxy. This server is intended for initial single-process integration behind a reverse proxy, not horizontal production scaling. Login uses Zimbra credentials and does not reuse the existing Node backend's 2FA/RBAC. Zimbra account suspension/expiry is enforced upstream on calls. Browser logout revokes the adapter session; the upstream token remains only until expiry and is no longer retained by the adapter.
 
-The 10 Python tests and 4 JavaScript adapter tests pass. Full browser smoke testing was attempted but the environment has no installed Chromium executable.
+The 11 Python tests and 4 JavaScript adapter tests pass. Live headless Chromium verified Dmail login, inbox, compose/send and settings against the installed Zimbra backend.
 
-A live Zimbra host was not supplied, so no real login/send/receive or DNS deliverability test has been performed. SOAP responses and HTTP security are covered by mocked tests:
+Real login, local SMTP ingress/self-delivery, mail mutations, drafts, session persistence and authenticated SMTP/IMAP have been verified. External send/receive and public DKIM/DMARC acceptance remain pending. SOAP responses and HTTP security are covered by mocked tests:
 
 ```bash
 python3 -m unittest discover -s tests -v
