@@ -21,7 +21,7 @@ function freshState(){
     blocked: ["winner@prize-lotto.xyz"],
     allowed: [],
     vacation: { on:false, subject:"Out of office", message:"Thanks for writing — I'm away and will reply when I'm back." },
-    prefs: { theme:"aol", brightness:"dark", customBg:"", customLogo:"", sounds:true },
+    prefs: { theme:"pearl", brightness:"light", customBg:"", customLogo:"", sounds:true, messageLayout:"list", inboxSpacing:"comfortable", messageTabs:false, largeText:false, mailUiVersion:2, mailSort:"dateDesc" },
     admin: {
       org: "DEJOIY INDIA PRIVATE LIMITED",
       users: [
@@ -46,8 +46,16 @@ function load(){
   return freshState();
 }
 
+function migrateAppearance(state){
+  const p=state.prefs;
+  if(!p.designVersion){
+    if(p.theme==='aol'&&!p.customBg){p.theme='pearl';p.brightness='light';}
+    p.designVersion=3;
+  }
+  return state;
+}
 const Store = {
-  state: load(),
+  state: migrateAppearance(load()),
   save(){ try{ localStorage.setItem(KEY, JSON.stringify(this.state)); }catch(e){} },
   reset(){ this.state = freshState(); this.save(); },
   get emails(){ return this.state.emails; }

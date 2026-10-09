@@ -11,7 +11,7 @@
 html{-webkit-text-size-adjust:100%}
 body{
   font-family:var(--font); color:var(--ink); background:#0e1420;
-  height:100dvh; overflow:hidden; font-size:14px; line-height:1.45;
+  height:calc(var(--vh,1vh)*100);height:100dvh; overflow:hidden; font-size:14px; line-height:1.45;
 }
 /* default (dark) surfaces — overridden per brightness in themes.css */
 body{ --surface:rgba(20,27,42,.86); --surface-2:rgba(28,37,56,.86); --surface-3:rgba(38,50,74,.9);
@@ -20,7 +20,7 @@ body{ --surface:rgba(20,27,42,.86); --surface-2:rgba(28,37,56,.86); --surface-3:
 }
 button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 input,select,textarea{font:inherit;color:var(--ink)}
-input[type="text"],input[type="search"],input[type="email"],input[type="date"],input[type="number"],select,textarea{
+input[type="text"],input[type="search"],input[type="email"],input[type="password"],input[type="date"],input[type="number"],select,textarea{
   background:var(--surface-3); border:1px solid var(--line); border-radius:var(--radius-s);
   padding:8px 10px; width:100%; outline:none;
 }

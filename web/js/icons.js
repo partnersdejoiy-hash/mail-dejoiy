@@ -1,0 +1,48 @@
+/* Small, original SVG icons for the Dejoiy Mail interface. */
+(function(){
+'use strict';
+const paths={
+ mail:'M3 5h18v14H3z M3 6l9 7 9-7',
+ inbox:'M4 4h16l2 12v4H2v-4L4 4z M2 15h6l2 3h4l2-3h6',
+ compose:'M14 4l6 6 M4 20l4-1L21 6l-4-4L4 15v5z',
+ unread:'M3 8l9-6 9 6v13H3V8z M3 9l9 6 9-6',
+ star:'M12 3l2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3z',
+ sent:'M22 2L9 15 M22 2l-7 20-6-7-7-6 20-7z',
+ draft:'M6 2h9l4 4v16H6V2z M14 2v5h5 M9 11h7 M9 15h7',
+ archive:'M3 3h18v5H3z M5 8v13h14V8 M9 12h6',
+ spam:'M8 2h8l6 6v8l-6 6H8l-6-6V8l6-6z M12 7v6 M12 17h.01',
+ trash:'M3 6h18 M9 6V3h6v3 M5 6l1 15h12l1-15 M10 10v7 M14 10v7',
+ contacts:'M4 3h16v18H4z M9 8a3 3 0 1 0 6 0a3 3 0 1 0-6 0 M7 18v-1a5 5 0 0 1 10 0v1',
+ photo:'M3 3h18v18H3z M3 17l6-7 5 6 3-4 4 5 M16 7h.01',
+ file:'M5 2h10l4 4v16H5V2z M14 2v5h5',
+ important:'M8 3h8l5 9-5 9H8l5-9-5-9z',
+ settings:'M9 3h6l1 3 3 1 2 5-2 5-3 1-1 3H9l-1-3-3-1-2-5 2-5 3-1 1-3z M9 12a3 3 0 1 0 6 0a3 3 0 1 0-6 0',
+ shield:'M12 2l9 4v6c0 5-9 10-9 10S3 17 3 12V6l9-4z M8 12l3 3 5-6',
+ search:'M10 3a7 7 0 1 0 0 14a7 7 0 1 0 0-14 M15 15l6 6',
+ refresh:'M20 7a9 9 0 1 0 1 9 M20 2v6h-6',
+ chevron:'M6 9l6 6 6-6',
+ back:'M15 5l-7 7 7 7',
+ next:'M9 5l7 7-7 7',
+ move:'M3 7V4h7l2 3h9v14H3V7z M7 14h10 M13 10l4 4-4 4',
+ more:'M4 12h.01 M12 12h.01 M20 12h.01',
+ tag:'M2 3h9l11 10-9 9L2 11V3z M7 7h.01',
+ reply:'M9 4l-7 7 7 7 M2 11h12a7 7 0 0 1 7 7',
+ replyall:'M7 5l-6 6 6 6 M13 5l-6 6 6 6 M7 11h8a7 7 0 0 1 7 7',
+ forward:'M15 4l7 7-7 7 M22 11H10a7 7 0 0 0-7 7',
+ print:'M6 9V3h12v6 M6 17H3V9h18v8h-3 M6 14h12v7H6z',
+ close:'M6 6l12 12 M6 18L18 6',
+ menu:'M3 6h18 M3 12h18 M3 18h18',
+ help:'M12 2a10 10 0 1 0 0 20a10 10 0 1 0 0-20 M9 8a3 3 0 0 1 6 0c0 2-3 2-3 5 M12 17h.01',
+ palette:'M12 2a10 10 0 1 0 0 20h2a2 2 0 0 0 0-4h-1a2 2 0 0 1 0-4h5a4 4 0 0 0 4-4c0-4-5-6-10-6 M7 9h.01 M10 6h.01 M15 6h.01 M18 9h.01',
+ layoutlist:'M3 3h18v18H3z M3 8h18 M3 13h18 M3 18h18',
+ layoutright:'M3 3h18v18H3z M12 3v18 M3 8h9 M3 13h9 M3 18h9',
+ layoutbottom:'M3 3h18v18H3z M3 12h18 M3 7h18',
+ calendar:'M4 5h16v16H4z M8 2v6 M16 2v6 M4 10h16',
+ note:'M4 3h16v18H4z M8 8h8 M8 12h8 M8 16h5',
+ chat:'M3 3h18v14H8l-5 4V3z M7 8h10 M7 12h7',
+ home:'M2 11l10-9 10 9 M5 9v13h5v-7h4v7h5V9',
+ paperclip:'M8 13l7-7a3 3 0 0 1 4 4L9 20a5 5 0 0 1-7-7L13 2',
+ check:'M4 12l5 5L20 6'
+};
+window.Icons={get(name){return `<svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="${paths[name]||paths.mail}"/></svg>`;}};
+})();

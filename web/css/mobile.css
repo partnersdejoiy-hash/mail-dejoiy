@@ -1,0 +1,81 @@
+/* ============ Dejoiy Mail — mobile.css : app-like phone experience ============
+   Loaded last. Desktop is untouched except for the hidden phone-only controls. */
+.fab,.m-avatar,.c-send-top{display:none}
+
+@media (max-width:680px){
+  /* header: menu, search, avatar — stays put while the list scrolls */
+  #topbar{position:sticky;top:0;z-index:41;height:auto;min-height:60px;padding-top:calc(8px + env(safe-area-inset-top));padding-bottom:8px;gap:8px;border-bottom:1px solid var(--line)}
+  .search-wrap{height:44px;border-radius:22px;padding-left:16px;background:var(--surface-2);border-color:transparent}
+  .search-wrap:focus-within{background:var(--surface)}
+  .search-submit{width:44px;border-radius:0 22px 22px 0}
+
+  /* drawer sits above the header so Compose and folders are fully visible */
+  #sidebar{z-index:46;width:280px!important;padding-top:calc(20px + env(safe-area-inset-top));border-radius:0 18px 18px 0;background:var(--surface)!important}
+  body.nav-open #side-scrim{z-index:45}
+  #sidebar .compose-btn{display:none}
+  .nav-item{min-height:46px;font-size:15px}
+
+  /* list chrome: no desktop toolbars on a phone */
+  #shell{padding:0!important}
+  #view{padding:0!important;border-radius:0!important;border:0}
+  .mail-filterbar{padding:0 16px;gap:8px;border-bottom:0;min-height:44px}
+  .mail-filterbar button{padding:6px 12px;border-radius:16px;border:1px solid var(--line);font-size:13px}
+  .mail-filterbar button.active{background:var(--active);border-color:transparent}
+  .mail-filterbar button.active::after{display:none}
+  .message-group{background:transparent;border:0;padding:14px 16px 4px;font-size:12px}
+
+  /* reading a message: full screen with a sticky action bar */
+  body.reader-open .mail-heading,body.reader-open .mail-filterbar,body.reader-open .msg-tabs,body.reader-open .list-toolbar{display:none!important}
+  body.reader-open .r-toolbar{position:sticky;top:0;z-index:5;background:var(--surface);border-bottom:1px solid var(--line)}
+  .reader{padding:16px 16px 96px}
+  .r-subject{font-size:21px;line-height:1.3}
+  .r-body{font-size:15px;line-height:1.65}
+  .r-body table{max-width:100%;display:block;overflow-x:auto}
+
+  /* compose: full screen, Send in the header like a native app */
+  .compose{border:0!important;border-radius:0!important;max-width:none;min-height:calc(calc(var(--vh,1vh)*100) - 70px);min-height:calc(100dvh - 70px);display:flex;flex-direction:column}
+  .compose-head{position:sticky;top:0;z-index:5;gap:8px;padding:10px 12px!important}
+  .c-send-top{display:inline-flex;min-width:44px;min-height:40px;border-radius:20px}
+  .c-row{padding:6px 16px!important;align-items:flex-start}
+  .c-lab{padding-top:8px;min-width:52px}
+  .chip-field input{min-width:120px;font-size:16px}
+  #c-subj{font-size:16px}
+  #compose-body{flex:1;font-size:16px}
+  .compose-foot{padding-bottom:calc(16px + env(safe-area-inset-bottom))!important}
+
+  /* bottom navigation + floating compose button */
+  #bottomnav{position:fixed;left:0;right:0;bottom:0;background:var(--surface)!important;border-top:1px solid var(--line)}
+  #bottomnav button{gap:3px;font-size:11px}
+  #bottomnav .b-ico .ui-icon{width:22px;height:22px}
+  #bottomnav button.active .b-ico{background:var(--active);border-radius:14px;padding:2px 16px}
+  #view{padding-bottom:calc(80px + env(safe-area-inset-bottom))!important}
+  .fab{display:inline-flex;align-items:center;gap:10px;position:fixed;right:16px;bottom:calc(76px + env(safe-area-inset-bottom));z-index:42;
+    padding:0 20px;height:56px;border-radius:18px;background:var(--accent);color:var(--accent-ink);font-weight:600;font-size:15px;box-shadow:0 6px 18px color-mix(in srgb,var(--accent) 35%,#0003)}
+  .fab .ui-icon{width:22px;height:22px}
+  body.reader-open .fab,body[data-route="compose"] .fab,body[data-route="settings"] .fab,body[data-route="contacts"] .fab{display:none}
+  body[data-route="compose"] #bottomnav,body.reader-open #bottomnav{display:none}
+
+  /* see-through themes keep the phone list readable */
+  html[data-photo-theme="true"] #sidebar{width:270px!important;border-radius:0 18px 18px 0!important}
+}
+
+/* installed app: respect the notch on both sides */
+@media (display-mode:standalone) and (max-width:680px){
+  #topbar{padding-left:calc(12px + env(safe-area-inset-left));padding-right:calc(12px + env(safe-area-inset-right))}
+}
+
+/* ---------- older phone browsers ----------
+   compat.js flags browsers without color-mix(); they get plain tints instead of losing them. */
+html.no-color-mix body{--active:rgba(47,124,246,.13)}
+html.no-color-mix .msg-row.unread{background:rgba(47,124,246,.06)}
+html.no-color-mix .fab{box-shadow:0 6px 18px rgba(0,0,0,.25)}
+
+/* Lists and the reader scroll smoothly with momentum, and an overscroll does not drag the page. */
+.msg-list,.reader,#view,#sidebar,.set-tabs{-webkit-overflow-scrolling:touch}
+.msg-list,.reader{overscroll-behavior-y:contain}
+@media (max-width:680px){
+  #view[data-route="mail"]{display:flex;flex-direction:column;overflow:hidden}
+  .mail-wrap{flex:1 1 auto;min-height:0;height:auto!important}
+  .list-col,.reader-col{min-height:0}
+}
+html.no-color-mix #account-btn{background:rgba(47,124,246,.15)}

@@ -1,71 +1,137 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="aol" data-brightness="dark">
+<html lang="en" data-theme="pearl" data-brightness="light" data-mail-layout="list">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#2f7cf6" />
+<link rel="manifest" href="manifest.webmanifest" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="Dmail" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png" />
 <title>Dejoiy Mail</title>
-<meta name="description" content="Dejoiy Mail — fast, beautiful webmail for your company." />
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f7cf6'/%3E%3Cpath d='M7 11l9 6 9-6' stroke='white' stroke-width='2.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3Crect x='7' y='10' width='18' height='13' rx='2' stroke='white' stroke-width='2.4' fill='none'/%3E%3C/svg%3E" />
-<link rel="stylesheet" href="css/base.css" />
-<link rel="stylesheet" href="css/themes.css" />
-<link rel="stylesheet" href="css/layout.css" />
-<link rel="stylesheet" href="css/components.css" />
+<meta name="description" content="Dmail — fast, beautiful webmail for your company." />
+<link rel="icon" type="image/svg+xml" href="assets/brand/dmail-logo.svg?v=20261010a" />
+<link rel="icon" type="image/png" sizes="32x32" href="assets/icons/favicon-32.png?v=20261010a" />
+<script src="js/compat.js?v=20261009m"></script>
+<link rel="stylesheet" href="css/base.css?v=20261009m" />
+<link rel="stylesheet" href="css/themes.css?v=20261009m" />
+<link rel="stylesheet" href="css/layout.css?v=20261009m" />
+<link rel="stylesheet" href="css/components.css?v=20261009m" />
+<link rel="stylesheet" href="css/backend.css?v=20261009m" />
+<link rel="stylesheet" href="css/mail-ui.css?v=20261009m" />
+<link rel="stylesheet" href="css/aol-layout.css?v=20261009m" />
+<link rel="stylesheet" href="css/mobile.css?v=20261009m" />
+<link rel="stylesheet" href="css/touch.css?v=20261009m" />
+<link rel="stylesheet" href="css/settings.css?v=20261009m" />
+<link rel="stylesheet" href="css/brand.css?v=20261010b" />
 </head>
 <body>
+<div id="dm-splash" role="status" aria-label="Loading Dejoiy Mail">
+  <div class="dm-center">
+    <div class="dm-stage" aria-hidden="true">
+      <div class="dm-orbit"><i></i></div>
+      <div class="dm-tile">
+        <svg class="dm-layer dm-depth" viewBox="74 66 380 380"><use href="#dsBody"/></svg><svg class="dm-layer dm-depth" viewBox="74 66 380 380"><use href="#dsBody"/></svg><svg class="dm-layer dm-depth" viewBox="74 66 380 380"><use href="#dsBody"/></svg><svg class="dm-layer dm-depth" viewBox="74 66 380 380"><use href="#dsBody"/></svg><svg class="dm-layer dm-depth" viewBox="74 66 380 380"><use href="#dsBody"/></svg><svg class="dm-layer dm-depth" viewBox="74 66 380 380"><use href="#dsBody"/></svg>
+        <svg class="dm-layer dm-face" viewBox="74 66 380 380" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="dsG" x1="84" y1="104" x2="444" y2="408" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#1F6BFF"/><stop offset=".5" stop-color="#7A3CF4"/><stop offset="1" stop-color="#FF2E92"/></linearGradient>
+            <linearGradient id="dsShine" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".5"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+            <path id="dsBody" d="M84 140C84 120 100 104 120 104H272C370 104 444 172 444 256S370 408 272 408H120C100 408 84 392 84 372Z"/>
+            <clipPath id="dsClip"><use href="#dsBody"/></clipPath>
+          </defs>
+          <use href="#dsBody" fill="url(#dsG)"/>
+          <g clip-path="url(#dsClip)">
+            <path class="dm-fold" d="M84 408L230 286L256 300L282 286L444 408Z" fill="#fff" opacity=".12"/>
+            <path class="dm-lid" d="M84 104H444V160L256 272L84 140Z" fill="#0B0A3A" opacity=".14"/>
+            <rect class="dm-shine" x="0" y="60" width="120" height="400" fill="url(#dsShine)" transform="skewX(-18)"/>
+          </g>
+          <path class="dm-flap" pathLength="100" d="M92 142L256 270L430 166" fill="none" stroke="#fff" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="dm-floor"></div>
+    </div>
+    <div class="dm-brandline"><div class="dm-word">d<b>mail</b></div><div class="dm-tag">BY DEJOIY · YOU+JOY</div></div>
+    <div class="dm-bar" aria-hidden="true"><i></i></div>
+  </div>
+</div>
+<script>
+/* Launch screen: stays at least ~1.6s so the intro plays, never longer than 12s. */
+window.DmSplash=(function(){
+  var el=document.getElementById('dm-splash'),t0=Date.now(),done=false,MIN=1600;
+  function hide(now){ if(done||!el)return; done=true;
+    var wait=now?0:Math.max(0,MIN-(Date.now()-t0));
+    setTimeout(function(){ el.classList.add('dm-out'); setTimeout(function(){ if(el.parentNode)el.parentNode.removeChild(el); },650); },wait); }
+  setTimeout(function(){hide(true);},12000);
+  return {hide:hide};
+})();
+</script>
 <div id="bg" aria-hidden="true"></div>
 
 <div id="app">
   <header id="topbar">
     <button id="menu-btn" class="icon-btn only-mobile" aria-label="Open navigation">☰</button>
-    <div class="brand" id="brand-home" role="button" tabindex="0" aria-label="Dejoiy Mail home">
-      <span class="brand-mark">✉</span>
-      <span class="brand-name">Dejoiy&nbsp;<b>Mail</b></span>
+    <div class="brand" id="brand-home" role="button" tabindex="0" aria-label="Dmail home">
+      <span class="brand-mark"><img src="assets/brand/dmail-logo.svg?v=20261010a" alt="" width="40" height="40"></span>
+      <span class="brand-name">dmail<span class="brand-dot">.</span></span>
     </div>
     <div class="search-wrap">
-      <span class="search-ico">⌕</span>
-      <input id="global-search" type="search" placeholder="Search mail…  ( press / )" autocomplete="off" aria-label="Search mail" />
-      <button id="adv-search-btn" class="icon-btn" title="Advanced search">▾</button>
+      <input id="global-search" type="search" placeholder="Find messages, documents, photos or people" autocomplete="off" aria-label="Search mail" />
+      <button id="adv-search-btn" title="Advanced search">Advanced <span aria-hidden="true">⌄</span></button>
+      <button id="search-submit-btn" class="search-submit" title="Search mail" aria-label="Search mail">⌕</button>
     </div>
     <div class="top-actions">
       <button id="check-mail-btn" class="icon-btn" title="Check for new mail">↻</button>
       <button id="theme-btn" class="icon-btn" title="Themes">🎨</button>
       <button id="shortcuts-btn" class="icon-btn" title="Keyboard shortcuts (?)">⌨</button>
-      <button id="settings-btn" class="icon-btn" title="Settings">⚙</button>
+      <button id="settings-btn" class="settings-link" title="Settings"><span aria-hidden="true">⚙</span></button>
+      <span id="account-label" class="account-label"></span>
       <button id="account-btn" class="avatar" title="Account">R</button>
     </div>
   </header>
 
   <div id="shell">
     <aside id="sidebar" aria-label="Mailbox navigation">
-      <button id="compose-btn" class="compose-btn">✎&nbsp; Compose</button>
+      <button id="compose-btn" class="compose-btn">Compose</button>
       <nav id="main-nav"></nav>
       <div class="side-foot">
+        <div class="workspace-signature"><span class="workspace-emblem">d.</span><span>Dejoiy workspace<small>Made for your everyday.</small></span></div><div id="mail-status"></div>
         <div class="storage"><div class="storage-bar"><i id="storage-fill"></i></div><span id="storage-label"></span></div>
       </div>
     </aside>
     <div id="side-scrim"></div>
     <main id="view" tabindex="-1" aria-live="polite"></main>
+    <aside id="app-rail" aria-label="Apps"></aside>
   </div>
 
   <nav id="bottomnav" aria-label="Primary"></nav>
+  <button id="fab-compose" class="fab" type="button" aria-label="Compose"></button>
 </div>
 
 <div id="dialog-root"></div>
 <div id="toast-root" aria-live="polite"></div>
 
-<script src="js/data.js"></script>
-<script src="js/store.js"></script>
-<script src="js/themes.js"></script>
-<script src="js/filters.js"></script>
-<script src="js/mail.js"></script>
-<script src="js/view-today.js"></script>
-<script src="js/view-mail.js"></script>
-<script src="js/view-compose.js"></script>
-<script src="js/view-calendar.js"></script>
-<script src="js/view-contacts.js"></script>
-<script src="js/view-extra.js"></script>
-<script src="js/view-admin.js"></script>
-<script src="js/view-settings.js"></script>
-<script src="js/app.js"></script>
+<script src="js/runtime-config.js"></script>
+<script src="js/icons.js?v=20261009m"></script>
+<script src="js/backend.js?v=20261010a"></script>
+<script src="js/data.js?v=20261009m"></script>
+<script src="js/store.js?v=20261009m"></script>
+<script src="js/profile.js?v=20261009m"></script>
+<script src="js/settings.js?v=20261009m"></script>
+<script src="js/live-themes.js?v=20261009m"></script>
+<script src="js/themes.js?v=20261009m"></script>
+<script src="js/filters.js?v=20261009m"></script>
+<script src="js/mail.js?v=20261009m"></script>
+<script src="js/view-today.js?v=20261009m"></script>
+<script src="js/view-mail.js?v=20261009m"></script>
+<script src="js/view-compose.js?v=20261009m"></script>
+<script src="js/view-calendar.js?v=20261009m"></script>
+<script src="js/view-contacts.js?v=20261009m"></script>
+<script src="js/view-extra.js?v=20261009m"></script>
+<script src="js/view-admin.js?v=20261009m"></script>
+<script src="js/view-settings.js?v=20261009m"></script>
+<script src="js/view-account-settings.js?v=20261009m"></script>
+<script src="js/app.js?v=20261010a"></script>
 </body>
 </html>

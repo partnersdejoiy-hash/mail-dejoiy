@@ -1,0 +1,14 @@
+DNS changes for corp.dejoiy.com only. Preserve all dejoiy.com Zoho records.
+
+REPLACE the existing corp.dejoiy.com SPF TXT record with this SINGLE record:
+corp.dejoiy.com TXT v=spf1 mx ip4:173.249.23.93 ip4:217.216.79.163 ~all
+
+ADD this newly generated DKIM TXT record (one record; DNS providers may split the string internally):
+dmail20261009._domainkey.corp.dejoiy.com TXT v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvNdff2q1u3JKpoBDsmyNmIf4KSnKGtR77zTmiyqq3jV8vCXKIChWkyc+rsFfkWFojAHk4EGlD4IGVLegrsXQOg60iOKRtFhXbRXHB/wT8Z2dqR8zHcMFScntXJsw/Zf6NWZsLrhHAdLNDsVaFl8bcpY6k7xDe8uikR6ekXKSMMhWfmVbqGWEaHyJTRXgVgxG5frioKZJ5zDnhH1CO0PvT8Z+GM7dgNEfga29QNYKJmmSjL5HMu28XoKCVA9DGVC1LtoPDF57GafjCnKPeegQmftW+ZwtOZzP2TebsnY1oPyZWuy9+Z0zPYFV8IhBoqk6HTqjD2FcbMJOKnzVIqnI9QIDAQAB
+
+ADD corporate DMARC:
+_dmarc.corp.dejoiy.com TXT v=DMARC1; p=none; adkim=s; aspf=s
+
+TTL: 300 or the provider default. No root-domain records need changing.
+The old DKIM selector is not used by this installation; do not overwrite it with this key.
+The old SPF IP is preserved because its purpose has not been confirmed obsolete.

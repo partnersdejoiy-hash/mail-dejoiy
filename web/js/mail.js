@@ -33,10 +33,48 @@ const Mail = {
           : all.filter(e=>e.folder===folder);
     const q = (App.ui.search||"").trim().toLowerCase();
     if(q) r = r.filter(e => (e.subject+" "+e.from.name+" "+e.from.email+" "+strip(e.body)).toLowerCase().includes(q));
-    return r.sort((a,b)=>b.date-a.date);
+    const sort=Store.state.prefs.mailSort||'dateDesc';
+    return r.sort((a,b)=>sort==='dateAsc'?a.date-b.date:sort==='sender'?a.from.name.localeCompare(b.from.name):sort==='subject'?a.subject.localeCompare(b.subject):b.date-a.date);
   },
 
   get(id){ return Store.state.emails.find(e=>e.id===id); },
+  /* Conversations work like Gmail: a thread listed in a folder also shows the rest of the
+     conversation (your sent replies, the answers in the inbox), while folder actions such as
+     Archive only move the messages that are actually in that folder (`ids`). */
+  conversation(id, folder){
+    const hidden=["trash","spam"].includes(folder)?[]:["trash","spam"];
+    return Store.state.emails.filter(m=>this.threadKey(m)===String(id)&&(m.folder===folder||!hidden.includes(m.folder)&&m.folder!=="drafts"));
+  },
+  /* The server groups messages by their Message-ID references. Amazon SES, which relays our
+     mail to Gmail, replaces the Message-ID of everything it sends, so a Gmail reply can come
+     back as a new upstream conversation. Like Gmail, a reply with the same subject and at least
+     one person in common (besides you) joins the earlier conversation. */
+  threadKey(message){ if(window.Settings && Settings.messageView()) return String(message.id); return threadKeys().get(message.id) || String(message.conversationId||message.id); },
+  threadId(messageId){ const m=this.get(messageId); return m ? this.threadKey(m) : String(messageId); },
+  senderNames(messages){
+    const me=(Store.state.user.email||"").toLowerCase();
+    return [...new Set(messages.map(m=>(m.from?.email||"").toLowerCase()===me&&me?"me":m.from?.name||m.from?.email).filter(Boolean))];
+  },
+  threadList(folder){
+    const groups=new Map();
+    for(const message of this.list(folder)){
+      const id=this.threadKey(message);
+      if(!groups.has(id))groups.set(id,[]);
+      groups.get(id).push(message);
+    }
+    return [...groups].map(([id,inFolder])=>{
+      const messages=folder==="drafts"||SMART.some(s=>s.id===folder)?inFolder:this.conversation(id,folder);
+      const ordered=[...messages].sort((a,b)=>a.date-b.date),latest=ordered.at(-1),senders=this.senderNames(ordered);
+      return {id,conversationId:id,messages:ordered,latest,ids:inFolder.map(m=>m.id),subject:latest.subject,from:{name:senders.join(', '),email:latest.from?.email||''},date:latest.date,read:ordered.every(m=>m.read),unreadCount:ordered.filter(m=>!m.read).length,starred:ordered.every(m=>m.starred),hasAttachment:ordered.some(m=>m.hasAttachment),important:ordered.some(m=>m.important),labels:[...new Set(ordered.flatMap(m=>m.labels||[]))],count:ordered.length};
+    }).sort((a,b)=>Store.state.prefs.mailSort==='dateAsc'?a.date-b.date:Store.state.prefs.mailSort==='sender'?a.from.name.localeCompare(b.from.name):Store.state.prefs.mailSort==='subject'?a.subject.localeCompare(b.subject):b.date-a.date);
+  },
+  getThread(id, folder=App.ui?.folder){
+    const messages=this.conversation(id,folder);
+    if(!messages.length)return null;
+    messages.sort((a,b)=>a.date-b.date);
+    const latest=messages[messages.length-1],senders=this.senderNames(messages);
+    return {...latest,id:String(id),conversationId:String(id),latest,messages,ids:messages.map(m=>m.id),folderIds:messages.filter(m=>m.folder===folder).map(m=>m.id),from:{...latest.from,name:senders.join(', ')},count:messages.length,unreadCount:messages.filter(m=>!m.read).length,read:messages.every(m=>m.read),starred:messages.every(m=>m.starred),hasAttachment:messages.some(m=>m.hasAttachment)};
+  },
 
   counts(){
     const all = Store.state.emails, c = {};
@@ -45,7 +83,7 @@ const Mail = {
     return c;
   },
 
-  setRead(id, read){ const e=this.get(id); if(e){ e.read = read!==false; Store.save(); } },
+  setRead(id, read){ const messages=(Array.isArray(id)?id:[id]).map(key=>this.get(key)).filter(Boolean);for(const e of messages)e.read=read!==false;if(messages.length)Store.save(); },
   toggleStar(id){ const e=this.get(id); if(e){ e.starred=!e.starred; Store.save(); } return e && e.starred; },
   toggleImportant(id){ const e=this.get(id); if(e){ e.important=!e.important; Store.save(); } },
 
@@ -53,10 +91,10 @@ const Mail = {
     (Array.isArray(ids)?ids:[ids]).forEach(id=>{ const e=this.get(id); if(e) e.folder=folder; });
     Store.save();
   },
-  trash(ids){ this.moveTo(ids, "trash"); },
-  archive(ids){ this.moveTo(ids, "archive"); },
-  spam(ids){ this.moveTo(ids, "spam"); },
-  notSpam(ids){ this.moveTo(ids, "inbox"); },
+  trash(ids){ return this.moveTo(ids, "trash"); },
+  archive(ids){ return this.moveTo(ids, "archive"); },
+  spam(ids){ return this.moveTo(ids, "spam"); },
+  notSpam(ids){ return this.moveTo(ids, "inbox"); },
   deleteForever(ids){
     const set = new Set(Array.isArray(ids)?ids:[ids]);
     Store.state.emails = Store.state.emails.filter(e=>!set.has(e.id));
@@ -97,17 +135,19 @@ const Mail = {
 
   replyDraft(id, all){
     const e = this.get(id); if(!e) return null;
-    const me = Store.state.user.email;
-    const to = [e.from.email];
-    const cc = all ? (e.cc||[]).concat((e.to||[]).filter(t=>t!==me && t!==e.from.email)) : [];
-    return { to: to.join(", "), cc:[...new Set(cc)].join(", "),
+    const me = (Store.state.user.email||"").toLowerCase(), not=list=>a=>!list.some(x=>x.toLowerCase()===a.toLowerCase());
+    // Replying to your own message goes back to the people you wrote to, as in Gmail.
+    const mine = (e.from.email||"").toLowerCase()===me;
+    const to = mine ? (e.to||[]) : [e.from.email];
+    const cc = all ? (mine ? (e.cc||[]) : (e.cc||[]).concat(e.to||[])).filter(a=>a.toLowerCase()!==me).filter(not(to)) : [];
+    return { to: to.join(", "), cc:[...new Set(cc)].join(", "), inReplyTo:e.messageId||"", origId:String(e.id), replyType:"r",
       subject: (/^re:/i.test(e.subject)?e.subject:"Re: "+e.subject),
-      body: `<br><br><div style="color:var(--ink-2);border-left:3px solid var(--line);padding-left:10px">On ${new Date(e.date).toLocaleString()}, ${esc(e.from.name)} wrote:<br>${e.body}</div>` };
+      body: `<br><br><div>On ${new Date(e.date).toLocaleString()}, ${esc(e.from.name)} &lt;${esc(e.from.email)}&gt; wrote:</div><blockquote>${e.body}</blockquote>` };
   },
   forwardDraft(id){
     const e = this.get(id); if(!e) return null;
-    return { to:"", cc:"", subject:(/^fwd?:/i.test(e.subject)?e.subject:"Fwd: "+e.subject),
-      body:`<br><br><div style="color:var(--ink-2);border-left:3px solid var(--line);padding-left:10px">Forwarded message — from ${esc(e.from.name)} &lt;${esc(e.from.email)}&gt;:<br>${e.body}</div>` };
+    return { to:"", cc:"", origId:String(e.id), replyType:"w", subject:(/^fwd?:/i.test(e.subject)?e.subject:"Fwd: "+e.subject),
+      body:`<br><br><div>---------- Forwarded message ---------<br>From: ${esc(e.from.name)} &lt;${esc(e.from.email)}&gt;<br>Date: ${new Date(e.date).toLocaleString()}<br>Subject: ${esc(e.subject)}<br>To: ${(e.to||[]).map(esc).join(", ")}</div><br>${e.body}` };
   },
 
   advancedSearch(c){
@@ -148,8 +188,35 @@ const Mail = {
   }
 };
 
+const REPLY_PREFIX=/^\s*(?:(?:re|fw|fwd|aw|wg|sv|antw)(?:\[\d+\])?\s*:\s*)+/i;
+const THREAD_WINDOW=90*864e5;
+let threadCache={emails:null,length:-1,me:"",keys:null};
+function threadKeys(){
+  const emails=Store.state.emails, me=(Store.state.user?.email||"").toLowerCase();
+  if(threadCache.emails===emails && threadCache.length===emails.length && threadCache.me===me) return threadCache.keys;
+  const parent=new Map(), find=id=>{ while(parent.has(id)&&parent.get(id)!==id) id=parent.get(id); return id; };
+  const bySubject=new Map();
+  for(const m of [...emails].sort((a,b)=>a.date-b.date)){
+    const own=String(m.conversationId||m.id); if(!parent.has(own)) parent.set(own,own);
+    const subject=String(m.subject||"").replace(REPLY_PREFIX,"").replace(/\s+/g," ").trim().toLowerCase();
+    if(!subject) continue;
+    const people=new Set([m.from?.email,...(m.to||[]),...(m.cc||[])].map(a=>String(a||"").toLowerCase()).filter(a=>a&&a!==me));
+    const earlier=bySubject.get(subject)||[];
+    if(REPLY_PREFIX.test(m.subject||"")||m.inReplyTo){
+      const match=[...earlier].reverse().find(t=>m.date-t.last<THREAD_WINDOW && [...people].some(p=>t.people.has(p)));
+      if(match){ const a=find(match.root), b=find(own); if(a!==b) parent.set(b,a); }
+    }
+    const root=find(own), entry=earlier.find(t=>find(t.root)===root);
+    if(entry){ people.forEach(p=>entry.people.add(p)); entry.last=Math.max(entry.last,m.date); }
+    else { earlier.push({root, people, last:m.date}); bySubject.set(subject, earlier); }
+  }
+  const keys=new Map(emails.map(m=>[m.id, find(String(m.conversationId||m.id))]));
+  threadCache={emails, length:emails.length, me, keys};
+  return keys;
+}
+
 function splitAddr(s){ return String(s||"").split(/[,;\n]+/).map(x=>x.trim()).filter(Boolean); }
-function strip(h){ const d=document.createElement("div"); d.innerHTML=h||""; return d.textContent||""; }
+function strip(h){ return new DOMParser().parseFromString(h||"","text/html").body.textContent||""; }
 
 window.Mail = Mail;
 })();

@@ -1,0 +1,165 @@
+/* ============ Dejoiy Mail — settings.css : Settings and the mail options it controls ============
+   Mobile first: one column that fills the phone, growing into labelled rows on wider screens.
+   Loaded last. */
+
+/* ---------- Settings page ---------- */
+.st{max-width:1040px;margin:0 auto;padding-bottom:24px}
+.st-head{display:flex;align-items:center;gap:6px;min-height:52px;padding:4px 16px}
+.st-head h1{font-size:22px;font-weight:600;color:var(--ink)}
+.st-back{width:44px;height:44px;margin-left:-10px;border-radius:50%}
+.st-tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--line);padding:0 8px;margin-bottom:16px}
+.st-tabs::-webkit-scrollbar{display:none}
+.st-tabs button{flex:0 0 auto;padding:12px 14px;min-height:44px;font-size:13.5px;color:var(--ink-2);border-bottom:3px solid transparent;border-radius:0;white-space:nowrap}
+.st-tabs button:hover{color:var(--ink);background:var(--hover)}
+.st-tabs button.on{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
+.st-body{padding:0 12px}
+.st-card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:4px 16px;margin-bottom:14px}
+.st-card>h2,.st-cardhead h2{font-size:16px;font-weight:600;margin:14px 0 6px}
+.st-cardhead{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.st-card>p:first-child,.st-card>form{margin-top:14px}
+.st-card .btn-row,.st-card>.btn,.st-card>form>.btn{margin:12px 0 14px}
+
+/* a setting: label on top on phones, label column on wider screens */
+.st-row{padding:16px 0;border-bottom:1px solid var(--line)}
+.st-row:last-child{border-bottom:0}
+.st-label{font-weight:600;font-size:14px;color:var(--ink);margin-bottom:10px}
+.st-label small{display:block;font-weight:400;font-size:12.5px;color:var(--ink-3);margin-top:3px;line-height:1.4}
+.st-control{min-width:0;font-size:14px;color:var(--ink)}
+.st-control select,.st-control input[type="text"],.st-control input[type="email"],.st-control input[type="date"],.st-control textarea,.st-field input,.st-field select,.st-field textarea{width:100%;max-width:420px;min-height:44px;font-size:16px}
+.st-inline select{width:auto;min-width:90px;display:inline-block;margin:0 4px}
+.st-inline{display:inline-flex;align-items:center;flex-wrap:wrap;gap:4px;line-height:2.4}
+.st-wrap{gap:8px}
+.st-control textarea{max-width:none;margin-top:8px}
+
+.st-radios{display:flex;flex-direction:column;gap:2px}
+.st-radio,.st-check{display:flex;align-items:flex-start;gap:12px;padding:9px 0;min-height:44px;cursor:pointer;line-height:1.4}
+.st-radio input,.st-check input{flex:0 0 auto;width:20px;height:20px;margin-top:1px;accent-color:var(--accent)}
+.st-radio b{font-weight:500}
+.st-radio small{display:block;color:var(--ink-3);font-size:12.5px;margin-top:2px}
+.st-note{font-size:13px;color:var(--ink-2);line-height:1.5;margin:6px 0}
+.st-error{color:#d93025;font-size:13px;margin:6px 0}
+.st-card.st-error{color:var(--ink)}
+.st-field{margin:10px 0}
+.st-field label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-2);margin-bottom:6px}
+.st-grid{display:grid;grid-template-columns:1fr;gap:0 16px}
+.st-dsec{font-size:12px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--ink-3);margin:18px 0 4px}
+.st-color{display:inline-flex;align-items:center;gap:8px;font-size:13px}
+.st-color input{width:44px;height:36px;padding:2px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.st-preview{margin-top:10px;padding:12px;border:1px dashed var(--line);border-radius:10px;background:#fff;color:#000}
+.st-photo{display:flex;gap:14px;align-items:center}
+.st-photo small{display:block;color:var(--ink-3);font-size:12.5px;margin-top:6px}
+.st-photo .btn-row{margin:0}
+.st-link{color:var(--accent);padding:0 2px;font-weight:600;text-decoration:underline}
+.st-details{margin-top:8px;font-size:13.5px}
+.st-details summary{cursor:pointer;color:var(--accent);font-weight:600;min-height:36px;display:flex;align-items:center}
+.st-dl{display:grid;grid-template-columns:1fr;gap:2px 16px;margin:8px 0;padding:12px;background:var(--surface-2);border-radius:10px}
+.st-dl dt{font-size:12px;color:var(--ink-3);margin-top:6px}
+.st-dl dd{font-weight:600;word-break:break-all}
+.st-meter{height:8px;max-width:420px;border-radius:99px;background:var(--surface-3);overflow:hidden}
+.st-meter i{display:block;height:100%;background:var(--accent);border-radius:99px}
+
+/* lists inside a card: labels, filters, blocked senders, templates */
+.st-table{display:flex;flex-direction:column}
+.st-trow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 0;min-height:48px;border-bottom:1px solid var(--line)}
+.st-trow:last-child{border-bottom:0}
+.st-trow>span:first-child{flex:1;min-width:0}
+.st-ftext{flex:1;min-width:0}
+.st-ftext b{word-break:break-word}
+.st-ftext small{display:block;font-size:12.5px;color:var(--ink-3);margin-top:2px;word-break:break-word}
+.st-filter .st-check{padding:0;min-height:0}
+.st-actions{display:flex;gap:4px;flex-wrap:wrap}
+.st-seg{display:inline-flex;gap:2px}
+.st-seg button{padding:6px 12px;min-height:36px;border-radius:8px;color:var(--accent);font-size:13px}
+.st-seg button.on{background:var(--active);color:var(--ink);font-weight:700}
+.lb-name{display:flex;align-items:center;gap:10px}
+.lb-name small{color:var(--ink-3);font-size:12px}
+.lb-dot{width:12px;height:12px;border-radius:50%;flex:0 0 auto}
+.st-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0;font-size:13px;color:var(--ink-2)}
+.st-toolbar>span{margin-right:auto}
+.st-addrow{display:flex;gap:8px;margin:8px 0 12px}
+.st-addrow input{flex:1;min-width:0;min-height:44px;font-size:16px}
+.tp-body{min-height:160px}
+.btn.danger,.btn.ghost.danger{color:#d93025}
+
+/* Save bar stays in reach while you scroll a long section */
+.st-save{position:sticky;bottom:0;z-index:4;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 16px;margin:0 -12px 14px;
+  background:var(--surface);border-top:1px solid var(--line);box-shadow:0 -4px 14px rgba(0,0,0,.06)}
+.st-save .btn{min-height:44px;padding:0 20px}
+.st-save:not(.dirty) #st-save{opacity:.6}
+.st-status{font-size:13px;color:#d93025;flex:1 1 100%}
+.st-status:empty{display:none}
+
+/* phone home: you, then one row per section */
+.st-me{display:flex;align-items:center;gap:14px;width:100%;padding:14px 16px;margin-bottom:12px;background:var(--surface);border:1px solid var(--line);border-radius:14px;text-align:left}
+.st-me-avatar{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;flex:0 0 auto;background:hsl(var(--h,220) 45% 48%);color:#fff;font-weight:600;font-size:18px;overflow:hidden}
+.st-me-avatar img{width:100%;height:100%;object-fit:cover}
+.st-me b,.st-item b{display:block;font-size:15px;font-weight:600;color:var(--ink)}
+.st-me small,.st-item small{display:block;font-size:12.5px;color:var(--ink-3);margin-top:2px}
+.st-list{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.st-item{display:flex;align-items:center;gap:14px;width:100%;min-height:64px;padding:10px 16px;text-align:left;border-bottom:1px solid var(--line)}
+.st-item:last-child{border-bottom:0}
+.st-item:active,.st-me:active{background:var(--hover)}
+.st-item>span:nth-child(2){flex:1;min-width:0}
+.st-ico{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;background:var(--active);color:var(--accent);flex:0 0 auto}
+.st-chev{color:var(--ink-3)}
+
+@media (max-width:680px){
+  #view[data-route="settings"]{padding:0!important}
+  .st-head{position:sticky;top:0;z-index:5;background:var(--surface-2);padding-top:env(safe-area-inset-top)}
+  .st-save{bottom:calc(64px + env(safe-area-inset-bottom));margin-left:-12px;margin-right:-12px;border-radius:0}
+  .st-body{padding:0 12px calc(16px + env(safe-area-inset-bottom))}
+  .st-card{border-radius:12px;padding:2px 14px}
+  .st-actions .btn{min-height:40px}
+  .st-trow{align-items:flex-start}
+  .dlg .st-grid{grid-template-columns:1fr}
+}
+@media (min-width:681px){
+  .st-head{padding:4px 8px}
+  .st-body{padding:0 8px}
+  .st-row{display:grid;grid-template-columns:minmax(170px,240px) minmax(0,1fr);gap:24px}
+  .st-label{margin-bottom:0}
+  .st-grid{grid-template-columns:1fr 1fr}
+  .st-dl{grid-template-columns:max-content 1fr}
+  .st-dl dt{margin-top:0}
+  .st-save{margin:0 -8px 14px;border-radius:12px;border:1px solid var(--line)}
+}
+
+/* ---------- options that change the mail list ---------- */
+.list-pager{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 16px calc(12px + env(safe-area-inset-bottom));font-size:13px;color:var(--ink-2)}
+.list-pager .btn{min-height:40px;gap:6px}
+.list-pager .ui-icon{width:16px;height:16px}
+.m-ind{flex:0 0 12px;width:12px;color:var(--accent);font-weight:700;text-align:center}
+body.no-snippets .m-snip{display:none!important}
+body.no-importance .m-flags .ui-icon:first-child:not(:only-child){display:none}
+body.density-compact .msg-row{padding-top:6px;padding-bottom:6px;min-height:0}
+body.density-compact .m-avatar{width:32px;height:32px;font-size:13px}
+.m-hover{display:none}
+@media (hover:hover) and (pointer:fine){
+  body.hover-actions .msg-row{position:relative}
+  body.hover-actions .msg-row:hover .m-hover{display:flex;position:absolute;right:10px;top:50%;transform:translateY(-50%);gap:2px;padding:2px 4px;border-radius:10px;background:var(--surface);box-shadow:0 1px 6px rgba(0,0,0,.15);z-index:3}
+  .m-hover button{display:grid;place-items:center;width:34px;height:34px;border-radius:8px;color:var(--ink-2)}
+  .m-hover button:hover{background:var(--hover);color:var(--ink)}
+}
+/* Button labels: Text */
+body.labels-text .r-toolbar .icon-btn::after{content:attr(aria-label);font-size:12px;margin-left:6px}
+body.labels-text .r-toolbar .icon-btn{padding:0 10px}
+body.labels-text .list-toolbar .icon-btn span{display:inline!important}
+
+/* Reading pane below the inbox (computers; phones always open conversations full screen) */
+@media (min-width:1200px), (min-width:681px) and (pointer:fine){
+  html[data-mail-layout="bottom"] .mail-wrap{flex-direction:column}
+  html[data-mail-layout="bottom"] .list-col{flex:0 0 42%;width:100%;max-width:none;border-right:0;border-bottom:1px solid var(--line);min-height:0}
+  html[data-mail-layout="bottom"] .reader-col{display:flex;flex:1 1 auto;min-height:0}
+  html[data-mail-layout="bottom"] #r-back{display:none}
+}
+.st-chev .ui-icon{transform:rotate(-90deg)}
+/* the floating Compose button never covers the last conversation or the pager */
+@media (max-width:680px){ .msg-list{padding-bottom:84px} }
+/* toasts (and their Undo buttons) sit above the bottom navigation and the Compose button */
+.toast{pointer-events:auto}
+@media (max-width:680px){
+  #toast-root{left:12px!important;right:12px!important;transform:none!important;bottom:calc(76px + env(safe-area-inset-bottom))!important}
+  body.reader-open #toast-root,body[data-route="compose"] #toast-root{bottom:calc(16px + env(safe-area-inset-bottom))!important}
+  body[data-route="mail"]:not(.reader-open) #toast-root{bottom:calc(144px + env(safe-area-inset-bottom))!important}
+  .toast{max-width:none;width:100%}
+}

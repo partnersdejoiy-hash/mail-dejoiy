@@ -3,6 +3,10 @@
 "use strict";
 
 Views.contacts = function(el){
+  if(window.Live?.enabled && !el._liveContactsReady){
+    el.innerHTML='<div class="card" role="status">Loading contacts…</div>';
+    Live.request('contacts').then(result=>{if(App.route!=='contacts')return;Store.state.contacts=result.contacts;el._liveContactsReady=true;Views.contacts(el);el._liveContactsReady=false;}).catch(error=>{if(App.route==='contacts')el.innerHTML=`<div class="empty-note">${esc(error.message)}</div>`;});return;
+  }
   const s = Store.state;
   let q = "";
 
@@ -36,7 +40,7 @@ Views.contacts = function(el){
     el.querySelectorAll("[data-edit]").forEach(b=> b.addEventListener("click", ()=> editDialog(s.contacts.find(c=>c.id===b.dataset.edit))));
     el.querySelectorAll("[data-del]").forEach(b=> b.addEventListener("click", ()=>{
       const c = s.contacts.find(x=>x.id===b.dataset.del);
-      App.confirm(`Delete ${c.name}?`, ()=>{ s.contacts = s.contacts.filter(x=>x.id!==c.id); Store.save(); render(); App.toast("Contact deleted."); });
+      App.confirm(`Delete ${c.name}?`, async ()=>{try{if(window.Live?.enabled)await Live.request('contacts',{op:'delete',id:c.id});s.contacts = s.contacts.filter(x=>x.id!==c.id); Store.save(); render(); App.toast("Contact deleted.");}catch(error){App.toast(error.message);} });
     }));
     el.querySelectorAll("[data-mail]").forEach(b=> b.addEventListener("click", ()=>{
       const c = s.contacts.find(x=>x.id===b.dataset.mail);
@@ -54,6 +58,11 @@ Views.contacts = function(el){
       actions:[{label:"Cancel"},{label:"Save", primary:true, fn:()=>{
         const name = document.getElementById("cc-name").value.trim(), email = document.getElementById("cc-email").value.trim();
         if(!name || !email){ App.toast("Name and email are required."); return false; }
+        if(window.Live?.enabled){
+          const button=document.querySelector('.dlg-foot .primary');if(button.disabled)return false;button.disabled=true;
+          const contact={id:isNew?undefined:c.id,name,email,phone:document.getElementById("cc-phone").value.trim(),org:document.getElementById("cc-org").value.trim(),presence:'off'};
+          Live.request('contacts',{op:'save',...contact}).then(result=>{contact.id=result.id;if(isNew)s.contacts.push(contact);else Object.assign(c,contact);App.closeDialog();render();App.toast('Contact saved.');}).catch(error=>{button.disabled=false;App.toast(error.message);});return false;
+        }
         if(isNew) s.contacts.push({id:uid("c"), name, email, phone:document.getElementById("cc-phone").value.trim(), org:document.getElementById("cc-org").value.trim(), presence:"off"});
         else Object.assign(c, {name, email, phone:document.getElementById("cc-phone").value.trim(), org:document.getElementById("cc-org").value.trim()});
         Store.save(); render(); App.toast("Contact saved ✓");
@@ -73,15 +82,21 @@ Views.contacts = function(el){
   function importCsv(ev){
     const f = ev.target.files[0]; if(!f) return;
     const r = new FileReader();
-    r.onload = ()=>{
+    r.onload = async ()=>{
       let added = 0;
-      String(r.result).split(/\r?\n/).slice(1).forEach(line=>{
-        const parts = line.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g); if(!parts || parts.length<2) return;
+      let failure='';
+      for(const line of String(r.result).split(/\r?\n/).slice(1)){
+        const parts = line.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g); if(!parts || parts.length<2) continue;
         const clean = v => v.replace(/^"|"$/g,"").replace(/""/g,'"').trim();
         const name = clean(parts[0]), email = clean(parts[1]);
-        if(name && email && /.+@.+\..+/.test(email)){ s.contacts.push({id:uid("c"), name, email, phone:clean(parts[2]||""), org:clean(parts[3]||""), presence:"off"}); added++; }
-      });
+        if(name && email && /.+@.+\..+/.test(email)){
+          const contact={id:uid('c'),name,email,phone:clean(parts[2]||''),org:clean(parts[3]||''),presence:'off'};
+          if(window.Live?.enabled){try{const result=await Live.request('contacts',{...contact,id:undefined,op:'save'});contact.id=result.id;}catch(error){failure=error.message;break;}}
+          s.contacts.push(contact);added++;
+        }
+      }
       Store.save(); render(); App.toast(added ? `Imported ${added} contacts ✓` : "No valid contacts found in CSV.");
+      if(failure)App.toast(`Import stopped after ${added} contacts: ${failure}`);
     };
     r.readAsText(f); ev.target.value="";
   }

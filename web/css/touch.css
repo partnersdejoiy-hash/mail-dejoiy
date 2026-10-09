@@ -1,0 +1,147 @@
+/* ============ Dejoiy Mail — touch.css : the Gmail-app feel on phones and touch tablets ============
+   "Compact" means phones, and tablets driven by touch. Desktop browsers, even narrow windows,
+   keep the portal layout. Loaded last, after mobile.css. */
+
+@media (max-width:680px), (max-width:1199px) and (pointer:coarse){
+  /* A blurred element becomes the frame for fixed bars inside it, so the selection bar would
+     stick to the mail panel instead of the screen. The blur moves to a layer behind the panel. */
+  html[data-photo-theme="true"] #view,html[data-scenic="true"] #view{backdrop-filter:none;-webkit-backdrop-filter:none}
+  html[data-photo-theme="true"] #shell,html[data-scenic="true"] #shell{position:relative;isolation:isolate}
+  html[data-photo-theme="true"] #shell::before,html[data-scenic="true"] #shell::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
+    backdrop-filter:blur(var(--glass-blur)) saturate(1.2);-webkit-backdrop-filter:blur(var(--glass-blur)) saturate(1.2)}
+
+  /* ---------- rows: avatar · sender + date · subject · snippet · star ---------- */
+  .msg-row{display:grid;grid-template-columns:40px minmax(0,1fr) auto;column-gap:14px;align-items:start;position:relative;
+    padding:12px 16px;min-height:76px;border-bottom:0;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+  .msg-row .m-check{display:none}
+  .m-avatar{display:grid;place-items:center;grid-column:1;grid-row:1;position:relative;width:40px;height:40px;border-radius:50%;
+    background:hsl(var(--h,220) 45% 48%);color:#fff;font-size:16px;font-weight:600;cursor:pointer}
+  .msg-row .m-main{grid-column:2;grid-row:1;min-width:0}
+  .msg-row .star{grid-column:3;grid-row:1;align-self:end;margin-top:24px}
+  html[data-mail-layout] .m-main{display:block}
+  html[data-mail-layout] .m-top{display:flex;gap:8px;align-items:baseline}
+  html[data-mail-layout] .m-from,html[data-mail-layout] .m-subj,html[data-mail-layout] .m-snip{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  html[data-mail-layout] .m-from{flex:1;min-width:0}
+  html[data-mail-layout] .m-subj{margin-top:2px}
+  html[data-mail-layout] .m-snip{margin-top:1px;font-size:13.5px;color:var(--ink-3)}
+  html[data-mail-layout] .m-snip::before{content:none}
+  html[data-mail-layout] .m-date{flex-shrink:0;margin-left:auto;font-size:12px}
+  html[data-mail-layout] .m-flags,.m-labels{display:none!important}
+  .msg-row.selected{background:var(--active)}
+  /* a selected row's avatar flips to a tick */
+  .msg-row.selected .m-avatar{background:var(--accent)!important}
+  .msg-row.selected .m-avatar>*{visibility:hidden}
+  .msg-row.selected .m-avatar::after{content:"";position:absolute;inset:0;background:center/22px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 12l5 5L20 6'/%3E%3C/svg%3E")}
+
+  /* ---------- selection mode: a contextual bar replaces the header ---------- */
+  .list-toolbar{display:none}
+  body.selecting .list-toolbar{display:flex;position:fixed;top:0;left:0;right:0;z-index:60;height:auto;min-height:calc(60px + env(safe-area-inset-top));
+    padding:env(safe-area-inset-top) 8px 0;gap:2px;align-items:center;background:var(--surface);border-bottom:1px solid var(--line);box-shadow:0 1px 4px #0002}
+  body.selecting #topbar{visibility:hidden}
+  html[data-theme] body.selecting #view .list-toolbar{background:var(--surface)}
+  body.selecting #tb-clear{display:inline-flex;order:-2}
+  body.selecting .selection-status{order:-1;margin:0 auto 0 6px;font-size:18px;font-weight:600;color:var(--ink)}
+  body.selecting #sel-all,body.selecting #tb-refresh,body.selecting .list-toolbar .icon-btn span{display:none}
+
+  /* ---------- swipe to archive: the row slides away over a green strip ---------- */
+  .msg-row.swiping,.msg-row.swiped{background:#1e8e3e!important;overflow:hidden}
+  .msg-row.swiping::before,.msg-row.swiped::before{content:"";position:absolute;top:0;bottom:0;width:64px;z-index:0;
+    background:center/24px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 3h18v5H3z M5 8v13h14V8 M9 12h6'/%3E%3C/svg%3E")}
+  .msg-row[data-swipe="right"]::before{left:4px}.msg-row[data-swipe="left"]::before{right:4px}
+  .msg-row.swiping::after,.msg-row.swiped::after{content:"";position:absolute;inset:0;z-index:1;background:var(--surface);transform:translateX(var(--dx,0))}
+  .msg-row.swiping>*,.msg-row.swiped>*{position:relative;z-index:2;transform:translateX(var(--dx,0))}
+  .msg-row.swiped::after,.msg-row.swiped>*{transition:transform .2s ease}
+
+  /* ---------- pull to refresh ---------- */
+  .list-col{position:relative}
+  .ptr{display:grid;place-items:center;position:absolute;top:0;left:50%;z-index:5;width:40px;height:40px;margin-left:-20px;border-radius:50%;
+    background:var(--surface);color:var(--ink-3);box-shadow:0 2px 8px #0003;opacity:0;pointer-events:none;transform:translateY(calc(var(--pull,0px) - 44px))}
+  .ptr.show{opacity:1}.ptr.ready{color:var(--accent)}
+  .ptr.busy{opacity:1;transform:translateY(16px);transition:transform .2s;color:var(--accent)}
+  .ptr.busy .ui-icon{animation:ptr-spin .8s linear infinite}
+  @keyframes ptr-spin{to{transform:rotate(360deg)}}
+
+  /* ---------- reading: compact header actions, wide message bodies ---------- */
+  #r-reply,#r-replyall,#r-fwd,#r-spam,#r-print{display:none}
+  #r-more{display:inline-flex}
+  #r-back{margin-right:auto}
+  .r-toolbar{gap:2px}
+  .tm-email{display:none!important}
+  .tm-content{padding-left:0;padding-right:0}
+  .thread-actions{padding-left:0;gap:8px}
+  .thread-actions .btn{flex:1;justify-content:center;min-height:44px;border:1px solid var(--line)}
+  .search-wrap{border-radius:26px}
+  #global-search{font-size:16px}
+}
+
+/* ---------- phones ---------- */
+@media (max-width:680px){
+  /* Gmail's floating search bar: menu, search and your photo in one rounded pill */
+  html[data-theme] #topbar{position:relative;top:auto;margin:calc(8px + env(safe-area-inset-top)) 12px 6px;height:52px;min-height:52px;
+    padding:0 6px 0 4px;gap:2px;border:0;border-radius:28px;background:var(--surface-2);box-shadow:none}
+  html[data-theme][data-photo-theme="true"] #topbar,html[data-theme][data-scenic="true"] #topbar{background:color-mix(in srgb,var(--surface) 80%,transparent)}
+  #menu-btn{width:44px;height:44px;border-radius:50%;color:var(--ink-2)}
+  .search-wrap,.search-wrap:focus-within{height:44px;padding:0 4px;border:0!important;border-radius:0;background:transparent!important;box-shadow:none!important}
+  .search-submit{display:none}
+  #account-btn{width:34px;height:34px;margin-right:2px}
+
+  .mail-heading{padding:6px 18px 2px}
+  .mail-heading h1{font-size:13px;font-weight:500;letter-spacing:.2px;color:var(--ink-2)}
+  .folder-total,.mail-controls{display:none}
+
+  /* reading and writing take the whole screen, as in the app */
+  body.reader-open #topbar,body[data-route="compose"] #topbar{display:none}
+  body.reader-open .r-toolbar{min-height:calc(56px + env(safe-area-inset-top));padding-top:env(safe-area-inset-top)}
+  .compose-head{padding-top:calc(10px + env(safe-area-inset-top))!important}
+  .c-back{display:inline-flex}
+  .compose-head .c-ico{display:none}
+
+  /* the Compose button shrinks to an icon while you scroll down */
+  .fab{transition:padding .2s ease,width .2s ease}
+  body.fab-mini .fab{width:56px;padding:0;justify-content:center}
+  body.fab-mini .fab span{display:none}
+  body.selecting .fab{display:none}
+}
+
+/* ---------- touch tablets: a navigation rail instead of the full sidebar ---------- */
+@media (min-width:681px) and (max-width:1199px) and (pointer:coarse){
+  #app-rail{display:none}
+  #menu-btn{display:inline-flex!important;width:44px;height:44px;border-radius:50%;color:var(--ink-2)}
+  .brand{width:auto}
+  .search-wrap{height:48px;padding-left:18px;background:var(--surface-2);border-color:transparent}
+  .search-submit{border-radius:0 26px 26px 0}
+  #sidebar{width:84px!important;padding:12px 6px!important;align-items:center;overflow-x:hidden}
+  #sidebar .compose-btn{width:56px;height:56px;min-height:56px;margin:4px 0 16px;padding:0;gap:0;border-radius:16px;font-size:0}
+  #sidebar .compose-btn .ui-icon{width:22px;height:22px}
+  .nav-item{justify-content:center;width:56px;height:48px;min-height:48px!important;margin:1px auto;padding:0!important;border-radius:24px!important}
+  .nav-item .ui-icon{width:22px;height:22px}
+  .nav-item .n-label,.nav-sep,.side-foot{display:none}
+  .nav-item .n-count,.nav-item.active .n-count{position:absolute;top:4px;right:2px;min-width:18px;padding:0 5px;border-radius:9px;background:var(--accent);color:var(--accent-ink);font-size:10px;line-height:16px;text-align:center}
+  /* the menu button opens the full drawer over the rail */
+  body.nav-open #sidebar{position:fixed;top:0;bottom:0;left:0;z-index:46;width:280px!important;align-items:stretch;padding:20px 12px!important;
+    background:var(--surface)!important;border-radius:0 18px 18px 0;box-shadow:var(--shadow)}
+  body.nav-open #sidebar .compose-btn{width:auto;padding:0 20px;gap:12px;justify-content:flex-start;font-size:14px}
+  body.nav-open #sidebar .nav-item{width:100%;justify-content:flex-start;gap:14px;padding:0 16px!important;border-radius:0 24px 24px 0!important}
+  body.nav-open #sidebar .n-label{display:inline}
+  body.nav-open #sidebar .nav-sep{display:block}
+  body.nav-open #sidebar .n-count{position:static;margin-left:auto}
+  body.nav-open #side-scrim{display:block;position:fixed;inset:0;z-index:45;background:#0006}
+  .mail-heading{padding:12px 20px}
+  .mail-subtitle,.mail-filter-hint{display:none}
+}
+/* portrait: the list, then the conversation full width with a back arrow */
+@media (min-width:681px) and (max-width:899px) and (pointer:coarse){
+  html[data-mail-layout] .list-col{flex:1;width:100%;border-right:0}
+  html[data-mail-layout] .reader-col{display:none}
+  html[data-mail-layout] body.reader-open .list-col{display:none}
+  html[data-mail-layout] body.reader-open .reader-col{display:flex}
+  body.reader-open .mail-heading,body.reader-open .mail-filterbar,body.reader-open .msg-tabs{display:none}
+}
+/* landscape: list and conversation side by side, as in Gmail for tablets */
+@media (min-width:900px) and (max-width:1199px) and (pointer:coarse){
+  html[data-mail-layout] .list-col{display:flex;flex:0 0 42%;width:42%;border-right:1px solid var(--line)}
+  html[data-mail-layout] .reader-col{display:flex}
+  html[data-mail-layout] body.reader-open .list-col{display:flex}
+  #r-back{display:none}
+  #r-archive{margin-left:auto}
+}
