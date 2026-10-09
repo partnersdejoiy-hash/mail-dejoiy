@@ -65,7 +65,7 @@ const App = {
     const mark=document.querySelector(".brand-mark"); if(!mark) return;
     const logo=Store.state.prefs.customLogo;
     if(logo){ if(!mark.dataset.logoApplied){ mark.dataset.logoApplied="1"; mark.innerHTML=`<img class="brand-logo" src="${logo}" alt="Dejoiy Mail logo">`; } }
-    else if(mark.dataset.logoApplied){ delete mark.dataset.logoApplied; mark.textContent="✉"; }
+    else if(mark.dataset.logoApplied){ delete mark.dataset.logoApplied; mark.innerHTML=`<img src="assets/brand/dmail-logo.svg?v=20261010a" alt="" width="40" height="40">`; }
   },
 
   renderSearch(el, q){
@@ -342,5 +342,5 @@ const App = {
 };
 
 window.App = App;
-document.addEventListener("DOMContentLoaded", async ()=>{await Live.boot(); App.init();});
+document.addEventListener("DOMContentLoaded", async ()=>{try{await Live.boot(); App.init();}finally{window.DmSplash&&DmSplash.hide();}});
 })();
