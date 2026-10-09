@@ -9,6 +9,8 @@ const TABS = [
 
 Views.settings = function(el, tab){
   const live = window.Live?.enabled;
+  /* The demo build keeps its on-device blocked list and data tools; everything else is the shared Settings. */
+  if(live || !['lists','data'].includes(tab)) return Views.accountSettings(el, tab);
   tab = tab || "general";
   if (live && !["general", "themes", "vacation", "shortcuts"].includes(tab)) tab = "general";
   const s = Store.state;
@@ -24,25 +26,73 @@ Views.settings = function(el, tab){
     lists:renderLists, shortcuts:renderShortcuts, data:renderData})[tab](body);
 };
 
+Views.settingsParts = {renderThemes:b=>renderThemes(b), renderFilters:b=>renderFilters(b)};
+
 /* ---------- general ---------- */
 function renderGeneral(body){
-  const u = Store.state.user;
+  const u = Store.state.user, live = window.Live?.enabled;
+  const photo = Profile.photo(u.email);
   body.innerHTML = `<div class="card"><h3>⚙️ General</h3>
-    <div class="grid c2">
-      <div class="field"><label>Display name</label><input type="text" id="sg-name" value="${esc(u.name)}"></div>
-      <div class="field"><label>Email address</label><input type="email" id="sg-email" value="${esc(u.email)}" ${window.Live?.enabled?'readonly':''}></div>
+    <div class="profile-row">
+      <div class="profile-photo">${Profile.avatar(u.email, u.name, "profile-avatar")}</div>
+      <div class="profile-photo-actions"><b>Profile photo</b><span class="hint">Shown on your messages and to colleagues at your company.</span>
+        <div class="btn-row"><label class="btn sm" style="cursor:pointer">${photo?"Change photo":"Upload photo"}<input type="file" id="sg-photo" accept="image/png,image/jpeg,image/webp" class="sr"></label>
+        ${photo?`<button class="btn sm ghost" id="sg-photo-remove" type="button">Remove</button>`:""}</div></div>
     </div>
-    <div class="field"><label>Signature (added to new messages)</label><textarea id="sg-sig" rows="4">${esc(u.signature)}</textarea></div>
+    <div class="grid c2">
+      <div class="field"><label for="sg-name">Display name</label><input type="text" id="sg-name" value="${esc(u.name)}"></div>
+      <div class="field"><label for="sg-email">Email address</label><input type="email" id="sg-email" value="${esc(u.email)}" ${live?'readonly':''}></div>
+    </div>
+    <div class="field"><label id="sg-sig-label">Signature</label>
+      <div class="sig-editor">
+        <div class="fmt-bar sig-bar" role="toolbar" aria-label="Signature formatting">
+          ${[["bold","B","Bold"],["italic","I","Italic"],["underline","U","Underline"],["createLink","🔗","Link"]].map(([c,l,t])=>`<button class="icon-btn sm" type="button" data-sfmt="${c}" title="${t}" aria-label="${t}"><b>${l}</b></button>`).join("")}
+          <label class="icon-btn sm sig-image-btn" title="Add an image (logo, scanned signature)" style="cursor:pointer">${Icons.get("photo")}<span>Image</span><input type="file" id="sg-sig-image" accept="image/png,image/jpeg,image/gif" class="sr"></label>
+          <span style="flex:1"></span><button class="btn sm ghost" type="button" id="sg-sig-clear">Clear</button>
+        </div>
+        <div id="sg-sig" class="sig-body" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="sg-sig-label" data-ph="Your name, title, phone… add your logo with Image.">${Profile.signatureHtml()}</div>
+      </div>
+      <p class="hint">Added to new messages, and above the quoted text in replies and forwards. Images are hosted for you so Gmail and other mail apps show them.</p></div>
     <div class="btn-row"><button class="btn primary" id="sg-save">Save changes</button></div></div>`;
+
+  const sig = body.querySelector("#sg-sig");
+  body.querySelectorAll("[data-sfmt]").forEach(b=> b.addEventListener("click", ()=>{
+    sig.focus();
+    if(b.dataset.sfmt==="createLink"){ const url=prompt("Link URL:","https://"); if(url && /^(https?:\/\/|mailto:)/i.test(url)) document.execCommand("createLink",false,url); }
+    else document.execCommand(b.dataset.sfmt,false,null);
+  }));
+  body.querySelector("#sg-sig-clear").addEventListener("click", ()=>{ sig.innerHTML=""; sig.focus(); });
+  body.querySelector("#sg-sig-image").addEventListener("change", async ev=>{
+    const file=ev.target.files[0]; ev.target.value=""; if(!file) return;
+    const label=ev.target.closest("label"); label.classList.add("busy");
+    try{
+      const {url,width}=await Profile.signatureImage(file);
+      sig.focus(); document.execCommand("insertHTML",false,`<img src="${esc(url)}" width="${width}" alt="">`);
+    }catch(error){ App.toast(error.message); }finally{ label.classList.remove("busy"); }
+  });
+  const photoInput = body.querySelector("#sg-photo");
+  photoInput.addEventListener("change", async ()=>{
+    const file=photoInput.files[0]; photoInput.value=""; if(!file) return;
+    try{ await Profile.setPhoto(file); App.toast("Profile photo updated."); renderGeneral(body); }catch(error){ App.toast(error.message); }
+  });
+  const removePhoto = body.querySelector("#sg-photo-remove");
+  if(removePhoto) removePhoto.addEventListener("click", async ()=>{
+    try{ await Profile.setPhoto(null); App.toast("Profile photo removed."); renderGeneral(body); }catch(error){ App.toast(error.message); }
+  });
+
   body.querySelector("#sg-save").addEventListener("click", async ()=>{
-    if(window.Live?.enabled){
+    const signatureHtml = sig.textContent.trim()||sig.querySelector("img") ? sig.innerHTML : "";
+    const signature = signatureHtml ? sig.innerText.trim() : "";
+    if(live){
       const button=body.querySelector('#sg-save');button.disabled=true;
-      const name=body.querySelector('#sg-name').value.trim(),signature=body.querySelector('#sg-sig').value;
-      try{await Live.request('preferences',{op:'profile',name,signature});u.name=name;u.signature=signature;App.refreshNav();App.toast('Settings saved.');}catch(error){App.toast(error.message);}finally{button.disabled=false;}return;
+      const name=body.querySelector('#sg-name').value.trim();
+      try{await Live.request('preferences',{op:'profile',name,signature,signatureHtml});
+        const saved=await Live.request('preferences');u.name=name;u.signature=saved.signature;u.signatureHtml=saved.signatureHtml||'';
+        App.refreshNav();App.toast('Settings saved.');}catch(error){App.toast(error.message);}finally{button.disabled=false;}return;
     }
     u.name = body.querySelector("#sg-name").value.trim() || u.name;
     u.email = body.querySelector("#sg-email").value.trim() || u.email;
-    u.signature = body.querySelector("#sg-sig").value;
+    u.signature = signature; u.signatureHtml = signatureHtml;
     Store.save(); App.refreshNav(); App.toast("Settings saved ✓");
   });
 }
@@ -51,13 +101,16 @@ function renderGeneral(body){
 function renderThemes(body){
   const p = Store.state.prefs;
   const cell = t => `<div class="theme-cell ${p.theme===t.id&&!p.customBg?"sel":""}" data-pick="${t.id}" role="button" tabindex="0">
-    <div class="theme-sw" style="background:${Themes.ALL.indexOf(t)>=0?themeSwatch(t.id):"#333"}"></div>
+    <div class="theme-sw" style="background:${Themes.preview(t.id)}"></div>
     <div class="theme-nm">${esc(t.name)} ${p.theme===t.id&&!p.customBg?"✓":""}</div></div>`;
   body.innerHTML = `<div class="card"><h3>🎨 Themes</h3>
     <div class="field"><label>Brightness — independent of theme</label>
       <div class="seg">${["light","medium","dark"].map(b=>`<button data-b="${b}" class="${p.brightness===b?"on":""}">${b[0].toUpperCase()+b.slice(1)}</button>`).join("")}</div></div>
+    ${Themes.glassControl()}
+    <div class="theme-sec">Live animated</div><div class="theme-grid photo-grid">${Themes.ALL.filter(t=>t.kind==="live").map(cell).join("")}</div>
+    <div class="theme-sec">Photo backgrounds</div><div class="theme-grid photo-grid">${Themes.ALL.filter(t=>t.kind==="photo").map(cell).join("")}</div>
     <div class="theme-sec">Colour themes</div><div class="theme-grid">${Themes.ALL.filter(t=>t.kind==="color").map(cell).join("")}</div>
-    <div class="theme-sec">Scenic themes</div><div class="theme-grid">${Themes.ALL.filter(t=>t.kind==="scenic").map(cell).join("")}</div>
+    <div class="theme-sec">Illustrated gradients</div><div class="theme-grid">${Themes.ALL.filter(t=>t.kind==="scenic").map(cell).join("")}</div>
     <div class="theme-sec">Your photo</div>
     <div class="btn-row"><label class="btn sm" style="cursor:pointer">Upload background<input type="file" id="st-upload" accept="image/*" class="sr"></label>
     ${p.customBg?`<button class="btn sm ghost" id="st-clear">Remove photo</button>`:""}
@@ -67,8 +120,9 @@ function renderThemes(body){
     ${p.customLogo?`<button class="btn sm ghost" id="st-logo-clear">Remove logo</button>`:""}
     ${p.customLogo?`<img src="${p.customLogo}" alt="logo preview" style="height:28px;border-radius:6px;border:1px solid var(--line)">`:""}</div>
     <p class="hint" style="margin-top:10px;font-size:12px;color:var(--ink-3)">Themes apply instantly — no save button needed. Your choice is remembered on this device.</p></div>`;
+  Themes.bindGlass(body);
   body.querySelectorAll("[data-b]").forEach(b=> b.addEventListener("click", ()=>{ Themes.setBrightness(b.dataset.b); renderThemes(body); }));
-  body.querySelectorAll("[data-pick]").forEach(c2=> c2.addEventListener("click", ()=>{ Themes.set(c2.dataset.pick); renderThemes(body); }));
+  body.querySelectorAll("[data-pick]").forEach(c2=> { const pick=()=>{Themes.set(c2.dataset.pick);renderThemes(body);};c2.addEventListener("click",pick);c2.addEventListener("keydown",event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();pick();}}); });
   body.querySelector("#st-upload").addEventListener("change", ev=>{
     const f = ev.target.files[0]; if(!f) return;
     const r = new FileReader(); r.onload = ()=>{ Themes.setCustom(r.result); renderThemes(body); }; r.readAsDataURL(f);
@@ -83,14 +137,15 @@ function renderThemes(body){
   if(clrL) clrL.addEventListener("click", ()=>{ p.customLogo=""; Store.save(); App.applyLogo(); renderThemes(body); });
 }
 function themeSwatch(id){
-  const m = {aol:"#2f7cf6",yellow:"#f7b733",highcontrast:"#111",simple:"#c9d2e2",aim:"#e33d2e",aoldotcom:"#00a9e0",
+  const m = {pearl:"#6654c0",aol:"#2f7cf6",yellow:"#f7b733",highcontrast:"#111",simple:"#c9d2e2",aim:"#e33d2e",aoldotcom:"#00a9e0",
     purple:"#9b5cf6",sunrise:"#ff9a56",aquagreen:"#34d399",aquablue:"#38bdf8",deeppurple:"#6d28d9",
     bluenight:"#1e3a8a",darkgrey:"#6b7280",nightlandscape:"linear-gradient(135deg,#3b4a6b,#05080f)",
     roadtrip:"linear-gradient(135deg,#7c3f16,#120903)",sunsetaussie:"linear-gradient(135deg,#93386b,#f7b733)",
     lighthouse:"linear-gradient(135deg,#155e86,#0a1622)",spring:"linear-gradient(135deg,#3f7d4e,#0b1a10)",
     winter:"linear-gradient(135deg,#d7e3ef,#9db4c8)",summer:"linear-gradient(135deg,#a3d65c,#2c7a4b)",
     galaxy:"linear-gradient(135deg,#4c1d95,#050310)",fall:"linear-gradient(135deg,#c2410c,#451a03)",
-    western:"linear-gradient(135deg,#eab308,#290e03)",sunset:"linear-gradient(135deg,#9d3c6e,#f97316)"};
+    western:"linear-gradient(135deg,#eab308,#290e03)",sunset:"linear-gradient(135deg,#9d3c6e,#f97316)",
+    christmas:"#0f5132",halloween:"#ff7518",thanksgiving:"#b45309",easter:"#db2777"};
   return m[id]||"#333";
 }
 

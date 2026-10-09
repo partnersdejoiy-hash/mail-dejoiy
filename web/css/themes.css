@@ -1,22 +1,26 @@
-/* ============ Dejoiy Mail — themes.css : 24 themes + light/medium/dark ============
+/* ============ Dejoiy Mail — themes.css : 35 themes + light/medium/dark ============
    Every theme sets: --hdr1/--hdr2 (header gradient), --accent (+ink), --scenic (app backdrop).
    Brightness sets surface/ink tokens. Custom uploaded photo: body.custom-bg overrides #bg. */
 
-body[data-brightness="light"]{
+html[data-brightness="light"] body{
   --surface:rgba(255,255,255,.88); --surface-2:rgba(244,246,251,.9); --surface-3:rgba(255,255,255,.96);
   --ink:#1d2637; --ink-2:#4c5871; --ink-3:#8a94ab;
   --line:rgba(20,30,55,.12); --hover:rgba(20,30,55,.05); --active:rgba(20,30,55,.09);
 }
-body[data-brightness="medium"]{
+html[data-brightness="medium"] body{
   --surface:rgba(52,63,88,.88); --surface-2:rgba(44,54,76,.9); --surface-3:rgba(60,72,100,.92);
   --ink:#f2f5fb; --ink-2:#c3cbdf; --ink-3:#93a0bb;
   --line:rgba(255,255,255,.12); --hover:rgba(255,255,255,.06); --active:rgba(255,255,255,.12);
 }
-body[data-brightness="dark"]{
+html[data-brightness="dark"] body{
   --surface:rgba(20,27,42,.86); --surface-2:rgba(28,37,56,.86); --surface-3:rgba(38,50,74,.9);
   --ink:#eef2fa; --ink-2:#aeb9cf; --ink-3:#7c88a3;
   --line:rgba(255,255,255,.09); --hover:rgba(255,255,255,.06); --active:rgba(255,255,255,.11);
 }
+
+/* ---------- default theme ---------- */
+[data-theme="pearl"]{--hdr1:#6654c0;--hdr2:#3f2d8f;--accent:#6654c0;--accent-ink:#fff;
+  --scenic:linear-gradient(135deg,#4a3d8f,#1c1740);}
 
 /* ---------- 13 colour / gradient header themes ---------- */
 [data-theme="aol"]{--hdr1:#2f7cf6;--hdr2:#173a8f;--accent:#2f7cf6;--accent-ink:#fff;
@@ -45,6 +49,16 @@ body[data-brightness="dark"]{
   --scenic:linear-gradient(135deg,#0d1b3f,#050914);}
 [data-theme="darkgrey"]{--hdr1:#6b7280;--hdr2:#1f2937;--accent:#9ca3af;--accent-ink:#111827;
   --scenic:linear-gradient(135deg,#333a45,#14171c);}
+
+/* ---------- 4 holiday themes (original palettes, retired-AOL motifs) ---------- */
+[data-theme="christmas"]{--hdr1:#c1272d;--hdr2:#0f5132;--accent:#0f5132;--accent-ink:#fff;
+  --scenic:linear-gradient(135deg,#123f2a,#0a1410);}
+[data-theme="halloween"]{--hdr1:#7b2ff7;--hdr2:#1a1a1a;--accent:#ff7518;--accent-ink:#2a1202;
+  --scenic:linear-gradient(135deg,#3b1d5e,#12060a);}
+[data-theme="thanksgiving"]{--hdr1:#b45309;--hdr2:#7c2d12;--accent:#b45309;--accent-ink:#fff;
+  --scenic:linear-gradient(135deg,#5b3410,#1f0e04);}
+[data-theme="easter"]{--hdr1:#ec4899;--hdr2:#8b5cf6;--accent:#db2777;--accent-ink:#fff;
+  --scenic:linear-gradient(135deg,#f9a8d4,#c4f1a5);}
 
 /* ---------- 11 scenic themes (gradient art; drop photos in assets/themes/) ---------- */
 [data-theme="nightlandscape"]{--hdr1:#334155;--hdr2:#020617;--accent:#818cf8;--accent-ink:#0b0f24;

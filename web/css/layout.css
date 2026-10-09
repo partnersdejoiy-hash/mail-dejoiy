@@ -1,5 +1,5 @@
 /* ============ Dejoiy Mail — layout.css : app shell + responsive ============ */
-#app{height:100dvh;display:flex;flex-direction:column;backdrop-filter:blur(2px)}
+#app{height:calc(var(--vh,1vh)*100);height:100dvh;display:flex;flex-direction:column;backdrop-filter:blur(2px)}
 
 /* ---------- top bar ---------- */
 #topbar{
@@ -53,7 +53,7 @@
 .view-head .sub{color:var(--ink-2);font-size:13px}
 
 /* ---------- mail 3-pane ---------- */
-.mail-wrap{display:flex;gap:0;height:calc(100dvh - 118px);min-height:420px;background:var(--surface);
+.mail-wrap{display:flex;gap:0;height:calc(calc(var(--vh,1vh)*100) - 118px);height:calc(100dvh - 118px);min-height:420px;background:var(--surface);
   border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:var(--shadow-s)}
 .folder-col{width:190px;flex:0 0 auto;border-right:1px solid var(--line);overflow-y:auto;padding:10px 8px}
 .list-col{width:340px;flex:0 0 auto;border-right:1px solid var(--line);display:flex;flex-direction:column;min-width:0}
@@ -127,7 +127,7 @@
   body.nav-open #sidebar{transform:none}
   body.nav-open #side-scrim{display:block;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:34}
   #view{padding:12px}
-  .mail-wrap{flex-direction:column;height:calc(100dvh - 170px)}
+  .mail-wrap{flex-direction:column;height:calc(calc(var(--vh,1vh)*100) - 170px);height:calc(100dvh - 170px)}
   .list-col{width:100%;border-right:none;flex:1}
   .reader-col{display:none}
   body.reader-open .list-col{display:none}

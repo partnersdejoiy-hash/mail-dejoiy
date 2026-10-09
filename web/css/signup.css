@@ -1,0 +1,41 @@
+/* ============ Dejoiy Mail — signup.css ============ */
+:root{--accent:#1d5bf0;--bg:#f4f6fb;--surface:#fff;--ink:#1f2330;--ink-2:#5b6070;--ink-3:#868b99;--line:#e3e5ea;--good:#1f8a4c;--bad:#c0362c;
+  --font:"Segoe UI",system-ui,-apple-system,Roboto,"Helvetica Neue",Arial,sans-serif}
+@media (prefers-color-scheme:dark){:root{--bg:#14161c;--surface:#1d2029;--ink:#eef0f6;--ink-2:#b8bccb;--ink-3:#8e93a4;--line:#ffffff17;--accent:#5b8cff;--good:#5fd394;--bad:#ff8a80}}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font:15px/1.6 var(--font);color:var(--ink);background:var(--bg);min-height:calc(var(--vh,1vh)*100);min-height:100dvh}
+a{color:var(--accent)}
+.su-top{display:flex;align-items:center;justify-content:space-between;padding:calc(14px + env(safe-area-inset-top)) 24px 14px}
+.su-brand{font-size:28px;font-weight:800;letter-spacing:-1.5px;color:var(--ink);text-decoration:none}
+.su-brand span{color:var(--accent)}
+.su-link{font-weight:600;text-decoration:none}
+.su-main{display:grid;grid-template-columns:1fr minmax(0,480px);gap:6vw;align-items:start;max-width:1120px;margin:0 auto;padding:6vh 24px 60px}
+.su-kicker{font-size:12px;font-weight:700;letter-spacing:1.4px;color:var(--accent)}
+.su-pitch h1{font-size:clamp(32px,4.4vw,54px);line-height:1.08;letter-spacing:-1.6px;margin:14px 0 24px}
+.su-pitch ul{list-style:none;display:grid;gap:12px;color:var(--ink-2)}
+.su-pitch li::before{content:"✓";color:var(--good);font-weight:700;margin-right:10px}
+.su-card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:28px;box-shadow:0 18px 60px #1d2b5a12}
+.su-steps{display:flex;gap:8px;list-style:none;margin-bottom:22px;font-size:12px;font-weight:600;color:var(--ink-3)}
+.su-steps li{flex:1;padding-top:8px;border-top:3px solid var(--line)}
+.su-steps li.on{color:var(--accent);border-color:var(--accent)}
+.su-steps li.done{color:var(--good);border-color:var(--good)}
+.su-card h2{font-size:22px;letter-spacing:-.4px;margin-bottom:10px}
+.su-card p{color:var(--ink-2);margin-bottom:14px}
+label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bottom:14px}
+input{display:block;width:100%;margin-top:5px;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);font:inherit;font-size:16px}
+input:focus{outline:2px solid color-mix(in srgb,var(--accent) 35%,transparent);border-color:var(--accent)}
+.su-address{display:flex;align-items:center;gap:6px}
+.su-address input{flex:1;min-width:0}
+.su-address span{margin-top:5px;color:var(--ink);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:55%}
+.su-btn{display:inline-flex;justify-content:center;align-items:center;width:100%;margin-top:6px;padding:13px 16px;border:0;border-radius:12px;background:var(--accent);color:#fff;font:inherit;font-weight:700;cursor:pointer;text-decoration:none}
+.su-btn.ghost{background:transparent;color:var(--accent);border:1px solid var(--line)}
+.su-btn:disabled{opacity:.55;cursor:default}
+.su-error{color:var(--bad)!important;min-height:1.2em;margin:0 0 6px!important}
+.su-fine{font-size:12.5px;color:var(--ink-3)!important;margin-top:14px}
+.su-record{display:grid;grid-template-columns:auto 1fr;gap:10px 16px;align-items:center;padding:16px;border:1px dashed var(--line);border-radius:12px;margin-bottom:14px;background:color-mix(in srgb,var(--accent) 5%,transparent)}
+.su-record dt{font-size:12px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.4px}
+.su-record dd{min-width:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.su-record code{font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-all;background:var(--surface);padding:4px 8px;border-radius:6px;border:1px solid var(--line)}
+.su-copy{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:8px;padding:4px 10px;font:inherit;font-size:12px;cursor:pointer}
+.su-status{font-weight:600;color:var(--ink)!important}
+@media(max-width:820px){.su-main{grid-template-columns:1fr;padding-top:2vh;gap:24px}.su-pitch h1{font-size:30px;margin:8px 0 14px}.su-pitch ul{display:none}.su-card{padding:22px}}
