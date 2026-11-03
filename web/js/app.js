@@ -63,7 +63,7 @@ const App = {
     const mark=document.querySelector(".brand-mark"); if(!mark) return;
     const logo=Store.state.prefs.customLogo;
     if(logo){ if(!mark.dataset.logoApplied){ mark.dataset.logoApplied="1"; mark.innerHTML=`<img class="brand-logo" src="${logo}" alt="Dejoiy Mail logo">`; } }
-    else if(mark.dataset.logoApplied){ delete mark.dataset.logoApplied; mark.textContent="✉"; }
+    else if(mark.dataset.logoApplied){ delete mark.dataset.logoApplied; mark.textContent=""; }
   },
 
   renderSearch(el, q){
