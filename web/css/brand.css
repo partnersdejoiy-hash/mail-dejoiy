@@ -56,3 +56,11 @@
   .dm-flap{stroke-dashoffset:0}.dm-shine,.dm-orbit{display:none}
   #dm-splash.dm-out .dm-stage{transform:none}
 }
+
+/* :Dejoiy Mail lockups */
+.brand-lockup{display:block;height:34px;width:auto}
+.login-lockup{display:block;height:48px;width:auto}
+.brand-lockup.on-dark,.login-lockup.on-dark{display:none}
+html[data-brightness="dark"] .brand-lockup.on-light,html[data-brightness="dark"] .login-lockup.on-light{display:none}
+html[data-brightness="dark"] .brand-lockup.on-dark,html[data-brightness="dark"] .login-lockup.on-dark{display:block}
+@media(max-width:680px){.login-lockup{height:38px;margin:0 auto}}
