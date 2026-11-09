@@ -14,7 +14,7 @@ const LIVE_THEMES = (window.LiveThemes ? window.LiveThemes.list() : []).map(t=>(
 const THEMES = [
   ...LIVE_THEMES,
   ...PHOTO_THEMES,
-  {id:"pearl", name:"Pearl", kind:"color"},
+  {id:"pearl", name:"Dejoiy Pink", kind:"color"},
   // 13 colour / gradient header themes
   {id:"aol",        name:"Cobalt",         kind:"color"},
   {id:"yellow",     name:"Yellow",         kind:"color"},
@@ -48,7 +48,7 @@ const THEMES = [
   {id:"sunset",     name:"Sunset",         kind:"scenic"}
 ];
 const THEME_CSS = {
-  pearl:"#6654c0",
+  pearl:"#ff4fa3",
   aol:"#2f7cf6", yellow:"#f7b733", highcontrast:"#111111", simple:"#c9d2e2", aim:"#e33d2e",
   aoldotcom:"#00a9e0", purple:"#9b5cf6", sunrise:"#ff9a56", aquagreen:"#34d399", aquablue:"#38bdf8",
   deeppurple:"#6d28d9", bluenight:"#1e3a8a", darkgrey:"#6b7280",

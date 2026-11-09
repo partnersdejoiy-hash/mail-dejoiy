@@ -3,32 +3,46 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<meta name="theme-color" content="#2f7cf6" />
+<meta name="theme-color" content="#FF4FA3" />
 <title>Business email for your company · Dejoiy Mail</title>
 <meta name="description" content="Create professional email on your own company domain with Dejoiy Mail." />
 <link rel="icon" type="image/svg+xml" href="assets/brand/dmail-logo.svg?v=20261110a" />
 <link rel="icon" type="image/png" sizes="32x32" href="assets/icons/favicon-32.png?v=20261110a" />
 <link rel="manifest" href="manifest.webmanifest" />
-<link rel="stylesheet" href="css/signup.css?v=20261110a" />
+<link rel="preload" href="assets/fonts/bricolage-grotesque-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
+<link rel="stylesheet" href="css/font.css?v=20261110b" />
+<link rel="stylesheet" href="css/signup.css?v=20261110b" />
 </head>
 <body>
-<header class="su-top"><a class="su-brand" href="/"><picture><source srcset="assets/brand/dejoiy-mail-on-dark.svg?v=20261110a" media="(prefers-color-scheme: dark)"><img src="assets/brand/dejoiy-mail.svg?v=20261110a" alt="Dejoiy Mail" height="34"></picture></a><a class="su-link" href="/">Sign in</a></header>
+<a class="su-skip" href="#su-body">Skip to sign-up</a>
+<header class="su-top">
+  <a class="su-brand" href="/"><picture><source srcset="assets/brand/dejoiy-mail-on-dark.svg?v=20261110a" media="(prefers-color-scheme: dark)"><img src="assets/brand/dejoiy-mail.svg?v=20261110a" alt="Dejoiy Mail" height="34"></picture></a>
+  <a class="su-link" href="/">Sign in</a>
+</header>
 <main class="su-main">
-  <section class="su-pitch">
-    <p class="su-kicker">DEJOIY MAIL FOR BUSINESS</p>
-    <h1>Email on your own domain, set up in minutes.</h1>
-    <ul>
-      <li>Addresses like <b>you@yourcompany.com</b> for your whole team</li>
-      <li>You are the admin: add people, set roles, reset passwords</li>
-      <li>Fast, beautiful webmail on phone and desktop</li>
+  <section class="su-pitch" aria-labelledby="su-title">
+    <h1 id="su-title">Mail that says<br>your <span>name.</span></h1>
+    <p class="su-lede">Business email on your own domain. Set up in minutes, run it from your phone.</p>
+    <figure class="su-preview">
+      <div class="su-preview-top"><img src="assets/brand/dmail-logo.svg?v=20261110a" alt="" width="34" height="34"><span id="su-pv-company">Your company</span><em>New message</em></div>
+      <p class="su-preview-from">From</p>
+      <p class="su-preview-addr"><span id="su-pv-local">you</span><b>@<span id="su-pv-domain">yourcompany.com</span></b></p>
+      <figcaption>This is how your team shows up in every inbox.</figcaption>
+    </figure>
+    <ul class="su-stickers">
+      <li>No card needed</li>
+      <li>You're the admin</li>
+      <li>24 themes</li>
+      <li>Phone, tablet, desktop</li>
     </ul>
   </section>
   <section class="su-card" aria-live="polite">
-    <ol class="su-steps" aria-label="Sign-up progress"><li data-step="1">Company</li><li data-step="2">Verify domain</li><li data-step="3">Create admin</li></ol>
-    <div id="su-body"></div>
+    <ol class="su-steps" aria-label="Sign-up progress"><li data-step="1">Company</li><li data-step="2">Domain</li><li data-step="3">Admin</li></ol>
+    <div id="su-body" tabindex="-1"></div>
   </section>
 </main>
+<footer class="su-foot">© 2026 Dejoiy India Private Limited · <a href="/third-party-notices.html">Notices</a></footer>
 <script src="js/compat.js?v=20261009m"></script>
-<script src="js/signup.js?v=20261110a"></script>
+<script src="js/signup.js?v=20261110b"></script>
 </body>
 </html>

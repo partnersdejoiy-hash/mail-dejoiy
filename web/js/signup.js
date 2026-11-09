@@ -39,7 +39,9 @@ function bindCopy(root, records){
     catch(_){ b.textContent = "Select and copy"; }
   }));
 }
-function step(n){ document.querySelectorAll(".su-steps li").forEach(li => { const k=+li.dataset.step; li.className = k<n ? "done" : k===n ? "on" : ""; }); }
+function step(n){ document.body.dataset.step = n;
+  if(n>1 && matchMedia("(max-width: 900px)").matches) document.querySelector(".su-card").scrollIntoView({behavior:"smooth", block:"start"});
+  document.querySelectorAll(".su-steps li").forEach(li => { const k=+li.dataset.step; li.className = k<n ? "done" : k===n ? "on" : ""; }); }
 function busy(form, on){ form.querySelectorAll("button,input").forEach(x => x.disabled = on); }
 
 function company(prefill){
@@ -52,9 +54,17 @@ function company(prefill){
     <label>Your admin address<span class="su-address"><input name="localPart" required placeholder="you" autocapitalize="off" spellcheck="false"><span id="su-at">@${esc(prefill?.domain || "yourcompany.com")}</span></span></label>
     <p class="su-error" role="alert"></p>
     <button class="su-btn">Continue</button>
-    <p class="su-fine">Next you'll get every DNS record your domain needs, ready to copy. No card needed to start.</p></form>`;
+    <p class="su-fine">Next you'll get every DNS record your domain needs, ready to copy.</p></form>`;
   const form = body.querySelector("form");
-  form.elements.domain.addEventListener("input", e => { document.getElementById("su-at").textContent = "@" + (e.target.value.trim().toLowerCase().replace(/^https?:\/\//,"").replace(/^www\./,"").replace(/\/.*$/,"") || "yourcompany.com"); });
+  const clean = v => v.trim().toLowerCase().replace(/^https?:\/\//,"").replace(/^www\./,"").replace(/\/.*$/,"");
+  const preview = () => {  // the big address card on the left mirrors what is typed here
+    const d = clean(form.elements.domain.value) || "yourcompany.com";
+    document.getElementById("su-at").textContent = "@" + d;
+    const set = (id, v) => { const el = document.getElementById(id); if(el) el.textContent = v; };
+    set("su-pv-domain", d); set("su-pv-local", form.elements.localPart.value.trim().toLowerCase() || "you");
+    set("su-pv-company", form.elements.company.value.trim() || "Your company");
+  };
+  ["domain","localPart","company"].forEach(n => form.elements[n].addEventListener("input", preview)); preview();
   form.addEventListener("submit", async e => {
     e.preventDefault(); busy(form, true);
     const domain = form.elements.domain.value.trim().toLowerCase().replace(/^https?:\/\//,"").replace(/^www\./,"").replace(/\/.*$/,"");
@@ -115,7 +125,7 @@ function create(c){
 
 function done(c, csrf){
   step(4);
-  body.innerHTML = `<div><h2>Welcome to Dejoiy Mail 🎉</h2>
+  body.innerHTML = `<div><h2>You're in.</h2>
     <p><b>${esc(c.email)}</b> is ready and you're the administrator of <b>${esc(c.domain)}</b>.</p>
     <p>Mail starts flowing once these records are live at your DNS host:</p>
     <div id="su-final"><p class="su-status" role="status">Checking your DNS…</p></div>

@@ -137,7 +137,7 @@ function renderThemes(body){
   if(clrL) clrL.addEventListener("click", ()=>{ p.customLogo=""; Store.save(); App.applyLogo(); renderThemes(body); });
 }
 function themeSwatch(id){
-  const m = {pearl:"#6654c0",aol:"#2f7cf6",yellow:"#f7b733",highcontrast:"#111",simple:"#c9d2e2",aim:"#e33d2e",aoldotcom:"#00a9e0",
+  const m = {pearl:"#ff4fa3",aol:"#2f7cf6",yellow:"#f7b733",highcontrast:"#111",simple:"#c9d2e2",aim:"#e33d2e",aoldotcom:"#00a9e0",
     purple:"#9b5cf6",sunrise:"#ff9a56",aquagreen:"#34d399",aquablue:"#38bdf8",deeppurple:"#6d28d9",
     bluenight:"#1e3a8a",darkgrey:"#6b7280",nightlandscape:"linear-gradient(135deg,#3b4a6b,#05080f)",
     roadtrip:"linear-gradient(135deg,#7c3f16,#120903)",sunsetaussie:"linear-gradient(135deg,#93386b,#f7b733)",

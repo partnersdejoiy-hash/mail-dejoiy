@@ -106,9 +106,9 @@ const App = {
       this.ui.activeTab=null; this.ui.quickFilter="all"; this.ui.sel.clear(); this.go(b.dataset.nav); document.body.classList.remove("nav-open");
     }));
     const bn = document.getElementById("bottomnav");
-    const items = Live.enabled ? [["mail:inbox","inbox","Mail"],["contacts","contacts","Contacts"],["settings","settings","Settings"]] : [["today","home","Today"],["mail:inbox","inbox","Mail"],["calendar","calendar","Calendar"],["chat","chat","Chat"]];
+    const items = Live.enabled ? [["mail:inbox","inbox","Inbox"],["mail:starred","star","Starred"],["contacts","contacts","Contacts"],["settings","settings","Settings"]] : [["today","home","Today"],["mail:inbox","inbox","Mail"],["calendar","calendar","Calendar"],["chat","chat","Chat"]];
     bn.innerHTML = items.map(([r,ico,label])=>{
-      const active = this.route===(r.includes(":")?r.split(":")[0]:r);
+      const active = this.route===(r.includes(":")?r.split(":")[0]:r) && (!r.includes(":") || this.ui.folder===r.split(":")[1]);
       return `<button data-nav="${r}" class="${active?"active":""}" ${active?'aria-current="page"':""}><span class="b-ico">${Icons.get(ico)}</span>${label}</button>`;
     }).join("");
     bn.querySelectorAll("[data-nav]").forEach(b=> b.addEventListener("click", async ()=>{

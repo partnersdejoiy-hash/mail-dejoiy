@@ -1,8 +1,7 @@
 /* ============ Dejoiy Mail — touch.css : the Gmail-app feel on phones and touch tablets ============
-   "Compact" means phones, and tablets driven by touch. Desktop browsers, even narrow windows,
-   keep the portal layout. Loaded last, after mobile.css. */
+   "Compact" means phones, tablets driven by touch, and any window narrower than 1024px. Loaded last, after mobile.css. */
 
-@media (max-width:680px), (max-width:1199px) and (pointer:coarse){
+@media (max-width:1023px), (max-width:1199px) and (pointer:coarse){
   /* A blurred element becomes the frame for fixed bars inside it, so the selection bar would
      stick to the mail panel instead of the screen. The blur moves to a layer behind the panel. */
   html[data-photo-theme="true"] #view,html[data-scenic="true"] #view{backdrop-filter:none;-webkit-backdrop-filter:none}
@@ -104,7 +103,7 @@
 }
 
 /* ---------- touch tablets: a navigation rail instead of the full sidebar ---------- */
-@media (min-width:681px) and (max-width:1199px) and (pointer:coarse){
+@media (min-width:681px) and (max-width:1199px) and (pointer:coarse), (min-width:681px) and (max-width:1023px){
   #app-rail{display:none}
   #menu-btn{display:inline-flex!important;width:44px;height:44px;border-radius:50%;color:var(--ink-2)}
   .brand{width:auto}
@@ -130,7 +129,7 @@
   .mail-subtitle,.mail-filter-hint{display:none}
 }
 /* portrait: the list, then the conversation full width with a back arrow */
-@media (min-width:681px) and (max-width:899px) and (pointer:coarse){
+@media (min-width:681px) and (max-width:899px){
   html[data-mail-layout] .list-col{flex:1;width:100%;border-right:0}
   html[data-mail-layout] .reader-col{display:none}
   html[data-mail-layout] body.reader-open .list-col{display:none}
@@ -138,7 +137,7 @@
   body.reader-open .mail-heading,body.reader-open .mail-filterbar,body.reader-open .msg-tabs{display:none}
 }
 /* landscape: list and conversation side by side, as in Gmail for tablets */
-@media (min-width:900px) and (max-width:1199px) and (pointer:coarse){
+@media (min-width:900px) and (max-width:1199px) and (pointer:coarse), (min-width:900px) and (max-width:1023px){
   html[data-mail-layout] .list-col{display:flex;flex:0 0 42%;width:42%;border-right:1px solid var(--line)}
   html[data-mail-layout] .reader-col{display:flex}
   html[data-mail-layout] body.reader-open .list-col{display:flex}

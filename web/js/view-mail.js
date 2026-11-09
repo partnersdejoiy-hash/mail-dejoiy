@@ -4,7 +4,7 @@
 
 /* Phones, and tablets used by touch, get the Gmail-app behaviours: tap an avatar or long-press to
    select, swipe to archive, pull to refresh. */
-const compact = ()=> !!window.matchMedia?.("(max-width:680px), (max-width:1199px) and (pointer:coarse)").matches;
+const compact = ()=> !!window.matchMedia?.("(max-width:1023px), (max-width:1199px) and (pointer:coarse)").matches;
 
 Views.mail = function(el, folder){
   const ui = App.ui;
