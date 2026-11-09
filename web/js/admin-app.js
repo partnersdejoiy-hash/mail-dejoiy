@@ -205,11 +205,11 @@ async function dnsSetup(domain){
     const done=out.records.filter(r=>r.ok).length;
     root.querySelector(".adm-dialog-body").innerHTML=`<p>Add these records where <b>${esc(domain)}</b>'s DNS is managed. <b>${done} of ${out.records.length}</b> are live.</p>
       <div class="adm-dns">${out.records.map((r,i)=>`<div class="adm-dns-row ${r.ok?"ok":""}">
-        <div class="adm-dns-head"><b>${esc(r.kind)}</b><span class="adm-pill ${r.ok?"good":"warn"}">${r.ok?"Live":r.pending?"Preparing":"Not found"}</span></div>
+        <div class="adm-dns-head"><b>${esc(r.kind)}</b><span class="adm-pill ${r.ok?"good":"warn"}">${r.ok?"Live":r.pending?"Preparing":r.status==="conflict"?"Needs a fix":"Not found"}</span></div>${r.purpose?`<p class="adm-muted">${esc(r.purpose)}</p>`:""}
         ${r.pending?`<p class="adm-muted">The signing key for this domain is being created. Check again in two minutes.</p>`:`
         <dl><dt>Type</dt><dd><code>${esc(r.type)}</code>${r.priority?` · priority <code>${r.priority}</code>`:""}</dd>
         <dt>Host</dt><dd><code>${esc(r.host)}</code></dd>
-        <dt>Value</dt><dd><code class="adm-dns-value">${esc(r.value)}</code> <button class="adm-btn ghost sm" data-copy="${i}">Copy</button></dd></dl>`}</div>`).join("")}</div>
+        <dt>Value</dt><dd><code class="adm-dns-value">${esc(r.value)}</code> <button class="adm-btn ghost sm" data-copy="${i}">Copy</button></dd></dl>${r.note?`<p class="adm-error">${esc(r.note)}</p>`:""}`}</div>`).join("")}</div>
       <p class="adm-muted">DNS changes can take up to an hour to appear. MX makes mail arrive; SPF, DKIM and DMARC make sure it is trusted and not marked as spam.</p>
       <button class="adm-btn primary" id="dns-recheck">Check again</button>`;
     root.querySelectorAll("[data-copy]").forEach(b=>b.addEventListener("click",async()=>{try{await navigator.clipboard.writeText(out.records[+b.dataset.copy].value);b.textContent="Copied";}catch(_){b.textContent="Select to copy";}}));

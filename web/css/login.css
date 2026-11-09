@@ -1,0 +1,122 @@
+/* Dejoiy Mail sign-in: two-step card (email, then password) with a story carousel. Brand colours are fixed
+   here so the first impression is the same whatever theme the mailbox later uses. */
+.lg-root{--lg-bg:#f7f4f6;--lg-card:#fff;--lg-tone:#fff0f6;--lg-ink:#121212;--lg-ink-2:#5e5a60;--lg-ink-3:#8a8489;--lg-line:#e2dce0;
+  --lg-pink:#ff4fa3;--lg-pink-2:#f23d93;--lg-link:#1f5ce0;--lg-bad:#c0263f;--lg-ease:cubic-bezier(.16,1,.3,1);
+  position:fixed;inset:0;z-index:10000;overflow:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:32px 20px;background:var(--lg-bg);color:var(--lg-ink);font:15px/1.5 "Segoe UI",system-ui,-apple-system,Roboto,"Helvetica Neue",Arial,sans-serif;
+  transition:opacity .4s var(--lg-ease),transform .4s var(--lg-ease)}
+html[data-brightness="dark"] .lg-root{--lg-bg:#141316;--lg-card:#1d1b20;--lg-tone:#2a1b24;--lg-ink:#f3f2ee;--lg-ink-2:#bdb8c0;--lg-ink-3:#8f8a93;--lg-line:#3a363c;--lg-link:#8fb2ff;--lg-bad:#ff8fa3}
+.lg-root ::selection{background:#ffc2df;color:#121212}
+.lg-root.lg-out{opacity:0;transform:scale(.985);pointer-events:none}
+
+/* two oversized :D silhouettes drift behind the card */
+.lg-bg{position:fixed;inset:0;overflow:hidden;pointer-events:none}
+.lg-bg i{position:absolute;width:520px;height:485px;border-radius:62px 50% 50% 62px/62px 50% 50% 62px;background:var(--lg-tone);animation:lgDrift 26s ease-in-out infinite alternate}
+.lg-bg i:nth-child(1){left:-180px;top:-160px;transform:rotate(-12deg)}
+.lg-bg i:nth-child(2){right:-220px;bottom:-200px;width:620px;height:578px;animation-duration:32s;animation-direction:alternate-reverse}
+.lg-bg i:nth-child(3){right:12%;top:-120px;width:180px;height:168px;border-radius:24px 50% 50% 24px/24px 50% 50% 24px;animation-duration:20s}
+
+.lg-card{position:relative;width:min(920px,100%);min-height:540px;display:grid;grid-template-columns:1fr 1fr;background:var(--lg-card);
+  border-radius:24px;overflow:hidden;box-shadow:0 40px 90px -50px rgba(70,20,50,.35);animation:lgIn .7s var(--lg-ease) both}
+.lg-card.lg-shake{animation:lgShake .42s ease}
+
+.lg-pane{display:flex;flex-direction:column;padding:44px 48px 34px;min-width:0}
+.lg-brand{align-self:flex-start;display:block}
+.lg-brand img{height:40px}
+.lg-pane h1{margin:40px 0 4px;font-size:28px;line-height:1.15;letter-spacing:-.6px;font-weight:700;color:var(--lg-ink)}
+.lg-sub{margin:0 0 26px;color:var(--lg-ink-2);font-size:14px}
+
+/* both steps share one grid cell and slide past each other */
+.lg-steps{position:relative}
+.lg-step{transition:opacity .45s var(--lg-ease),transform .45s var(--lg-ease),visibility .45s}
+.lg-pane form[data-step="email"] .lg-step[data-step="password"],.lg-pane form[data-step="password"] .lg-step[data-step="email"]{position:absolute;inset:0 0 auto}
+.lg-pane form[data-step="email"] .lg-step[data-step="password"]{opacity:0;visibility:hidden;transform:translateX(48px)}
+.lg-pane form[data-step="password"] .lg-step[data-step="email"]{opacity:0;visibility:hidden;transform:translateX(-48px)}
+
+.lg-field{display:block;margin:0}
+.lg-field>span:first-child{display:block;margin-bottom:7px;font-size:13px;font-weight:600;color:var(--lg-ink-2)}
+.lg-root input{display:block;width:100%;height:50px;margin:0;padding:0 14px;border:1.5px solid var(--lg-line);border-radius:12px;background:var(--lg-card);
+  color:var(--lg-ink);font:inherit;font-size:16px;caret-color:var(--lg-pink);box-shadow:none;transition:border-color .2s,box-shadow .2s}
+.lg-root input::placeholder{color:var(--lg-ink-3)}
+.lg-root input:focus{outline:none;border-color:var(--lg-ink);box-shadow:0 0 0 4px rgba(255,79,163,.22)}
+.lg-pass{position:relative;display:block}
+.lg-pass input{padding-right:52px}
+.lg-eye{position:absolute;right:6px;top:50%;width:40px;height:40px;margin-top:-20px;display:grid;place-items:center;border:0;border-radius:10px;background:none;color:var(--lg-ink-3);cursor:pointer}
+.lg-eye svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8}
+.lg-eye[aria-pressed="true"]{color:var(--lg-pink)}
+.lg-eye:hover{color:var(--lg-ink)}
+
+.lg-who{display:flex;align-items:center;gap:10px;margin:0 0 16px;padding:6px 6px 6px 6px;border-radius:999px;background:var(--lg-tone);min-width:0}
+.lg-avatar{flex:none;width:30px;height:30px;display:grid;place-items:center;border-radius:50%;background:var(--lg-pink);color:#121212;font-weight:700;font-size:14px}
+.lg-email{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;font-size:14px}
+.lg-change{flex:none;border:0;background:none;color:var(--lg-link);font:inherit;font-size:13px;font-weight:600;padding:6px 10px;border-radius:999px;cursor:pointer}
+.lg-change:hover{background:var(--lg-card)}
+.lg-hint{margin:10px 0 0;font-size:12.5px;color:var(--lg-ink-3)}
+
+.lg-alert{min-height:20px;margin:12px 0 6px;font-size:13px;color:var(--lg-bad)}
+.lg-btn{position:relative;width:100%;height:50px;border:0;border-radius:999px;background:var(--lg-pink);color:#121212;font:inherit;font-size:15px;font-weight:700;cursor:pointer;
+  transition:background .2s,transform .15s var(--lg-ease)}
+.lg-btn:hover{background:var(--lg-pink-2)}
+.lg-btn:active{transform:scale(.98)}
+.lg-btn:focus-visible{outline:3px solid var(--lg-ink);outline-offset:3px}
+.lg-btn:disabled{opacity:.55;cursor:default;transform:none}
+.lg-btn span{transition:opacity .2s}
+.lg-btn i{position:absolute;left:50%;top:50%;width:22px;height:22px;margin:-11px;border-radius:50%;border:3px solid rgba(18,18,18,.25);border-top-color:#121212;opacity:0;transition:opacity .2s}
+form.is-busy .lg-btn span{opacity:0}
+form.is-busy .lg-btn i{opacity:1;animation:lgSpin .7s linear infinite}
+form.is-busy .lg-btn:disabled{opacity:1}
+
+.lg-signup{margin:auto 0 0;padding-top:28px;font-size:13.5px;color:var(--lg-ink-2)}
+.lg-signup a,.lg-root a:not(.lg-brand){color:var(--lg-link);font-weight:600;text-underline-offset:3px}
+.lg-foot{position:relative;margin:18px 0 0;font-size:12px;color:var(--lg-ink-3)}
+
+/* story carousel */
+.lg-story{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:40px 36px;background:var(--lg-tone)}
+.lg-slides{display:grid;width:100%}
+.lg-slide{grid-area:1/1;margin:0;display:flex;flex-direction:column;align-items:center;text-align:center;opacity:0;transform:translateY(14px);visibility:hidden;
+  transition:opacity .6s var(--lg-ease),transform .6s var(--lg-ease),visibility .6s}
+.lg-slide.is-on{opacity:1;transform:none;visibility:visible}
+.lg-slide svg{width:100%;max-width:320px;height:auto;overflow:visible}
+.lg-slide text{font-family:inherit}
+.lg-slide h2{margin:18px 0 6px;font-size:19px;letter-spacing:-.3px;font-weight:700;color:var(--lg-ink)}
+.lg-slide p{margin:0 auto;max-width:30ch;font-size:14px;color:var(--lg-ink-2)}
+.lg-dots{display:flex;gap:8px}
+.lg-dots button{width:8px;height:8px;padding:0;border:0;border-radius:4px;background:#e8c3d6;cursor:pointer;transition:width .4s var(--lg-ease),background .3s}
+.lg-dots button[aria-current="true"]{width:24px;background:var(--lg-pink)}
+.lg-dots button:focus-visible{outline:2px solid var(--lg-ink);outline-offset:3px}
+
+/* each illustration performs when its slide arrives */
+.lg-slide.is-on .lg-a-rise{animation:lgRise .8s var(--lg-ease) .1s both}
+.lg-slide.is-on .lg-a-type{animation:lgType .7s steps(19) .55s both}
+.lg-slide.is-on .lg-a-pop{transform-box:fill-box;transform-origin:center;animation:lgPop .6s cubic-bezier(.2,1.5,.4,1) both}
+.lg-a-draw{stroke-dasharray:100;stroke-dashoffset:0}
+.lg-slide.is-on .lg-a-draw{animation:lgDraw .55s var(--lg-ease) .35s both}
+.lg-slide.is-on .lg-a-chip{animation:lgChip .5s var(--lg-ease) var(--d) both}
+.lg-a-fan{transform-box:view-box;transform-origin:160px 160px;transform:rotate(var(--r))}
+.lg-slide.is-on .lg-a-fan{animation:lgFan .9s var(--lg-ease) .1s both}
+.lg-slide.is-on .lg-a-slide{animation:lgSlideIn .8s var(--lg-ease) .25s both}
+
+@keyframes lgIn{from{opacity:0;transform:translateY(24px) scale(.985)}}
+@keyframes lgShake{20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
+@keyframes lgSpin{to{transform:rotate(360deg)}}
+@keyframes lgDrift{to{translate:40px 30px;rotate:6deg}}
+@keyframes lgRise{from{transform:translateY(40px);opacity:0}}
+@keyframes lgType{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
+@keyframes lgPop{from{transform:scale(.55);opacity:0}}
+@keyframes lgDraw{from{stroke-dashoffset:100}}
+@keyframes lgChip{from{opacity:0;transform:translateY(12px)}}
+@keyframes lgFan{from{transform:rotate(0)}}
+@keyframes lgSlideIn{from{opacity:0;transform:translateX(46px)}}
+
+@media(max-width:780px){
+  .lg-root{justify-content:flex-start;padding:0;background:var(--lg-card)}
+  .lg-bg,.lg-story{display:none}
+  .lg-card{grid-template-columns:1fr;min-height:0;border-radius:0;box-shadow:none;flex:1}
+  .lg-pane{padding:calc(28px + env(safe-area-inset-top)) 22px 28px}
+  .lg-pane h1{margin-top:44px}
+  .lg-foot{margin:0 0 calc(18px + env(safe-area-inset-bottom))}
+}
+@media(prefers-reduced-motion:reduce){
+  .lg-root *,.lg-root{animation:none!important}
+  .lg-step,.lg-slide{transition:opacity .2s linear,visibility .2s;transform:none!important}
+}

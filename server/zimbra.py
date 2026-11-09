@@ -178,19 +178,51 @@ def dns_lookup(name, kind='TXT'):
 
 def txt_records(domain): return dns_lookup(domain,'TXT')
 
+def merged_spf(existing, mail_host):
+    """One SPF record per domain is allowed, so ours is merged into the one already published."""
+    terms=[t for t in (existing or 'v=spf1').split()[1:] if not re.fullmatch(r'[~?+-]?all',t,re.I)]
+    ending=next((t for t in (existing or '').split() if re.fullmatch(r'[~?+-]?all',t,re.I)),'~all')
+    for want in ('mx','a:'+mail_host):
+        if want not in terms: terms.append(want)
+    return ' '.join(['v=spf1',*terms,ending])
+
 def domain_records(domain, mail_host, dkim_dir):
-    """The DNS records a hosted domain needs, each marked published or not in public DNS."""
+    """The DNS records a hosted domain needs, each with its public status: ok, missing or conflict."""
     dkim=None
     if dkim_dir:
         try: dkim=json.loads((Path(dkim_dir)/(domain+'.json')).read_text())
         except (OSError,ValueError): dkim=None
     txt=dns_lookup(domain); mx=dns_lookup(domain,'MX')
-    records=[{'kind':'MX','type':'MX','host':'@','value':mail_host,'priority':10,'ok':mail_host in mx},
-        {'kind':'SPF','type':'TXT','host':'@','value':f'v=spf1 mx a:{mail_host} ~all','ok':any(t.startswith('v=spf1') and (mail_host in t or ' mx' in t) for t in txt)}]
-    if dkim: records.append({'kind':'DKIM','type':'TXT','host':dkim['host'],'value':dkim['value'],'ok':dkim['value'].replace(' ','') in [t.replace(' ','') for t in dns_lookup(dkim['host']+'.'+domain)]})
-    else: records.append({'kind':'DKIM','type':'TXT','host':'','value':'','ok':False,'pending':True})
-    records.append({'kind':'DMARC','type':'TXT','host':'_dmarc','value':f'v=DMARC1; p=quarantine; rua=mailto:postmaster@{domain}','ok':any(t.startswith('v=DMARC1') for t in dns_lookup('_dmarc.'+domain))})
+    def record(kind,rtype,host,value,ok,found=(),note='',**extra):
+        status='ok' if ok and not note else 'conflict' if note else 'missing'
+        return {'kind':kind,'type':rtype,'host':host,'value':value,'ok':status=='ok','status':status,'found':list(found),'note':note,**extra}
+    others=[h for h in mx if h!=mail_host]
+    records=[record('MX','MX','@',mail_host,mail_host in mx,mx,
+        f"Delete the other MX records ({', '.join(others)}), or some mail will keep going to the old provider." if mail_host in mx and others
+        else f"Replace the current MX records ({', '.join(others)}) with this one." if others else '',priority=10,purpose='Receives mail for your domain')]
+    spf=[t for t in txt if t.lower().startswith('v=spf1')]
+    spf_ok=len(spf)==1 and (mail_host in spf[0] or ' mx' in spf[0])
+    records.append(record('SPF','TXT','@',merged_spf(spf[0] if len(spf)==1 else '',mail_host),spf_ok,spf,
+        'A domain may have only one SPF record. Delete the extra ones and keep only the value shown.' if len(spf)>1
+        else 'Your domain already has an SPF record. Edit it to the value shown instead of adding a second one.' if spf and not spf_ok else '',
+        purpose='Allows Dejoiy Mail to send for your domain'))
+    if dkim:
+        live=[t for t in dns_lookup(dkim['host']+'.'+domain) if t.startswith('v=DKIM1')]
+        records.append(record('DKIM','TXT',dkim['host'],dkim['value'],dkim['value'].replace(' ','') in [t.replace(' ','') for t in live],live,
+            'A different key is published here. Replace it with the value shown.' if live and dkim['value'].replace(' ','') not in [t.replace(' ','') for t in live] else '',
+            purpose='Signs every message so it cannot be forged'))
+    else: records.append({'kind':'DKIM','type':'TXT','host':'','value':'','ok':False,'status':'pending','found':[],'note':'','pending':True,'purpose':'Signs every message so it cannot be forged'})
+    dmarc=[t for t in dns_lookup('_dmarc.'+domain) if t.startswith('v=DMARC1')]
+    records.append(record('DMARC','TXT','_dmarc',f'v=DMARC1; p=quarantine; rua=mailto:postmaster@{domain}',len(dmarc)==1,dmarc,
+        'Only one DMARC record is allowed. Delete the extra ones.' if len(dmarc)>1 else '',purpose='Tells Gmail and Outlook what to do with forged mail'))
     return records
+
+def signup_records(pending, mail_host, dkim_dir):
+    """Everything a new company adds at once: the ownership proof first, then the records that make mail flow."""
+    proof={'kind':'Verification','type':'TXT','host':'@','value':pending['code'],'purpose':'Proves you own the domain'}
+    try: rest=domain_records(pending['domain'],mail_host,dkim_dir)
+    except APIError: rest=[]
+    return [proof,*rest]
 
 class SignupStore:
     """Pending company sign-ups waiting for DNS proof. No passwords are ever stored here."""
@@ -1265,14 +1297,16 @@ class Handler(SimpleHTTPRequestHandler):
             token=secrets.token_urlsafe(24)
             pending={'company':company,'domain':domain,'name':name,'email':local+'@'+domain,'code':'dejoiy-verification='+secrets.token_hex(16)}
             self.server.signups.put(token,pending)
-            return self.reply(200,{'token':token,'domain':domain,'email':pending['email'],'record':{'type':'TXT','host':'@','value':pending['code']}})
+            return self.reply(200,{'token':token,'domain':domain,'email':pending['email'],'record':{'type':'TXT','host':'@','value':pending['code']},
+                'records':signup_records(pending,self.server.mail_host,getattr(self.server.admin,'dkim_dir',None))})
         token=str(data.get('token',''))
         pending=self.server.signups.get(token) if 20<=len(token)<=64 else None
         if not pending: raise APIError('This sign-up has expired. Start again.',404)
         if op not in ('check','complete'): raise APIError('Not found',404)
         verified=pending['code'] in txt_records(pending['domain'])
         if op=='check':
-            return self.reply(200,{'verified':verified,'domain':pending['domain'],'email':pending['email'],'company':pending['company'],'record':{'type':'TXT','host':'@','value':pending['code']}})
+            records=signup_records(pending,self.server.mail_host,getattr(self.server.admin,'dkim_dir',None)); records[0]['ok']=verified; records[0]['status']='ok' if verified else 'missing'
+            return self.reply(200,{'verified':verified,'domain':pending['domain'],'email':pending['email'],'company':pending['company'],'record':{'type':'TXT','host':'@','value':pending['code']},'records':records})
         password=data.get('password')
         if not isinstance(password,str) or not 8<=len(password)<=4096: raise APIError('Choose a password of at least 8 characters.')
         if not verified: raise APIError('We could not find the TXT record yet. DNS changes can take a few minutes.',409)
@@ -1316,6 +1350,9 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.start_session(email,password)
             sid,s=self.session()
             if not secrets.compare_digest(self.headers.get('X-CSRF-Token',''),s['csrf']): raise APIError('Invalid request token',403)
+            if self.path=='/api/dns':
+                domain=self.domain(s)
+                return self.reply(200,{'domain':domain,'records':domain_records(domain,self.server.mail_host,getattr(self.server.admin,'dkim_dir',None))})
             if self.path=='/api/logout':
                 with LOCK: SESSIONS.pop(sid,None)
                 return self.reply(200,{'ok':True},'dejoiy_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0')

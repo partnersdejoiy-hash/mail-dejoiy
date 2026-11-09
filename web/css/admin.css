@@ -15,7 +15,7 @@ a{color:var(--accent);text-decoration:none}
 
 /* top bar */
 .adm-top{display:flex;align-items:center;gap:16px;height:60px;padding:0 20px;background:var(--surface);border-bottom:1px solid var(--line);flex-shrink:0}
-.adm-brand{font-size:26px;font-weight:800;letter-spacing:-1.4px;color:var(--ink)}
+.adm-brand{display:inline-flex;align-items:center;gap:8px;text-decoration:none}.adm-brand img{display:block;height:30px;width:auto}
 .adm-brand span{color:var(--accent)}
 .adm-brand em{font-style:normal;font-size:12px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent);padding:3px 8px;border-radius:6px;vertical-align:middle;margin-left:4px}
 .adm-top-actions{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-2)}

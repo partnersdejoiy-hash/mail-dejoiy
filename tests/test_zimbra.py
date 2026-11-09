@@ -16,6 +16,34 @@ class Response:
     def __exit__(self,*args): pass
     def read(self,*args): return self.body
 
+class DnsRecordTests(unittest.TestCase):
+    def lookup(self, answers):
+        return lambda name, kind='TXT': answers.get((name,kind),[])
+    def test_spf_is_merged_not_duplicated(self):
+        self.assertEqual(z.merged_spf('v=spf1 include:_spf.google.com -all','mail.dejoiy.com'),'v=spf1 include:_spf.google.com mx a:mail.dejoiy.com -all')
+        self.assertEqual(z.merged_spf('','mail.dejoiy.com'),'v=spf1 mx a:mail.dejoiy.com ~all')
+    def test_all_records_with_conflicts(self):
+        old=z.dns_lookup
+        z.dns_lookup=self.lookup({('acme.com','MX'):['mail.dejoiy.com','mx.zoho.in'],('acme.com','TXT'):['v=spf1 include:zoho.in ~all','v=spf1 mx ~all']})
+        try: rec={r['kind']:r for r in z.domain_records('acme.com','mail.dejoiy.com',None)}
+        finally: z.dns_lookup=old
+        self.assertEqual(list(rec),['MX','SPF','DKIM','DMARC'])
+        self.assertEqual(rec['MX']['status'],'conflict');self.assertIn('mx.zoho.in',rec['MX']['note'])
+        self.assertEqual(rec['SPF']['status'],'conflict');self.assertTrue(rec['DKIM']['pending']);self.assertEqual(rec['DMARC']['status'],'missing')
+    def test_signup_lists_proof_first_and_survives_dns_outage(self):
+        old=z.dns_lookup
+        def down(*a,**k): raise z.APIError('DNS down',502)
+        z.dns_lookup=down
+        try: records=z.signup_records({'domain':'acme.com','code':'dejoiy-verification=x'},'mail.dejoiy.com',None)
+        finally: z.dns_lookup=old
+        self.assertEqual([r['kind'] for r in records],['Verification'])
+        z.dns_lookup=self.lookup({('acme.com','MX'):['mail.dejoiy.com'],('acme.com','TXT'):['v=spf1 mx a:mail.dejoiy.com ~all'],('_dmarc.acme.com','TXT'):['v=DMARC1; p=none']})
+        try: records=z.signup_records({'domain':'acme.com','code':'dejoiy-verification=x'},'mail.dejoiy.com',None)
+        finally: z.dns_lookup=old
+        self.assertEqual([r['kind'] for r in records],['Verification','MX','SPF','DKIM','DMARC'])
+        self.assertTrue(all(r['ok'] for r in records if r['kind'] in ('MX','SPF','DMARC')))
+
+
 class AdapterTests(unittest.TestCase):
     def test_https_only(self):
         with self.assertRaises(ValueError): z.Zimbra('http://mail.example.com')

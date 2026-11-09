@@ -6,8 +6,7 @@
 body{font:15px/1.6 var(--font);color:var(--ink);background:var(--bg);min-height:calc(var(--vh,1vh)*100);min-height:100dvh}
 a{color:var(--accent)}
 .su-top{display:flex;align-items:center;justify-content:space-between;padding:calc(14px + env(safe-area-inset-top)) 24px 14px}
-.su-brand{font-size:28px;font-weight:800;letter-spacing:-1.5px;color:var(--ink);text-decoration:none}
-.su-brand span{color:var(--accent)}
+.su-brand{display:block}.su-brand img{display:block;height:34px;width:auto}
 .su-link{font-weight:600;text-decoration:none}
 .su-main{display:grid;grid-template-columns:1fr minmax(0,480px);gap:6vw;align-items:start;max-width:1120px;margin:0 auto;padding:6vh 24px 60px}
 .su-kicker{font-size:12px;font-weight:700;letter-spacing:1.4px;color:var(--accent)}
@@ -39,3 +38,18 @@ input:focus{outline:2px solid color-mix(in srgb,var(--accent) 35%,transparent);b
 .su-copy{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:8px;padding:4px 10px;font:inherit;font-size:12px;cursor:pointer}
 .su-status{font-weight:600;color:var(--ink)!important}
 @media(max-width:820px){.su-main{grid-template-columns:1fr;padding-top:2vh;gap:24px}.su-pitch h1{font-size:30px;margin:8px 0 14px}.su-pitch ul{display:none}.su-card{padding:22px}}
+.su-dns{list-style:none;display:grid;gap:12px;margin:0 0 16px}
+.su-dns-row{padding:14px;border-radius:14px;background:color-mix(in srgb,var(--accent) 4%,var(--surface));border:1px solid var(--line)}
+.su-dns-row.is-good{background:color-mix(in srgb,var(--good) 7%,var(--surface))}
+.su-dns-row.is-bad{background:color-mix(in srgb,var(--bad) 7%,var(--surface))}
+.su-dns-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.su-dns-head b{font-size:15px}
+.su-dns-head span{flex:1;min-width:140px;font-size:12.5px;color:var(--ink-3)}
+.su-pill{font-style:normal;font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;background:var(--line);color:var(--ink-2)}
+.su-pill.good{background:color-mix(in srgb,var(--good) 16%,transparent);color:var(--good)}
+.su-pill.bad{background:color-mix(in srgb,var(--bad) 14%,transparent);color:var(--bad)}
+.su-dns .su-record{margin:0;padding:0;border:0;background:none}
+.su-note{color:var(--bad)!important;font-size:13px;font-weight:600;margin:10px 0 0!important}
+.su-dns .su-fine{margin-top:8px}
+.su-dns .su-fine code{font-size:12px}
+.su-btn+.su-btn,.su-btn.ghost{margin-top:8px}
