@@ -74,7 +74,7 @@ Views.mail = function(el, folder){
     const items=visibleItems(),visible=new Set(items.map(e=>e.id));for(const id of ui.sel)if(!visible.has(id))ui.sel.delete(id);
     const n=items.filter(e=>ui.sel.has(e.id)).length,checkbox=el.querySelector('#sel-all'),pg=pageItems();
     const onPage=pg.items.filter(e=>ui.sel.has(e.id)).length;checkbox.checked=pg.items.length>0&&onPage===pg.items.length;checkbox.indeterminate=onPage>0&&onPage<pg.items.length;
-    el.querySelector('#selection-status').textContent=n?`${n} selected`:items.length>pg.size?`${ui.page*pg.size+1}–${ui.page*pg.size+pg.items.length} of ${items.length}`:`${items.length} messages`;
+    el.querySelector('#selection-status').innerHTML=n?`${n}<span class="sel-word"> selected</span>`:items.length>pg.size?`${ui.page*pg.size+1}–${ui.page*pg.size+pg.items.length} of ${items.length}`:`${items.length} messages`;
     el.querySelectorAll('#tb-archive,#tb-spam,#tb-trash,#tb-read,#tb-label').forEach(b=>b.disabled=!n);
     document.body.classList.toggle('selecting',n>0);
   };

@@ -158,3 +158,21 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
 .adm-role-head select{width:auto;flex:none;margin:0}
 .adm-role-head .adm-muted{flex:none}
 @media (max-width:640px){.adm-role-head input{flex-basis:100%}}
+/* phones: dialogs become bottom sheets, tables become stacked cards, nothing runs off the side */
+.adm-dialog{min-width:0}
+.adm-dialog-body{overflow-x:hidden}
+.adm-dialog select,.adm-dialog input,.adm-main select,.adm-main input{max-width:100%;min-width:0}
+@media (max-width:640px){
+  .adm-backdrop{align-items:flex-end!important;padding:0!important}
+  .adm-dialog,.adm-dialog.wide{width:100%!important;border-radius:22px 22px 0 0;max-height:92dvh;padding-bottom:env(safe-area-inset-bottom)}
+  .adm-dialog-foot{flex-wrap:wrap}.adm-dialog-foot .adm-btn{flex:1 1 auto;min-height:46px}
+  .adm-table thead{display:none}
+  .adm-table,.adm-table tbody{display:block}
+  .adm-table tr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line)}
+  .adm-table td{display:block;padding:0!important;border:0!important;min-width:0;overflow-wrap:anywhere}
+  .adm-table td:first-child{grid-column:1/-1;font-size:16px}
+  .adm-table td.adm-right,.adm-table td:last-child{grid-column:1/-1;justify-self:start;display:flex;flex-wrap:wrap;gap:6px}
+  .adm-table td small{display:block}
+  .adm-btn{min-height:44px}
+  .adm-top-actions .adm-btn{min-height:38px;padding:0 12px}
+}

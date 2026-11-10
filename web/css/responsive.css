@@ -442,3 +442,40 @@ figure.upd-cover.is-gone img,figure.upd-cover.is-gone figcaption{display:none}
 .upd-auds .upd-kind-pick{--k:var(--pop,#ff4fa3)}
 /* the mail Compose button stays out of the way on the update pages */
 body:is([data-route="news"],[data-route="company"]) .fab{display:none!important}
+
+/* ============ phone pass: every screen fits, every control is easy to tap ============ */
+@media (max-width:1023px), (max-width:1199px) and (pointer:coarse){
+  /* an open mail uses the whole screen: no space kept for the hidden bottom bar, one scroll only */
+  body.reader-open #view{padding-bottom:0!important}
+  body.reader-open .reader{padding-bottom:calc(24px + env(safe-area-inset-bottom))!important}
+  body.reader-open .r-body{overflow:visible!important;max-height:none!important}
+  /* stars: a 44px target around the 16px icon */
+  .msg-row .star{position:relative;min-width:24px;min-height:24px;justify-content:center}
+  .msg-row .star::after{content:"";position:absolute;inset:-12px}
+  /* selected mail shows a tick on its avatar */
+  .msg-row.selected .m-avatar{position:relative}
+  .msg-row.selected .m-avatar::before{content:"✓";position:absolute;inset:0;display:grid;place-items:center;border-radius:inherit;background:#121212;color:#fff;font-weight:800;font-size:18px;z-index:1}
+  /* settings: the last fields scroll clear of the save bar and the bottom bar */
+  body[data-route="settings"] #view{padding-bottom:calc(170px + env(safe-area-inset-bottom))!important}
+  input[type=checkbox],input[type=radio]{width:22px;height:22px}
+}
+/* the selection bar fits a 320px phone: the count stays, the word goes */
+@media (max-width:380px){
+  .selection-status .sel-word{display:none}
+  .list-toolbar{gap:2px!important;padding:8px 8px!important}
+  .list-toolbar .icon-btn{min-width:40px!important;padding:0 4px!important}
+}
+/* phones on their side: short screens get compact bars so the mail has room */
+@media (max-height:500px) and (orientation:landscape) and (pointer:coarse){
+  #topbar{height:56px!important;padding:6px 12px!important}
+  #bottomnav{min-height:0!important;padding-top:4px!important;padding-bottom:calc(4px + env(safe-area-inset-bottom))!important}
+  #bottomnav button{min-height:40px!important;flex-direction:row!important;gap:6px!important}
+  #view{padding-bottom:64px!important}
+  .fab{min-height:48px!important;padding:0 18px!important;bottom:calc(64px + env(safe-area-inset-bottom))!important}
+  .mail-filterbar{min-height:0!important}
+  .message-group{padding-top:6px!important;padding-bottom:2px!important}
+  html .msg-row{min-height:64px;margin:5px 10px!important}
+  .compose-head{flex-wrap:nowrap!important;padding:8px 12px 10px!important;border-radius:0 0 20px 20px!important}
+  .compose-head .c-title{order:0!important;flex:1 1 auto!important;font-size:22px!important;padding:0!important}
+  .compose #compose-body{min-height:44vh!important}
+}

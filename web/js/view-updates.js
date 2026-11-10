@@ -47,7 +47,7 @@ Views.updates = function(el, box){
   const route = box==="dejoiy" ? "news" : "company";
   let view = null, filter = "all", picked = [], kind = "news", audience = "both", composing = false;
   el.innerHTML = `<div class="upd"><div class="upd-skel" aria-hidden="true"><i></i><i></i><i></i></div></div>`;
-  load().then(v=>{ if(App.route!==route) return; view=v; App.companyName=v.company?.name; App.refreshNav(); draw(); })
+  load().then(v=>{ if(App.route!==route) return; if(!v?.company || !Array.isArray(v.dejoiy)) throw new Error("Updates couldn't load right now. Please try again in a moment."); view=v; App.companyName=v.company?.name; App.refreshNav(); draw(); })
     .catch(error=>{ el.innerHTML = `<div class="empty-note">${esc(error.message)}</div>`; });
 
   const files = (post, cover) => {
