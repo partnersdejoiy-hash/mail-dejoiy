@@ -13,8 +13,9 @@
 <link rel="icon" type="image/png" sizes="32x32" href="assets/icons/favicon-32.png?v=20261110a" />
 <link rel="manifest" href="manifest.webmanifest" />
 <link rel="preload" href="assets/fonts/bricolage-grotesque-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
+<script src="js/accent.js?v=20261110e"></script>
 <link rel="stylesheet" href="css/font.css?v=20261110b" />
-<link rel="stylesheet" href="css/landing.css?v=20261110d" />
+<link rel="stylesheet" href="css/landing.css?v=20261110e" />
 <script>document.documentElement.classList.add("js")</script>
 </head>
 <body class="lp">
@@ -33,6 +34,12 @@
       <p class="lp-lede rv">Your own @company address for the whole team. On phone, tablet and desktop. Set up in minutes.</p>
       <div class="lp-cta rv"><a class="lp-btn big" href="/signup">Create my email</a><a class="lp-btn big ghost" href="/?signin">Sign in</a></div>
       <p class="lp-note rv">Already on Dejoiy Mail? Sign in with your work address.</p>
+      <div class="lp-colours rv">
+        <span id="lp-colour-label">Pick your colour</span>
+        <div class="lp-swatches" role="radiogroup" aria-labelledby="lp-colour-label" data-swatches></div>
+        <button class="lp-btn small" type="button" data-save-colour>Save</button>
+        <span class="lp-saved" aria-live="polite" data-colour-msg></span>
+      </div>
     </div>
     <div class="lp-hero-art" aria-hidden="true">
       <i class="lp-eye lp-eye-1"></i><i class="lp-eye lp-eye-2"></i>
@@ -114,31 +121,34 @@
       </div>
     </div>
     <div class="lp-calc rv">
-      <label for="lp-seats">My team is <output id="lp-seats-out">8</output> people</label>
-      <input id="lp-seats" type="range" min="1" max="30" value="8">
+      <label for="lp-seats">My team is <output id="lp-seats-out">25</output> people</label>
+      <input id="lp-seats" type="range" min="1" max="250" value="25">
       <p id="lp-calc-out" aria-live="polite"></p>
     </div>
     <div class="lp-plans">
-      <article class="lp-plan rv" data-plan="starter" data-month="79" data-year="790" data-seats="3">
+      <article class="lp-plan rv" data-plan="starter" data-month="79" data-year="790" data-seats="51">
         <h3>Starter</h3>
         <p class="lp-price-line"><b>₹<span data-amount>79</span></b><span data-per>/month</span></p>
-        <p class="lp-per-head">₹<span data-head>26</span> per mailbox · up to 3</p>
-        <ul><li>3 mailboxes, 5 GB each</li><li>Your own domain</li><li>Aliases like hello@</li><li>Every theme, light and dark</li><li>Phone, tablet and desktop</li></ul>
-        <a class="lp-btn ghost" href="/signup?plan=starter">Choose Starter</a>
+        <p class="lp-per-head" data-alt>or ₹790/year · 2 months free</p>
+        <p class="lp-per-head">up to 51 mailboxes</p>
+        <ul><li>51 mailboxes, 5 GB each</li><li>Your own domain</li><li>Aliases like hello@</li><li>Every theme, light and dark</li><li>Phone, tablet and desktop</li></ul>
+        <a class="lp-btn ghost" href="/signup?plan=starter&amp;billing=month" data-choose>Choose Starter</a>
       </article>
-      <article class="lp-plan is-pop rv" data-plan="team" data-month="249" data-year="2490" data-seats="10">
+      <article class="lp-plan is-pop rv" data-plan="team" data-month="249" data-year="2490" data-seats="101">
         <h3>Team</h3>
         <p class="lp-price-line"><b>₹<span data-amount>249</span></b><span data-per>/month</span></p>
-        <p class="lp-per-head">₹<span data-head>25</span> per mailbox · up to 10 · <b>most picked</b></p>
-        <ul><li>10 mailboxes, 5 GB each</li><li>Everything in Starter</li><li>Team lists like sales@ and team@</li><li>Admin console on your phone</li><li>Live DNS health checks</li></ul>
-        <a class="lp-btn" href="/signup?plan=team">Choose Team</a>
+        <p class="lp-per-head" data-alt>or ₹2,490/year · 2 months free</p>
+        <p class="lp-per-head">up to 101 mailboxes · <b>most picked</b></p>
+        <ul><li>101 mailboxes, 5 GB each</li><li>Everything in Starter</li><li>Team lists like sales@ and team@</li><li>Admin console on your phone</li><li>Live DNS health checks</li></ul>
+        <a class="lp-btn" href="/signup?plan=team&amp;billing=month" data-choose>Choose Team</a>
       </article>
-      <article class="lp-plan rv" data-plan="business" data-month="599" data-year="5990" data-seats="30">
+      <article class="lp-plan rv" data-plan="business" data-month="599" data-year="5990" data-seats="100000">
         <h3>Business</h3>
         <p class="lp-price-line"><b>₹<span data-amount>599</span></b><span data-per>/month</span></p>
-        <p class="lp-per-head">₹<span data-head>20</span> per mailbox · up to 30</p>
-        <ul><li>30 mailboxes, 10 GB each</li><li>Everything in Team</li><li>Roles and per-person storage</li><li>Forwarding and shared addresses</li><li>Priority setup help</li></ul>
-        <a class="lp-btn ghost" href="/signup?plan=business">Choose Business</a>
+        <p class="lp-per-head" data-alt>or ₹5,990/year · 2 months free</p>
+        <p class="lp-per-head">unlimited mailboxes</p>
+        <ul><li>Unlimited mailboxes, 10 GB each</li><li>Everything in Team</li><li>Roles and per-person storage</li><li>Forwarding and shared addresses</li><li>Priority setup help</li></ul>
+        <a class="lp-btn ghost" href="/signup?plan=business&amp;billing=month" data-choose>Choose Business</a>
       </article>
     </div>
     <p class="lp-fine">Compared with list prices on annual plans before GST, November 2026: Zoho Mail Lite 5 GB at ₹59 per user a month and Google Workspace Business Starter at ₹270 per user a month.</p>
@@ -160,7 +170,7 @@
   <svg class="lp-mark" viewBox="0 0 640 210" role="img" aria-label=":D">
     <circle class="rv" cx="70" cy="52" r="40" fill="#fff" stroke="#121212" stroke-width="8"/>
     <circle class="rv" cx="70" cy="158" r="40" fill="#121212"/>
-    <path class="rv" d="M160 4H460A101 101 0 0 1 460 206H160Z" fill="#FF4FA3"/>
+    <path class="rv" d="M160 4H460A101 101 0 0 1 460 206H160Z" style="fill:var(--pink)"/>
     <path class="rv" fill-rule="evenodd" d="M230 50H420A55 55 0 0 1 420 160H230Z M296 84H404A21 21 0 0 1 404 126H296Z" fill="#121212"/>
   </svg>
   <div class="lp-foot-grid">
@@ -169,6 +179,6 @@
   </div>
   <div class="lp-foot-last"><span>© 2026 Dejoiy India Private Limited</span><a class="lp-btn small" href="/signup">Sign up</a></div>
 </footer>
-<script src="js/landing.js?v=20261110d"></script>
+<script src="js/landing.js?v=20261110e"></script>
 </body>
 </html>

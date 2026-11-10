@@ -8,14 +8,14 @@
 html[data-brightness="dark"] #dm-splash{background:#141316;color:#b9b5bd}
 #dm-splash.dm-out{opacity:0;visibility:hidden;pointer-events:none}
 .dl-mark{width:112px;height:auto;overflow:visible}
-.dl-box{fill:#FF4FA3;transform-origin:75px 50px;animation:dlPop .7s cubic-bezier(.2,1.4,.4,1) both}
+.dl-box{fill:var(--dj-pop,#FF4FA3);transform-origin:75px 50px;animation:dlPop .7s cubic-bezier(.2,1.4,.4,1) both}
 .dl-dot-1{fill:#fff;transform-box:fill-box;transform-origin:center;animation:dlDot .45s cubic-bezier(.2,1.6,.4,1) .45s both,dlWink 3.2s ease-in-out 1.6s infinite}
 .dl-dot-2{fill:#121212;transform-box:fill-box;transform-origin:center;animation:dlDot .45s cubic-bezier(.2,1.6,.4,1) .58s both}
 .dl-d{fill:#121212;clip-path:inset(0 100% 0 0);animation:dlWipe .5s cubic-bezier(.7,0,.2,1) .7s forwards}
 /* two strokes chase around a halo of the mark while we wait */
 .dl-rings{transform:translate(75px,50px) scale(1.18) translate(-75px,-50px)}
 .dl-ring{fill:none;stroke-width:4.5;stroke-linecap:round;stroke-dasharray:18 82;opacity:0;animation:dlFade .4s ease .9s forwards,dlChase 1.6s linear .9s infinite}
-.dl-ring-a{stroke:#FF4FA3}
+.dl-ring-a{stroke:var(--dj-pop,#FF4FA3)}
 .dl-ring-b{stroke:#121212;stroke-dashoffset:-50;animation:dlFade .4s ease .9s forwards,dlChaseB 1.6s linear .9s infinite}
 html[data-brightness="dark"] .dl-ring-b{stroke:#F3F2EE}
 .dl-text{font-size:14px;letter-spacing:.1px;max-width:80vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;animation:dlFade .5s ease .5s both}

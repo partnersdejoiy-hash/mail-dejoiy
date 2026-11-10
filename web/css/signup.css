@@ -1,10 +1,10 @@
 /* ============ Dejoiy Mail — signup.css ============
    Sticker world: hot pink and ink, thick outlines, hard shadows, big Bricolage type. */
 :root{--bg:#fbf6f9;--surface:#fff;--ink:#121212;--ink-2:#4a464c;--ink-3:#77727a;--edge:#121212;--line:#e7dfe4;
-  --pink:#ff4fa3;--pink-soft:#ffe1ef;--accent:#c4166c;--good:#12804a;--good-soft:#d8f5e5;--bad:#c0263f;--bad-soft:#ffe0e6;
+  --pink:var(--dj-pop,#ff4fa3);--pink-soft:var(--dj-soft,#ffe1ef);--accent:var(--dj-deep,#c4166c);--good:#12804a;--good-soft:#d8f5e5;--bad:#c0263f;--bad-soft:#ffe0e6;
   --font:"Bricolage Grotesque","Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;--ease:cubic-bezier(.16,1,.3,1)}
 @media (prefers-color-scheme:dark){:root{--bg:#141215;--surface:#1e1b20;--ink:#f5f2f0;--ink-2:#cdc7cf;--ink-3:#9a94a0;--edge:#f5f2f0;--line:#39333c;
-  --pink-soft:#3a1d2c;--accent:#ff7dbb;--good:#5fd394;--good-soft:#173a28;--bad:#ff8fa3;--bad-soft:#3d1a22}}
+  --pink-soft:var(--dj-soft-dark,#3a1d2c);--accent:var(--dj-pop,#ff7dbb);--good:#5fd394;--good-soft:#173a28;--bad:#ff8fa3;--bad-soft:#3d1a22}}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth}
 body{font:16px/1.55 var(--font);color:var(--ink);background:var(--bg);min-height:100dvh;display:flex;flex-direction:column;-webkit-font-smoothing:antialiased}

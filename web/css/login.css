@@ -1,12 +1,12 @@
 /* Dejoiy Mail sign-in: two-step card (email, then password) with a story carousel. Brand colours are fixed
    here so the first impression is the same whatever theme the mailbox later uses. */
-.lg-root{--lg-bg:#f7f4f6;--lg-card:#fff;--lg-tone:#fff0f6;--lg-ink:#121212;--lg-ink-2:#5e5a60;--lg-ink-3:#8a8489;--lg-line:#e2dce0;
-  --lg-pink:#ff4fa3;--lg-pink-2:#f23d93;--lg-link:#1f5ce0;--lg-bad:#c0263f;--lg-ease:cubic-bezier(.16,1,.3,1);
+.lg-root{--lg-bg:#f7f4f6;--lg-card:#fff;--lg-tone:var(--dj-soft,#fff0f6);--lg-ink:#121212;--lg-ink-2:#5e5a60;--lg-ink-3:#8a8489;--lg-line:#e2dce0;
+  --lg-pink:var(--dj-pop,#ff4fa3);--lg-pink-2:color-mix(in srgb,var(--lg-pink) 86%,#000);--lg-link:#1f5ce0;--lg-bad:#c0263f;--lg-ease:cubic-bezier(.16,1,.3,1);
   position:fixed;inset:0;z-index:10000;overflow:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;
   padding:32px 20px;background:var(--lg-bg);color:var(--lg-ink);font:15px/1.5 "Segoe UI",system-ui,-apple-system,Roboto,"Helvetica Neue",Arial,sans-serif;
   transition:opacity .4s var(--lg-ease),transform .4s var(--lg-ease)}
-html[data-brightness="dark"] .lg-root{--lg-bg:#141316;--lg-card:#1d1b20;--lg-tone:#2a1b24;--lg-ink:#f3f2ee;--lg-ink-2:#bdb8c0;--lg-ink-3:#8f8a93;--lg-line:#3a363c;--lg-link:#8fb2ff;--lg-bad:#ff8fa3}
-.lg-root ::selection{background:#ffc2df;color:#121212}
+html[data-brightness="dark"] .lg-root{--lg-bg:#141316;--lg-card:#1d1b20;--lg-tone:var(--dj-soft-dark,#2a1b24);--lg-ink:#f3f2ee;--lg-ink-2:#bdb8c0;--lg-ink-3:#8f8a93;--lg-line:#3a363c;--lg-link:#8fb2ff;--lg-bad:#ff8fa3}
+.lg-root ::selection{background:var(--lg-pink);color:#121212}
 .lg-root.lg-out{opacity:0;transform:scale(.985);pointer-events:none}
 
 /* two oversized :D silhouettes drift behind the card */
@@ -38,7 +38,7 @@ html[data-brightness="dark"] .lg-root{--lg-bg:#141316;--lg-card:#1d1b20;--lg-ton
 .lg-root input{display:block;width:100%;height:50px;margin:0;padding:0 14px;border:1.5px solid var(--lg-line);border-radius:12px;background:var(--lg-card);
   color:var(--lg-ink);font:inherit;font-size:16px;caret-color:var(--lg-pink);box-shadow:none;transition:border-color .2s,box-shadow .2s}
 .lg-root input::placeholder{color:var(--lg-ink-3)}
-.lg-root input:focus{outline:none;border-color:var(--lg-ink);box-shadow:0 0 0 4px rgba(255,79,163,.22)}
+.lg-root input:focus{outline:none;border-color:var(--lg-ink);box-shadow:0 0 0 4px color-mix(in srgb,var(--lg-pink) 25%,transparent)}
 .lg-pass{position:relative;display:block}
 .lg-pass input{padding-right:52px}
 .lg-eye{position:absolute;right:6px;top:50%;width:40px;height:40px;margin-top:-20px;display:grid;place-items:center;border:0;border-radius:10px;background:none;color:var(--lg-ink-3);cursor:pointer}
@@ -81,7 +81,7 @@ form.is-busy .lg-btn:disabled{opacity:1}
 .lg-slide h2{margin:18px 0 6px;font-size:19px;letter-spacing:-.3px;font-weight:700;color:var(--lg-ink)}
 .lg-slide p{margin:0 auto;max-width:30ch;font-size:14px;color:var(--lg-ink-2)}
 .lg-dots{display:flex;gap:8px}
-.lg-dots button{width:8px;height:8px;padding:0;border:0;border-radius:4px;background:#e8c3d6;cursor:pointer;transition:width .4s var(--lg-ease),background .3s}
+.lg-dots button{width:8px;height:8px;padding:0;border:0;border-radius:4px;background:color-mix(in srgb,var(--lg-pink) 40%,#9a949c);cursor:pointer;transition:width .4s var(--lg-ease),background .3s}
 .lg-dots button[aria-current="true"]{width:24px;background:var(--lg-pink)}
 .lg-dots button:focus-visible{outline:2px solid var(--lg-ink);outline-offset:3px}
 

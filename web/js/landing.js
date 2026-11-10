@@ -14,6 +14,24 @@
     io ? io.observe(el) : el.classList.add("in");
   });
 
+  /* colour picker: a click previews the colour on the whole page, Save keeps it in this browser */
+  const swatches = document.querySelector("[data-swatches]");
+  if(swatches && window.DejoiyAccent){
+    const A = window.DejoiyAccent, msg = document.querySelector("[data-colour-msg]");
+    let current = A.saved();
+    const label = n => n[0].toUpperCase() + n.slice(1);
+    swatches.innerHTML = Object.keys(A.COLOURS).map(n =>
+      `<button type="button" role="radio" aria-label="${label(n)}" aria-checked="${n === current}" data-colour="${n}" style="--c:${A.COLOURS[n][0]}"></button>`).join("");
+    $$("[data-colour]", swatches).forEach(b => b.addEventListener("click", () => {
+      current = b.dataset.colour; A.apply(current);
+      $$("[data-colour]", swatches).forEach(x => x.setAttribute("aria-checked", x === b));
+      msg.textContent = current === A.saved() ? "" : "Previewing " + label(current) + ". Save to keep it.";
+    }));
+    document.querySelector("[data-save-colour]").addEventListener("click", () => {
+      A.save(current); msg.textContent = "Saved. This browser stays " + label(current) + ".";
+    });
+  }
+
   /* sentences with switches */
   $$(".lp-switch").forEach(band => {
     const t = band.querySelector(".lp-toggle");
@@ -37,11 +55,11 @@
   const stage = document.querySelector("[data-stage]");
   if(stage){
     const looks = [
-      ["#ff4fa3", "The default. Hot pink, ink and plenty of white."],
+      ["var(--pink)", "The default. Your colour, ink and plenty of white."],
       ["#2a1f5c", "One of the photo themes: a night sky behind your inbox."],
       ["#121212", "Every theme has a dark side. Easy on the eyes at 2 a.m."],
       ["#f59e6b", "Big screens get the full scene, from Sydney at sunset to snow."],
-      ["#ffe1ef", "Open a message and Reply sits right where your thumb is."]
+      ["var(--soft)", "Open a message and Reply sits right where your thumb is."]
     ];
     const tabs = $$("[data-look]"), imgs = $$("img", stage), fact = document.querySelector(".lp-show-fact");
     const pick = n => {
@@ -59,24 +77,25 @@
     pick(0);
   }
 
-  /* pricing: monthly or yearly, and a team-size slider that names the plan and the saving */
+  /* pricing: monthly or yearly on every plan, and a team-size slider that names the plan and the saving */
   const plans = $$(".lp-plan");
   if(plans.length){
     const inr = n => "₹" + Math.round(n).toLocaleString("en-IN");
     const seats = document.getElementById("lp-seats"), out = document.getElementById("lp-seats-out"), calc = document.getElementById("lp-calc-out");
     let yearly = false;
-    const monthly = el => yearly ? +el.dataset.year / 12 : +el.dataset.month;
     const render = () => {
       plans.forEach(el => {
-        el.querySelector("[data-amount]").textContent = (yearly ? +el.dataset.year : +el.dataset.month).toLocaleString("en-IN");
+        const m = +el.dataset.month, y = +el.dataset.year;
+        el.querySelector("[data-amount]").textContent = (yearly ? y : m).toLocaleString("en-IN");
         el.querySelector("[data-per]").textContent = yearly ? "/year" : "/month";
-        el.querySelector("[data-head]").textContent = Math.round(monthly(el) / +el.dataset.seats);
+        el.querySelector("[data-alt]").textContent = yearly ? `or ${inr(m)}/month` : `or ${inr(y)}/year · 2 months free`;
+        el.querySelector("[data-choose]").href = `/signup?plan=${el.dataset.plan}&billing=${yearly ? "year" : "month"}`;
       });
       const n = +seats.value, plan = plans.find(el => n <= +el.dataset.seats) || plans[plans.length - 1];
       plans.forEach(el => el.classList.toggle("is-pick", el === plan));
       out.textContent = n;
-      const ours = monthly(plan);
-      calc.innerHTML = `<b>${plan.querySelector("h3").firstChild.textContent.trim()}</b> fits. You pay <b>${inr(ours)} a month</b> for everyone (${inr(ours / n)} a person). ` +
+      const ours = yearly ? +plan.dataset.year / 12 : +plan.dataset.month;
+      calc.innerHTML = `<b>${plan.querySelector("h3").textContent}</b> fits. You pay <b>${inr(ours)} a month</b> for everyone (${n > 1 ? "about " + inr(Math.max(1, ours / n)) + " a person" : "just you"}). ` +
         `The same team on Zoho Mail Lite: ${inr(59 * n)}. On Google Workspace Starter: ${inr(270 * n)}.`;
     };
     seats.addEventListener("input", render);

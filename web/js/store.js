@@ -21,7 +21,7 @@ function freshState(){
     blocked: ["winner@prize-lotto.xyz"],
     allowed: [],
     vacation: { on:false, subject:"Out of office", message:"Thanks for writing — I'm away and will reply when I'm back." },
-    prefs: { theme:"pearl", brightness:"light", customBg:"", customLogo:"", sounds:true, messageLayout:"list", inboxSpacing:"comfortable", messageTabs:false, largeText:false, mailUiVersion:2, mailSort:"dateDesc" },
+    prefs: { theme:(function(){ try{ const m=document.cookie.match(/(?:^|; )dm-accent=([a-z]+)/); const a=(m&&m[1])||localStorage.getItem("dm-accent"); return a&&a!=="pink"&&/^[a-z]+$/.test(a)?"dj"+a:"pearl"; }catch(e){ return "pearl"; } })(), brightness:"light", customBg:"", customLogo:"", sounds:true, messageLayout:"list", inboxSpacing:"comfortable", messageTabs:false, largeText:false, mailUiVersion:2, mailSort:"dateDesc" },
     admin: {
       org: "DEJOIY INDIA PRIVATE LIMITED",
       users: [

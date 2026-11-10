@@ -45,10 +45,11 @@ function step(n){ document.body.dataset.step = n;
 function busy(form, on){ form.querySelectorAll("button,input").forEach(x => x.disabled = on); }
 
 // The plan picked on the pricing page; billing is arranged after setup, so this is shown, not charged.
-const PLANS = {starter:["Starter","₹79/month","3 mailboxes"], team:["Team","₹249/month","10 mailboxes"], business:["Business","₹599/month","30 mailboxes"]};
+const PLANS = {starter:["Starter",79,790,"51 mailboxes"], team:["Team",249,2490,"101 mailboxes"], business:["Business",599,5990,"unlimited mailboxes"]};
 function planLine(){
-  const p = PLANS[new URLSearchParams(location.search).get("plan")];
-  return p ? `<p class="su-plan">Plan: <b>${p[0]}</b> · ${p[1]} · up to ${p[2]} · <a href="/home#pricing">change</a></p>` : "";
+  const q = new URLSearchParams(location.search), p = PLANS[q.get("plan")]; if(!p) return "";
+  const yearly = q.get("billing") === "year";
+  return `<p class="su-plan">Plan: <b>${p[0]}</b> · ₹${(yearly ? p[2] : p[1]).toLocaleString("en-IN")}/${yearly ? "year" : "month"} · ${p[3]} · <a href="/home#pricing">change</a></p>`;
 }
 function company(prefill){
   step(1);
