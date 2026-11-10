@@ -5,3 +5,4 @@ node_modules/
 *.sqlite
 *.sqlite-journal
 zimbra-foss-build/
+.taste-skill/
