@@ -123,3 +123,8 @@ html[data-scenic="true"] .cal :is(.cal-grid,.cal-side,.cal-card,.cal-strip,.cal-
   .cal-row3{grid-template-columns:1fr 1fr}
 }
 @media (prefers-reduced-motion:reduce){.cal-card{animation:none}.cal-spin{animation-duration:2s}}
+/* "Add a Shine video meeting" in the event sheet */
+.cal-shine{justify-self:start;display:inline-flex;align-items:center;gap:8px;min-height:42px;padding:0 16px;border-radius:999px;border:2px solid #121212;
+  background:#FF4FA3;color:#121212;font:inherit;font-weight:800;cursor:pointer;box-shadow:3px 3px 0 #121212;transition:transform .15s,box-shadow .15s}
+.cal-shine:active{transform:translate(2px,2px);box-shadow:none}
+.cal-shine:disabled{opacity:.7;cursor:progress}

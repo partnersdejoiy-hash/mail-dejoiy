@@ -55,4 +55,26 @@ class DirectoryTests(unittest.TestCase):
         self.assertEqual(people[0]['admin'], 'company'); self.assertTrue(people[0]['photo'].endswith('v=5'))
         self.assertFalse(people[1]['active']); self.assertEqual(people[1]['photo'], '')
 
+class CalendarBridgeTests(unittest.TestCase):
+    def handler(self):
+        h = z.Handler.__new__(z.Handler)
+        h.server = type('S', (), {'zimbra': object()})()
+        h.delegated = lambda email: 'tok:' + email
+        h.calls = []
+        h.cal = lambda fn, *a: h.calls.append((fn.__name__, a[1:])) or {'ok': True, 'invId': '7-6'}
+        return h
+
+    def test_saves_lists_and_deletes_for_the_owner(self):
+        h = self.handler()
+        self.assertEqual(h.shine_calendar({'op': 'save', 'owner': 'Deepak@Corp.Dejoiy.com', 'event': {'title': 'Sync'}})['invId'], '7-6')
+        h.shine_calendar({'op': 'list', 'owner': 'a@x.in', 'start': 1, 'end': 2})
+        h.shine_calendar({'op': 'delete', 'owner': 'a@x.in', 'event': {'invId': '7-6'}})
+        self.assertEqual([c[0] for c in h.calls], ['save_event', 'events', 'delete_event'])
+        self.assertEqual(h.calls[0][1][0], 'tok:deepak@corp.dejoiy.com'); self.assertEqual(h.calls[0][1][2], 'deepak@corp.dejoiy.com')
+
+    def test_refuses_bad_requests(self):
+        h = self.handler()
+        for bad in ({'op': 'save', 'owner': 'nope'}, {'op': 'drop', 'owner': 'a@x.in'}, {'op': 'list', 'owner': 'a@x.in', 'start': 'x'}):
+            with self.assertRaises(z.APIError): h.shine_calendar(bad)
+
 if __name__ == '__main__': unittest.main()

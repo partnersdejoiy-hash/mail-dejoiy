@@ -163,6 +163,7 @@ Views.calendar = function(el){
       <div class="cal-row2"><label>Repeat<select name="repeat">${REPEAT.map(([v,l])=>`<option value="${v}" ${(detail.repeat??e?.repeat??"")===v?"selected":""}>${l}</option>`).join("")}</select></label>
         <label>Reminder<select name="reminder">${REMIND.map(([v,l])=>`<option value="${v}" ${(detail.reminder??(e?-1:10))===v?"selected":""}>${l}</option>`).join("")}</select></label></div>
       <label>Location or video link<input name="location" maxlength="300" value="${esc(e?.location||"")}" placeholder="Office, or a meeting link"></label>
+      ${Live.enabled&&!/\/meet\//.test(e?.location||"")?`<button type="button" class="cal-shine" data-shine-meet><span aria-hidden="true">📹</span> Add a Shine video meeting</button>`:""}
       <label>Guests<input name="guests" type="email" multiple value="${esc(guests.join(", "))}" placeholder="priya@company.com, rahul@gmail.com"></label>
       ${guests.length&&Object.keys(replies).length?`<ul class="cal-guests">${guests.map(g=>`<li><span>${esc(g)}</span><em data-r="${esc(replies[g]||"NE")}">${({AC:"Going",DE:"Not going",TE:"Maybe"})[replies[g]]||"Invited"}</em></li>`).join("")}</ul>`:""}
       <label>Notes<textarea name="notes" rows="3" maxlength="10000">${esc(detail.notes??e?.notes??"")}</textarea></label>
@@ -172,7 +173,20 @@ Views.calendar = function(el){
     const form=document.getElementById("cal-form");
     form.elements.allDay.addEventListener("change",()=>{ form.elements.st.hidden=form.elements.et.hidden=form.elements.allDay.checked; });
     form.elements.sd.addEventListener("change",()=>{ if(form.elements.ed.value<form.elements.sd.value) form.elements.ed.value=form.elements.sd.value; });
+    form.querySelector("[data-shine-meet]")?.addEventListener("click", ev=>addShineMeeting(ev.currentTarget));
     if(!e) setTimeout(()=>form.elements.title.focus(),60);
+  }
+  /* "Add a Shine video meeting": Shine makes a room for this event; its link goes in Location, so guests get it in the invite */
+  async function addShineMeeting(button){
+    const f=document.getElementById("cal-form").elements, err=document.querySelector("#cal-form .cal-error"), all=f.allDay.checked;
+    const start=all?at(f.sd.value,"09:00"):at(f.sd.value,f.st.value), end=all?start+3600000:at(f.ed.value,f.et.value);
+    button.disabled=true; button.textContent="Making the meeting…"; err.textContent="";
+    try{
+      const out=await Live.request("shine/meeting",{title:f.title.value.trim()||"Meeting", start, end, guests:f.guests.value});
+      f.location.value=out.url;
+      if(!f.notes.value.includes(out.url)) f.notes.value=(f.notes.value?f.notes.value+"\n\n":"")+`Join on Shine: ${out.url}`;
+      button.remove(); App.toast("Shine meeting added. Save to send the invites.");
+    }catch(error){ err.textContent=error.message; button.disabled=false; button.innerHTML='<span aria-hidden="true">📹</span> Add a Shine video meeting'; }
   }
   async function save(e){
     const f=document.getElementById("cal-form").elements, err=document.querySelector("#cal-form .cal-error"), all=f.allDay.checked;

@@ -1544,11 +1544,43 @@ class Handler(SimpleHTTPRequestHandler):
         # Shine loads it from here, so the usual rule holds: only signed-in colleagues on the same domain see it.
         version=self.server.avatars.versions(email.lower().rsplit('@',1)[1]).get(email.lower())
         return f"{self.server.app_origin}/api/avatar?email={urllib.parse.quote(email.lower())}&v={version}" if version else ''
-    def shine_directory(self):
-        """Every mailbox, for Shine's people list. Server to server only: Shine sends the shared secret."""
+    def shine_allowed(self):
         secret=self.server.shine_secret
         auth=self.headers.get('Authorization') or ''
         if not secret or not auth.startswith('Bearer ') or not hmac.compare_digest(auth[7:].strip().encode(),secret.encode()): raise APIError('Not allowed',403)
+    def shine_calendar(self, data):
+        """Shine's meetings live on the same Zimbra calendar: save/delete/list events for one mailbox."""
+        owner=str(data.get('owner','')).strip().lower()
+        if not EMAIL.fullmatch(owner): raise APIError('Invalid mailbox')
+        token=self.delegated(owner); client=self.server.zimbra; op=data.get('op')
+        if op=='list':
+            try: start,end=int(data.get('start')),int(data.get('end'))
+            except (TypeError,ValueError): raise APIError('Invalid dates.')
+            return {'events':self.cal(dcalendar.events,client,token,start,end)}
+        event=data.get('event') if isinstance(data.get('event'),dict) else {}
+        if op=='delete': return self.cal(dcalendar.delete_event,client,token,event)
+        if op=='save': return self.cal(dcalendar.save_event,client,token,event,owner)
+        raise APIError('Unknown calendar request')
+    def shine_meeting(self, session, data):
+        """'Add Shine meeting' on a calendar event: Shine makes a room for this mailbox and gives back its link."""
+        if not self.server.shine_secret: raise APIError("Shine isn't connected to this mailbox yet.",503)
+        guests=[g for g in re.split(r'[,;\s]+',str(data.get('guests',''))) if EMAIL.fullmatch(g)][:100]
+        body=json.dumps({'host':session['user']['email'],'title':str(data.get('title') or 'Meeting')[:200],
+            'start':data.get('start'),'end':data.get('end'),'guests':guests}).encode()
+        request=urllib.request.Request(self.server.shine_site+'/dejoiy/meeting',data=body,method='POST',
+            headers={'Content-Type':'application/json','Authorization':'Bearer '+self.server.shine_secret})
+        try:
+            with urllib.request.urlopen(request,timeout=15) as response: out=json.loads(response.read())
+        except urllib.error.HTTPError as error:
+            try: message=json.loads(error.read()).get('error')
+            except (ValueError,AttributeError): message=None
+            raise APIError(message or 'Shine could not make the meeting.',502)
+        except (urllib.error.URLError,TimeoutError,ValueError): raise APIError('Shine is not reachable right now.',502)
+        if not str(out.get('url','')).startswith('https://'): raise APIError('Shine could not make the meeting.',502)
+        return {'url':out['url'],'roomCode':out.get('roomCode','')}
+    def shine_directory(self):
+        """Every mailbox, for Shine's people list. Server to server only: Shine sends the shared secret."""
+        self.shine_allowed()
         provisioner=getattr(self.server,'provisioner',None)
         if not provisioner: raise APIError('The directory needs the service admin account (PROVISION_ADMIN).',503)
         out=provisioner.admin.call(node(ADMIN,'GetAllAccountsRequest'),provisioner.token())
@@ -1790,6 +1822,14 @@ class Handler(SimpleHTTPRequestHandler):
         return client,session['admin_token'],session.get('admin_scope')
     def do_POST(self):
         try:
+            # Shine's server asking for calendar work: no browser, so no Origin; the shared secret instead.
+            if self.path=='/api/shine/calendar':
+                self.shine_allowed()
+                length=int(self.headers.get('Content-Length','0'))
+                if not 0<length<=MAX_REQUEST_BYTES: raise APIError('Request too large or empty',413)
+                data=json.loads(self.rfile.read(length))
+                if not isinstance(data,dict): raise APIError('JSON object required')
+                return self.reply(200,self.shine_calendar(data))
             origin=self.headers.get('Origin')
             if origin not in (self.server.app_origin,getattr(self.server,'admin_origin',None)) or not origin: raise APIError('Invalid request origin',403)
             if self.headers.get('Content-Type','').split(';')[0]!='application/json': raise APIError('JSON required',415)
@@ -1859,6 +1899,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if data.get('op')=='delete': return self.reply(200,self.cal(dcalendar.delete_event,self.server.zimbra,s['token'],data))
                 return self.reply(200,self.cal(dcalendar.save_event,self.server.zimbra,s['token'],data,s['user']['email']))
             if self.path=='/api/booking': return self.reply(200,self.save_booking(s,data))
+            if self.path=='/api/shine/meeting': return self.reply(200,self.shine_meeting(s,data))
             if self.path=='/api/draft': return self.reply(200,self.server.zimbra.write_message(s['token'],data,True))
             if self.path=='/api/action': return self.reply(200,self.server.zimbra.action(s['token'],data))
             if self.path=='/api/contacts': return self.reply(200,self.server.zimbra.contact_action(s['token'],data))
@@ -1917,6 +1958,7 @@ def serve():
     server.mail_host=os.environ.get('MAIL_HOST') or parsed.hostname
     server.shine_origin=(os.environ.get('SHINE_ORIGIN') or 'https://app.shine.dejoiy.com').rstrip('/')
     server.shine_secret=os.environ.get('SHINE_SSO_SECRET','')
+    server.shine_site=(os.environ.get('SHINE_SITE') or 'https://convex-site.shine.dejoiy.com').rstrip('/')
     state_dir=Path(os.environ['SESSION_DB']).parent if os.environ.get('SESSION_DB') else None
     server.avatars=AvatarStore(str(state_dir/'avatars.sqlite') if state_dir else None)
     server.media=MediaStore(str(state_dir/'media') if state_dir else None)
