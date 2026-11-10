@@ -76,8 +76,13 @@ const Live={enabled:!!window.DEJOIY_LIVE,csrf:'',more:false,avatars:{},
     this.install();
   },
   async login(){
+    // First visit on this device: show the landing page; "Sign in" there comes back with ?signin.
+    if(location.pathname==='/'&&!/[?&](signin|next)\b/.test(location.search)){
+      let known=false; try{known=localStorage.getItem('dm-signed-in')==='1';}catch(_){}
+      if(!known){location.replace('/home');return new Promise(()=>{});}
+    }
     const config=await this.request('config');
-    const admin=location.pathname.startsWith('/admin');
+    const admin=location.pathname.startsWith('/admin')||/[?&]next=admin\b/.test(location.search);
     return new Promise(resolve=>{
       const layer=document.createElement('div'); layer.className='lg-root';
       layer.innerHTML=loginMarkup(admin,config.configured);
@@ -104,7 +109,7 @@ const Live={enabled:!!window.DEJOIY_LIVE,csrf:'',more:false,avatars:{},
         btn.disabled=true;form.classList.add('is-busy');
         try{
           const result=await this.request('login',{email:email.value,password:pass.value});
-          const address=email.value;form.reset();clearInterval(timer);
+          const address=email.value;form.reset();clearInterval(timer);try{localStorage.setItem('dm-signed-in','1');}catch(_){}
           if(window.DmSplash)DmSplash.show('Loading… '+address);
           layer.classList.add('lg-out');setTimeout(()=>layer.remove(),450);resolve(result);
         }catch(err){alert.textContent=err.message;pass.value='';btn.disabled=!config.configured;form.classList.remove('is-busy');shake();pass.focus();}

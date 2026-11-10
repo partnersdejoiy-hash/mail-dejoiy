@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#121212" />
+<title>Dejoiy Mail Admin · Run your company's email</title>
+<meta name="description" content="Mailboxes, domains, DNS and team lists for your company's Dejoiy Mail, in one console." />
+<meta property="og:title" content="Dejoiy Mail Admin · Admin mode: on." />
+<meta property="og:description" content="Mailboxes, domains, DNS and team lists for your company's Dejoiy Mail, in one console." />
+<meta property="og:image" content="https://admin-mail.dejoiy.com/assets/landing/adm-overview.webp" />
+<link rel="icon" type="image/svg+xml" href="assets/brand/dmail-logo.svg?v=20261110a" />
+<link rel="icon" type="image/png" sizes="32x32" href="assets/icons/favicon-32.png?v=20261110a" />
+<link rel="preload" href="assets/fonts/bricolage-grotesque-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
+<link rel="stylesheet" href="css/font.css?v=20261110b" />
+<link rel="stylesheet" href="css/landing.css?v=20261110c" />
+<script>document.documentElement.classList.add("js")</script>
+</head>
+<body class="lp lp-admin">
+<a class="lp-skip" href="#main">Skip to content</a>
+<div class="lp-page">
+<header class="lp-nav">
+  <a class="lp-logo" href="/" aria-label="Dejoiy Mail Admin home"><img src="assets/brand/dejoiy-mail-on-dark.svg?v=20261110a" alt="Dejoiy Mail" height="36"></a>
+  <span class="lp-tag">Admin</span>
+  <nav class="lp-links" aria-label="Page"><a href="#try">Try it</a><a href="#features">What you control</a><a href="https://mail.dejoiy.com/home">Dejoiy Mail</a></nav>
+  <div class="lp-actions"><a class="lp-btn ghost" href="https://mail.dejoiy.com/signup">New company</a><a class="lp-btn" href="https://mail.dejoiy.com/?next=admin">Open admin</a></div>
+</header>
+
+<main id="main">
+  <section class="lp-hero" aria-labelledby="hero-title">
+    <div class="lp-hero-copy">
+      <h1 id="hero-title" class="rv">Admin mode: <span class="lp-smile">on.</span></h1>
+      <p class="lp-lede rv">Mailboxes, domains, DNS and team lists for your company's Dejoiy Mail, in one console that works on your phone too.</p>
+      <div class="lp-cta rv"><a class="lp-btn big" href="https://mail.dejoiy.com/?next=admin">Sign in to admin</a><a class="lp-btn big ghost" href="https://mail.dejoiy.com/signup">Set up a company</a></div>
+      <p class="lp-note rv">Sign in with your administrator's work address. The console asks for your password again before any change.</p>
+    </div>
+    <div class="lp-hero-art" aria-hidden="true">
+      <i class="lp-eye lp-eye-1"></i><i class="lp-eye lp-eye-2"></i>
+      <div class="lp-d lp-d-hero">
+        <div class="lp-fade" data-fade>
+          <img src="assets/landing/adm-overview.webp" alt="" width="1440" height="900" class="is-on">
+          <img src="assets/landing/adm-users.webp" alt="" width="1440" height="900" loading="lazy">
+          <img src="assets/landing/adm-domains.webp" alt="" width="1440" height="900" loading="lazy">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="lp-band" aria-hidden="true"><div class="lp-band-track">
+    <span>new mailbox in one form</span><span>aliases &amp; team lists</span><span>live DNS health</span><span>lock, don't delete</span><span>quotas per person</span><span>works on your phone</span>
+    <span>new mailbox in one form</span><span>aliases &amp; team lists</span><span>live DNS health</span><span>lock, don't delete</span><span>quotas per person</span><span>works on your phone</span>
+  </div></div>
+
+  <section id="try" class="lp-try" aria-labelledby="try-title">
+    <h2 id="try-title" class="rv">Try the console</h2>
+    <p class="rv">A preview with sample data. Nothing you type here is saved or sent.</p>
+    <div class="lp-panel rv" data-ui>
+      <h3>Mailboxes · <span id="lp-count">3</span></h3>
+      <p class="lp-sub">Company domain <label class="sr" for="lp-domain">Company domain</label></p>
+      <div class="lp-add"><input id="lp-domain" value="kaalitea.in" autocomplete="off" spellcheck="false" aria-label="Company domain"></div>
+      <form id="lp-add" class="lp-add"><input name="name" placeholder="Add a teammate, e.g. Priya Shah" autocomplete="off" aria-label="Teammate's full name"><button class="lp-btn">Add mailbox</button></form>
+      <ul class="lp-people" id="lp-people">
+        <li><span class="av">A</span><span class="who"><b>Ananya Iyer</b><span data-local="ananya"></span></span><span class="lp-pill">Admin</span></li>
+        <li><span class="av">K</span><span class="who"><b>Kabir Malhotra</b><span data-local="kabir"></span></span><span class="lp-pill">Active</span></li>
+        <li><span class="av">M</span><span class="who"><b>Meera Pillai</b><span data-local="meera"></span></span><span class="lp-pill">Active</span></li>
+      </ul>
+    </div>
+    <div class="lp-panel rv" data-ui>
+      <h3>DNS health</h3>
+      <p class="lp-sub">The records that keep your mail out of spam folders.</p>
+      <ul class="lp-dns" id="lp-dns">
+        <li><b>MX</b><span>Receives mail</span><span class="lp-pill">Live</span></li>
+        <li><b>SPF</b><span>Allows sending</span><span class="lp-pill">Live</span></li>
+        <li><b>DKIM</b><span>Signs every message</span><span class="lp-pill">Live</span></li>
+        <li><b>DMARC</b><span>Blocks forgeries</span><span class="lp-pill wait">Not added yet</span></li>
+      </ul>
+      <p class="lp-score" id="lp-score" aria-live="polite">3 of 4 records live</p>
+      <button class="lp-btn" id="lp-dns-check" type="button">Check DNS now</button>
+    </div>
+  </section>
+
+  <section id="features" class="lp-switches" aria-label="What you control">
+    <div class="lp-switch is-on" data-tone="pink">
+      <div><p class="lp-statement">New hire? One form, one mailbox.</p><p class="lp-more">Name, address, password and plan. They can sign in straight away on any screen.</p></div>
+      <button class="lp-toggle" role="switch" aria-checked="true" aria-label="Create mailboxes"><i></i></button>
+    </div>
+    <div class="lp-switch" data-tone="ink">
+      <div><p class="lp-statement">Lock an account, keep the mail.</p><p class="lp-more">Lock someone out without deleting a single message. Unlock when you need to.</p></div>
+      <button class="lp-toggle" role="switch" aria-checked="false" aria-label="Lock accounts"><i></i></button>
+    </div>
+    <div class="lp-switch is-on" data-tone="soft">
+      <div><p class="lp-statement">One address, many inboxes.</p><p class="lp-more">Aliases like hello@ and lists like team@ deliver to the right people.</p></div>
+      <button class="lp-toggle" role="switch" aria-checked="true" aria-label="Aliases and lists"><i></i></button>
+    </div>
+    <div class="lp-switch" data-tone="pink">
+      <div><p class="lp-statement">DNS problems, with the fix.</p><p class="lp-more">MX, SPF, DKIM and DMARC checked live. A leftover record shows up with the exact change to make.</p></div>
+      <button class="lp-toggle" role="switch" aria-checked="false" aria-label="DNS checks"><i></i></button>
+    </div>
+  </section>
+
+  <section class="lp-how" aria-labelledby="how-title">
+    <h2 id="how-title" class="rv">From inbox to console</h2>
+    <div class="lp-tiles">
+      <figure class="lp-tile t1 rv"><div class="lp-tile-pic"><img src="assets/landing/adm-phone.webp" alt="Admin mailbox list on a phone" width="390" height="844" loading="lazy"></div>
+        <figcaption><b>Sign in as admin</b>Use your work address, then confirm your password to unlock the console.</figcaption></figure>
+      <figure class="lp-tile t2 rv"><div class="lp-tile-pic"><img src="assets/landing/adm-users.webp" alt="Mailboxes table with status, role, plan and storage" width="1440" height="900" loading="lazy" class="fill"></div>
+        <figcaption><b>Add your team</b>Mailboxes, roles, storage and aliases on one screen.</figcaption></figure>
+      <figure class="lp-tile t3 rv"><div class="lp-tile-pic"><img src="assets/landing/adm-domains.webp" alt="DNS setup dialog showing MX, SPF and DKIM live and DMARC not found" width="1440" height="900" loading="lazy" class="fill"></div>
+        <figcaption><b>Keep it healthy</b>Every record checked live, with copy buttons and plain-English fixes.</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="lp-claim" aria-labelledby="claim-title">
+    <h2 id="claim-title" class="lp-claim-line">Your console is waiting.</h2>
+    <div class="lp-cta"><a class="lp-btn big" href="https://mail.dejoiy.com/?next=admin">Open admin</a><a class="lp-btn big ghost" href="https://mail.dejoiy.com/signup">Set up a new company</a></div>
+  </section>
+</main>
+</div>
+
+<footer class="lp-foot">
+  <svg class="lp-mark" viewBox="0 0 640 210" role="img" aria-label=":D">
+    <circle class="rv" cx="70" cy="52" r="40" fill="#fff" stroke="#121212" stroke-width="8"/>
+    <circle class="rv" cx="70" cy="158" r="40" fill="#FF4FA3"/>
+    <path class="rv" d="M160 4H460A101 101 0 0 1 460 206H160Z" fill="#FF4FA3"/>
+    <path class="rv" fill-rule="evenodd" d="M230 50H420A55 55 0 0 1 420 160H230Z M296 84H404A21 21 0 0 1 404 126H296Z" fill="#121212"/>
+  </svg>
+  <div class="lp-foot-grid">
+    <nav aria-label="Footer"><a href="https://mail.dejoiy.com/?next=admin">Open admin</a><a href="https://mail.dejoiy.com/signup">Set up a company</a><a href="https://mail.dejoiy.com/home">Dejoiy Mail</a><a href="https://mail.dejoiy.com/third-party-notices.html">Notices</a></nav>
+    <p>Dejoiy India Private Limited<br>New Delhi, India</p>
+  </div>
+  <div class="lp-foot-last"><span>© 2026 Dejoiy India Private Limited</span><a class="lp-btn small" href="https://mail.dejoiy.com/?next=admin">Open admin</a></div>
+</footer>
+<script src="js/landing.js?v=20261110c"></script>
+</body>
+</html>

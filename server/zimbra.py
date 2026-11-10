@@ -1243,6 +1243,15 @@ class Handler(SimpleHTTPRequestHandler):
             raw=self.server.media.get(path[len('/media/'):])
             if raw is None: return self.send_error(404)
             return self.image(raw,IMAGE_MIME[path.rsplit('.',1)[1]],'public, max-age=31536000, immutable')
+        host=(self.headers.get('Host') or '').split(':')[0].lower()
+        if host.startswith('admin-mail.'):
+            # The admin site is a landing page only; everything that needs a session lives on the mail origin.
+            if path in ('/','/index.html'): self.path='/admin-home.html'
+            elif path in ADMIN_ASSETS or not (path.startswith(('/css/','/js/','/assets/')) or path=='/admin-home.html'):
+                return self.redirect(self.server.app_origin+self.path)
+            return super().do_GET()
+        if path=='/home':
+            self.path='/home.html'
         if path=='/admin/':
             return self.redirect('/admin')
         if path=='/signup':

@@ -64,6 +64,9 @@ function company(prefill){
     set("su-pv-domain", d); set("su-pv-local", form.elements.localPart.value.trim().toLowerCase() || "you");
     set("su-pv-company", form.elements.company.value.trim() || "Your company");
   };
+  const q = new URLSearchParams(location.search);  // arriving from the landing page's "Claim" form
+  if(q.get("domain") && !form.elements.domain.value) form.elements.domain.value = clean(q.get("domain")).slice(0,80);
+  if(q.get("local") && !form.elements.localPart.value) form.elements.localPart.value = q.get("local").toLowerCase().replace(/[^a-z0-9._-]/g,"").slice(0,40);
   ["domain","localPart","company"].forEach(n => form.elements[n].addEventListener("input", preview)); preview();
   form.addEventListener("submit", async e => {
     e.preventDefault(); busy(form, true);
