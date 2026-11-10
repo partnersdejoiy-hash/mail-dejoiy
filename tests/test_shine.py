@@ -86,4 +86,30 @@ class ShineUpdatesTests(unittest.TestCase):
         # after the team has posted/deleted, a removed launch post stays gone
         self.assertEqual([p['id'] for p in z.dejoiy_posts({'posts': [{'id': 'joi'}], 'seen': z.SEED_UPDATE_IDS})], ['joi'])
 
+class ShineLoginTests(unittest.TestCase):
+    def handler(self, ok=True):
+        class Zim:
+            def login(self, email, password):
+                if not ok: raise z.APIError('Invalid or expired login', 401)
+                return 'tok', 3600
+            def capabilities(self, token): return {'isAdmin': True, 'canManageRoles': False}
+            def preferences(self, token): return {'name': 'Khushi Sharma'}
+        class Avatars: versions = lambda self, domain: {}
+        h = z.Handler.__new__(z.Handler)
+        h.server = type('S', (), {'zimbra': Zim(), 'attempts': {}, 'avatars': Avatars(), 'app_origin': 'https://mail.dejoiy.com'})()
+        return h
+
+    def test_checks_the_mailbox_password_with_zimbra(self):
+        out = self.handler().shine_login({'email': 'Khushi.Sharma@corp.dejoiy.com', 'password': 'x'})
+        self.assertEqual(out, {'email': 'khushi.sharma@corp.dejoiy.com', 'name': 'Khushi Sharma', 'admin': 'company', 'photo': ''})
+        with self.assertRaises(z.APIError) as e: self.handler(ok=False).shine_login({'email': 'a@x.in', 'password': 'bad'})
+        self.assertEqual(e.exception.status, 401)
+
+    def test_limits_tries_per_mailbox(self):
+        h = self.handler(ok=False)
+        for _ in range(8):
+            with self.assertRaises(z.APIError): h.shine_login({'email': 'a@x.in', 'password': 'bad'})
+        with self.assertRaises(z.APIError) as e: h.shine_login({'email': 'a@x.in', 'password': 'bad'})
+        self.assertEqual(e.exception.status, 429)
+
 if __name__ == '__main__': unittest.main()

@@ -1569,6 +1569,23 @@ class Handler(SimpleHTTPRequestHandler):
         if op=='delete': return self.cal(dcalendar.delete_event,client,token,event)
         if op=='save': return self.cal(dcalendar.save_event,client,token,event,owner)
         raise APIError('Unknown calendar request')
+    def shine_login(self, data):
+        """Shine's sign-in form: check a mailbox email + password with Zimbra and say who it is.
+        The password is only passed on to Zimbra, never kept. Shine's server is the caller, so the limit is per mailbox."""
+        email=str(data.get('email','')).strip().lower(); password=str(data.get('password',''))
+        if not EMAIL.fullmatch(email) or len(email)>320 or not password or len(password)>4096: raise APIError('Enter your Dejoiy Mail email and password.')
+        with LOCK:
+            now=time.time(); key='shine-login:'+email; tries=[t for t in self.server.attempts.get(key,[]) if t>now-60]
+            if len(tries)>=8: raise APIError('Too many attempts; wait one minute',429)
+            self.server.attempts[key]=tries+[now]
+        try: token,_=self.server.zimbra.login(email,password)
+        except APIError as error:
+            if error.status==401: raise APIError('Wrong email or password.',401)
+            raise
+        user=self.server.zimbra.capabilities(token)
+        try: name=self.server.zimbra.preferences(token).get('name') or ''
+        except APIError: name=''
+        return {'email':email,'name':name,'admin':shine_admin(user),'photo':self.shine_photo(email)}
     def shine_meeting(self, session, data):
         """'Add Shine meeting' on a calendar event: Shine makes a room for this mailbox and gives back its link."""
         if not self.server.shine_secret: raise APIError("Shine isn't connected to this mailbox yet.",503)
@@ -1831,13 +1848,13 @@ class Handler(SimpleHTTPRequestHandler):
     def do_POST(self):
         try:
             # Shine's server asking for calendar work: no browser, so no Origin; the shared secret instead.
-            if self.path=='/api/shine/calendar':
+            if self.path in ('/api/shine/calendar','/api/shine/login'):
                 self.shine_allowed()
                 length=int(self.headers.get('Content-Length','0'))
                 if not 0<length<=MAX_REQUEST_BYTES: raise APIError('Request too large or empty',413)
                 data=json.loads(self.rfile.read(length))
                 if not isinstance(data,dict): raise APIError('JSON object required')
-                return self.reply(200,self.shine_calendar(data))
+                return self.reply(200,self.shine_calendar(data) if self.path=='/api/shine/calendar' else self.shine_login(data))
             origin=self.headers.get('Origin')
             if origin not in (self.server.app_origin,getattr(self.server,'admin_origin',None)) or not origin: raise APIError('Invalid request origin',403)
             if self.headers.get('Content-Type','').split(';')[0]!='application/json': raise APIError('JSON required',415)
