@@ -479,3 +479,7 @@ body:is([data-route="news"],[data-route="company"]) .fab{display:none!important}
   .compose-head .c-title{order:0!important;flex:1 1 auto!important;font-size:22px!important;padding:0!important}
   .compose #compose-body{min-height:44vh!important}
 }
+/* a post whose photo can't load keeps a full sticker cover */
+figure.upd-cover.is-gone .upd-sticker{left:22px;right:auto;top:22px;bottom:auto;width:72px;height:72px;font-size:38px}
+.upd-hero figure.upd-cover.is-gone .upd-sticker{left:50%;top:50%;width:120px;height:120px;font-size:64px;transform:translate(-50%,-50%) rotate(-6deg)}
+.upd-hero figure.upd-cover.is-gone{min-height:220px;background:color-mix(in srgb,var(--k) 80%,#fff)}

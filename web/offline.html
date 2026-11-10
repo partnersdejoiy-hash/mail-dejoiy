@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#FF4FA3" />
+<title>You're offline · Dejoiy Mail</title>
+<style>
+  :root{--pop:#FF4FA3;--ink:#121212;--paper:#FFFBF7}
+  @media (prefers-color-scheme:dark){:root{--paper:#141215}}
+  *{box-sizing:border-box;margin:0}
+  html,body{height:100%}
+  body{display:grid;place-items:center;padding:24px;background:var(--paper);color:var(--ink);font:17px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;text-align:center}
+  @media (prefers-color-scheme:dark){body{color:#F5F2F0}}
+  .card{max-width:360px}
+  svg{width:132px;height:auto;margin:0 auto 22px;display:block;animation:bob 2.4s ease-in-out infinite}
+  h1{font-size:30px;letter-spacing:-.03em;line-height:1.1;margin-bottom:10px}
+  p{opacity:.75;margin-bottom:24px}
+  button{font:inherit;font-weight:800;border:2px solid #121212;border-radius:999px;background:var(--pop);color:#121212;min-height:52px;padding:0 28px;box-shadow:3px 3px 0 #121212;cursor:pointer}
+  button:active{transform:translate(2px,2px);box-shadow:none}
+  @keyframes bob{50%{transform:translateY(-8px) rotate(-3deg)}}
+  @media (prefers-reduced-motion:reduce){svg{animation:none}}
+</style>
+</head>
+<body>
+<main class="card">
+  <svg viewBox="0 -25 150 150" aria-hidden="true"><path d="M18 -20H80A70 70 0 0 1 80 120H18A18 18 0 0 1 0 102V-2A18 18 0 0 1 18 -20Z" fill="#FF4FA3" stroke="#121212" stroke-width="5"/><g transform="translate(22 17) scale(.66)"><circle cx="13" cy="28" r="12" fill="#fff"/><circle cx="13" cy="72" r="12" fill="#121212"/><path fill-rule="evenodd" d="M38 0H88A50 50 0 0 1 88 100H38Z M62 26H86A24 24 0 0 1 86 74H62Z" fill="#121212"/></g></svg>
+  <h1>You're offline</h1>
+  <p>Your mail is safe. Dejoiy Mail opens again as soon as you're back online.</p>
+  <button type="button" onclick="location.reload()">Try again</button>
+</main>
+<script>addEventListener("online", () => location.reload());</script>
+</body>
+</html>

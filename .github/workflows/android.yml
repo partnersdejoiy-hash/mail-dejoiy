@@ -1,0 +1,59 @@
+# Builds the Play Store bundles for Dejoiy Mail and Dejoiy Mail Admin.
+# Run it from GitHub: Actions > Android apps > Run workflow, with the next version code.
+# Signing uses the upload key in the repository secrets (see android/README.md); without
+# them the bundles are built unsigned, which checks the build but can't be uploaded to Play.
+name: Android apps
+on:
+  workflow_dispatch:
+    inputs:
+      version_code:
+        description: "Version code (a whole number, one higher than the last upload)"
+        required: true
+        default: "1"
+      version_name:
+        description: "Version name shown in the store"
+        required: true
+        default: "1.0.0"
+  push:
+    branches: [fix/dejoiy-mail-completion]
+    paths: ["android/**", ".github/workflows/android.yml"]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [mail, admin]
+    env:
+      DMAIL_VERSION_CODE: ${{ inputs.version_code || '1' }}
+      DMAIL_VERSION_NAME: ${{ inputs.version_name || '1.0.0' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: "17"}
+      - uses: android-actions/setup-android@v3
+      - name: Upload key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.DMAIL_UPLOAD_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.DMAIL_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+            echo "DMAIL_KEYSTORE=$RUNNER_TEMP/upload.jks" >> "$GITHUB_ENV"
+            echo "DMAIL_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "DMAIL_KEY_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "DMAIL_KEY_ALIAS=${{ matrix.app == 'mail' && 'dejoiy-mail' || 'dejoiy-mail-admin' }}" >> "$GITHUB_ENV"
+          else
+            echo "::warning::No upload key in secrets: building unsigned (not uploadable to Play)."
+          fi
+      - name: Build bundle and APK
+        working-directory: android/${{ matrix.app }}
+        run: chmod +x gradlew && ./gradlew --no-daemon bundleRelease assembleRelease
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dejoiy-${{ matrix.app }}-${{ env.DMAIL_VERSION_CODE }}
+          path: |
+            android/${{ matrix.app }}/app/build/outputs/bundle/release/*.aab
+            android/${{ matrix.app }}/app/build/outputs/apk/release/*.apk

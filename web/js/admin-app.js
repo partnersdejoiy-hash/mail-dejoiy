@@ -365,3 +365,4 @@ function settings(main, d){
   try{ await load(); }catch(e){ $("adm-main").innerHTML=`<div class="adm-card adm-error">${esc(e.message)}</div>`; }
 })();
 })();
+if("serviceWorker" in navigator && location.protocol==="https:") navigator.serviceWorker.register("/sw.js").catch(()=>{});

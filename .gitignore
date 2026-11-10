@@ -7,3 +7,11 @@ node_modules/
 zimbra-foss-build/
 .taste-skill/
 .email-frames/
+
+# Android builds
+android/*/.gradle/
+android/*/build/
+android/*/app/build/
+android/*/local.properties
+*.jks
+*.keystore

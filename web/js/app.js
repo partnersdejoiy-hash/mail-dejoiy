@@ -1,4 +1,17 @@
 /* ============ Dejoiy Mail — app.js : router, dialogs, nav, shortcuts, sounds ============ */
+/* Android's Back button (and the browser's) closes what is on top first: a menu, a dialog, the side
+   drawer. Opening one adds a history step; closing it from the screen just clears the mark, so a
+   later navigation can never be undone by a delayed history.back(). */
+const Back = {
+  open(){ if(!history.state?.dmailLayer) history.pushState({...(history.state||{}), dmailLayer:true}, ""); },
+  closed(){ if(history.state?.dmailLayer){ const {dmailLayer, ...rest}=history.state; history.replaceState(rest, ""); } }
+};
+window.addEventListener("popstate", ()=>{
+  if(history.state?.dmailLayer) return;
+  document.querySelectorAll(".menu").forEach(m=>m.remove());
+  if(document.querySelector("#dialog-root .dlg-back")) document.getElementById("dialog-root").innerHTML="";
+  document.body.classList.remove("nav-open");
+});
 (function(){
 "use strict";
 
@@ -142,7 +155,7 @@ const App = {
       <div class="dlg-body">${body}</div>
       ${actions&&actions.length?`<div class="dlg-foot">${actions.map((a,i)=>`<button class="btn ${a.primary?"primary":""}" data-act="${i}">${esc(a.label)}</button>`).join("")}</div>`:""}
     </div></div>`;
-    const close = async ()=>{ root.innerHTML=""; document.removeEventListener("keydown", escHandler); };
+    const close = async ()=>{ root.innerHTML=""; document.removeEventListener("keydown", escHandler); Back.closed(); };
     const escHandler = async e=>{ if(e.key==="Escape") close(); };
     document.addEventListener("keydown", escHandler);
     root.querySelector(".dlg-back").addEventListener("click", async e=>{ if(e.target.classList.contains("dlg-back")) close(); });
@@ -150,10 +163,10 @@ const App = {
     (actions||[]).forEach((a,i)=> root.querySelector(`[data-act="${i}"]`).addEventListener("click", async ()=>{
       const r = a.fn && a.fn(); if(r!==false) close();
     }));
-    this.closeDialog = close;
+    this.closeDialog = close; Back.open();
     const first = root.querySelector("input,textarea,select"); if(first) setTimeout(()=>first.focus(), 50);
   },
-  closeDialog(){ document.getElementById("dialog-root").innerHTML=""; },
+  closeDialog(){ document.getElementById("dialog-root").innerHTML=""; Back.closed(); },
   confirm(msg, fn){
     this.dialog({title:"Please confirm", body:`<p>${esc(msg)}</p>`,
       actions:[{label:"Cancel"},{label:"Yes, do it", primary:true, fn}]});
@@ -172,8 +185,9 @@ const App = {
     m.style.top = Math.min(innerHeight-220, r.bottom+6)+"px";
     m.style.left = Math.max(8, Math.min(innerWidth-220, r.left))+"px";
     document.body.appendChild(m);
-    m.querySelectorAll("[data-mi]").forEach(b=> b.addEventListener("click", async ()=>{ m.remove(); items[+b.dataset.mi].fn(); }));
-    const away = async e=>{ if(!m.contains(e.target)){ m.remove(); document.removeEventListener("click", away); } };
+    Back.open();
+    m.querySelectorAll("[data-mi]").forEach(b=> b.addEventListener("click", async ()=>{ m.remove(); Back.closed(); items[+b.dataset.mi].fn(); }));
+    const away = async e=>{ if(!m.contains(e.target)){ m.remove(); document.removeEventListener("click", away); Back.closed(); } };
     setTimeout(()=>document.addEventListener("click", away), 10);
   },
 
@@ -327,8 +341,8 @@ const App = {
     document.getElementById("settings-btn").addEventListener("click", ()=> this.go("settings"));
     document.getElementById("shortcuts-btn").addEventListener("click", ()=> this.go("settings:shortcuts"));
     document.getElementById("adv-search-btn").addEventListener("click", ()=> this.advSearch());
-    document.getElementById("menu-btn").addEventListener("click", ()=> document.body.classList.toggle("nav-open"));
-    document.getElementById("side-scrim").addEventListener("click", ()=> document.body.classList.remove("nav-open"));
+    document.getElementById("menu-btn").addEventListener("click", ()=>{ if(document.body.classList.toggle("nav-open")) Back.open(); else Back.closed(); });
+    document.getElementById("side-scrim").addEventListener("click", ()=>{ document.body.classList.remove("nav-open"); Back.closed(); });
     document.getElementById("brand-home").addEventListener("click", ()=> this.go("mail:inbox"));
     document.getElementById("account-btn").addEventListener("click", async ev=>{
       const u = Store.state.user;

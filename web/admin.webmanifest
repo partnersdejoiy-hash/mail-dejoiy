@@ -1,0 +1,85 @@
+{
+ "id": "/admin",
+ "name": "Dejoiy Mail Admin",
+ "short_name": "Mail Admin",
+ "description": "Run your company's Dejoiy Mail from your phone: mailboxes, departments, roles, permissions and DNS.",
+ "lang": "en-IN",
+ "dir": "ltr",
+ "start_url": "/admin?source=app",
+ "scope": "/",
+ "display": "standalone",
+ "orientation": "any",
+ "background_color": "#121212",
+ "theme_color": "#121212",
+ "categories": [
+  "business",
+  "productivity",
+  "utilities"
+ ],
+ "icons": [
+  {
+   "src": "assets/icons/admin-192.png",
+   "sizes": "192x192",
+   "type": "image/png",
+   "purpose": "any"
+  },
+  {
+   "src": "assets/icons/admin-512.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "any"
+  },
+  {
+   "src": "assets/icons/admin-maskable-192.png",
+   "sizes": "192x192",
+   "type": "image/png",
+   "purpose": "maskable"
+  },
+  {
+   "src": "assets/icons/admin-maskable-512.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "maskable"
+  },
+  {
+   "src": "assets/icons/admin-monochrome-512.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "monochrome"
+  }
+ ],
+ "screenshots": [
+  {
+   "src": "assets/screens/admin-1-overview.webp",
+   "sizes": "1080x1920",
+   "type": "image/webp",
+   "form_factor": "narrow",
+   "label": "Your company's mail at a glance"
+  },
+  {
+   "src": "assets/screens/admin-2-mailboxes.webp",
+   "sizes": "1080x1920",
+   "type": "image/webp",
+   "form_factor": "narrow",
+   "label": "Add and manage mailboxes"
+  },
+  {
+   "src": "assets/screens/admin-3-teams-roles.webp",
+   "sizes": "1080x1920",
+   "type": "image/webp",
+   "form_factor": "narrow",
+   "label": "Departments, roles and permissions"
+  },
+  {
+   "src": "assets/screens/admin-4-domains.webp",
+   "sizes": "1080x1920",
+   "type": "image/webp",
+   "form_factor": "narrow",
+   "label": "Domains and DNS health"
+  }
+ ],
+ "launch_handler": {
+  "client_mode": "navigate-existing"
+ },
+ "prefer_related_applications": false
+}

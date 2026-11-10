@@ -1,0 +1,5 @@
+{
+ "_note": "Android apps (Trusted Web Activities) allowed to open these sites full screen. Paste the SHA-256 certificate fingerprints from Play Console > Setup > App signing (both the app signing key and the upload key) into sha256, then deploy.",
+ "mail": {"package": "com.dejoiy.mail", "sha256": []},
+ "admin": {"package": "com.dejoiy.mail.admin", "sha256": []}
+}

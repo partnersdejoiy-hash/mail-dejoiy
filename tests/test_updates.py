@@ -72,4 +72,13 @@ class UpdateTests(unittest.TestCase):
         self.assertIn('outside', [p['title'] for p in h.updates_view(team)['dejoiy']])  # the team still sees it to manage it
         self.assertEqual(h.post_update(session('boss@kaalitea.in', admin=True), {'box': 'company', 'op': 'post', 'title': 'c', 'body': 'c', 'audience': 'external'})['company']['posts'][0]['audience'], 'internal')
 
+    def test_assetlinks_only_with_real_fingerprints(self):
+        self.assertEqual(z.assetlinks('mail'), [])
+        fp = ':'.join(['AB'] * 32)
+        os.environ['DMAIL_ADMIN_ANDROID_SHA256'] = fp + ',not-a-print'
+        try:
+            link = z.assetlinks('admin')[0]
+            self.assertEqual(link['target']['package_name'], 'com.dejoiy.mail.admin'); self.assertEqual(link['target']['sha256_cert_fingerprints'], [fp])
+        finally: del os.environ['DMAIL_ADMIN_ANDROID_SHA256']
+
 if __name__ == '__main__': unittest.main()

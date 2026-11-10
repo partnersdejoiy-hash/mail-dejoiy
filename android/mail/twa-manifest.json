@@ -1,0 +1,63 @@
+{
+  "display": "standalone",
+  "displayOverride": [],
+  "orientation": "default",
+  "enableNotifications": true,
+  "splashScreenFadeOutDuration": 300,
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "minSdkVersion": 21,
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "generatorApp": "bubblewrap-cli",
+  "appVersionCode": 1,
+  "navigationDividerColor": "#00000000",
+  "navigationDividerColorDark": "#00000000",
+  "packageId": "com.dejoiy.mail",
+  "host": "mail.dejoiy.com",
+  "name": "Dejoiy Mail",
+  "launcherName": "Dejoiy Mail",
+  "themeColor": "#FF4FA3",
+  "themeColorDark": "#141215",
+  "navigationColor": "#FFFBF7",
+  "navigationColorDark": "#141215",
+  "backgroundColor": "#FFFBF7",
+  "startUrl": "/?source=android",
+  "iconUrl": "https://mail.dejoiy.com/assets/icons/icon-512.png",
+  "maskableIconUrl": "https://mail.dejoiy.com/assets/icons/maskable-512.png",
+  "monochromeIconUrl": "https://mail.dejoiy.com/assets/icons/monochrome-512.png",
+  "webManifestUrl": "https://mail.dejoiy.com/manifest.webmanifest",
+  "fullScopeUrl": "https://mail.dejoiy.com/",
+  "signingKey": {
+    "path": "./upload-keystore.jks",
+    "alias": "dejoiy-mail"
+  },
+  "shortcuts": [
+    {
+      "name": "Write a mail",
+      "shortName": "Compose",
+      "url": "https://mail.dejoiy.com/?source=shortcut#/compose:new",
+      "chosenIconUrl": "https://mail.dejoiy.com/assets/icons/shortcut-compose.png"
+    },
+    {
+      "name": "Inbox",
+      "shortName": "Inbox",
+      "url": "https://mail.dejoiy.com/?source=shortcut#/mail:inbox",
+      "chosenIconUrl": "https://mail.dejoiy.com/assets/icons/shortcut-inbox.png"
+    },
+    {
+      "name": "Dejoiy Updates",
+      "shortName": "Updates",
+      "url": "https://mail.dejoiy.com/?source=shortcut#/news",
+      "chosenIconUrl": "https://mail.dejoiy.com/assets/icons/shortcut-updates.png"
+    }
+  ],
+  "appVersion": "1.0.0"
+}

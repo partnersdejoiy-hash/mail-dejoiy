@@ -80,6 +80,14 @@ MAX_UPDATE_FILES=10*1024*1024
 # Shown in Dejoiy Updates until the Dejoiy team posts or deletes anything there.
 DEFAULT_UPDATES=json.loads((Path(__file__).with_name('default-updates.json')).read_text(encoding='utf-8'))
 # People photos on the default posts (Unsplash License). Only these can be fetched: the server is not an open proxy.
+ANDROID_APPS=json.loads((Path(__file__).with_name('android-apps.json')).read_text(encoding='utf-8'))
+def assetlinks(app):
+    """Digital Asset Links: proves the Play Store app and this site belong together, so the app opens
+    the site full screen with no browser bar. Fingerprints come from android-apps.json or the environment."""
+    entry=ANDROID_APPS.get(app,{}); extra=os.environ.get('DMAIL_ADMIN_ANDROID_SHA256' if app=='admin' else 'DMAIL_ANDROID_SHA256','')
+    prints=[f.strip().upper() for f in [*entry.get('sha256',[]),*extra.split(',')] if re.fullmatch(r'([0-9A-Fa-f]{2}:){31}[0-9A-Fa-f]{2}',f.strip())]
+    if not prints: return []
+    return [{'relation':['delegate_permission/common.handle_all_urls'],'target':{'namespace':'android_app','package_name':entry['package'],'sha256_cert_fingerprints':prints}}]
 UPDATE_PHOTOS={p['photo']['id']:p['photo']['src'] for p in DEFAULT_UPDATES if p.get('photo')}
 class AppearanceStore:
     """Per-mailbox appearance, keyed by the upstream account id so it follows the user across devices."""
@@ -1389,6 +1397,10 @@ class Handler(SimpleHTTPRequestHandler):
         if not session: raise APIError('Sign in to your mailbox',401)
         return sid,session
     def do_GET(self):
+        if self.path=='/.well-known/assetlinks.json':
+            app='admin' if self.headers.get('Host','').split(':')[0].lower().startswith('admin-') else 'mail'
+            raw=json.dumps(assetlinks(app)).encode(); self.send_response(200); self.send_header('Content-Type','application/json')
+            self.send_header('Cache-Control','public, max-age=3600'); self.send_header('Content-Length',str(len(raw))); self.end_headers(); self.wfile.write(raw); return
         if self.path=='/js/runtime-config.js':
             raw=b'window.DEJOIY_LIVE=true;'; self.send_response(200); self.send_header('Content-Type','text/javascript'); self.send_header('Cache-Control','no-store'); self.end_headers(); self.wfile.write(raw); return
         if self.path.startswith('/api/'):
@@ -1466,7 +1478,7 @@ class Handler(SimpleHTTPRequestHandler):
                 except APIError: return self.redirect('/signin?next=admin') if path=='/admin' else self.send_error(404)
                 if s['user'].get('isAdmin') is not True: return self.redirect(self.server.app_origin+'/') if path=='/admin' else self.send_error(404)
                 if path=='/admin': self.path='/admin.html'
-            elif not (path.startswith(('/css/','/js/','/assets/')) or path in ('/admin-home.html','/sw.js','/manifest.webmanifest','/runtime-config.js')):
+            elif not (path.startswith(('/css/','/js/','/assets/')) or path in ('/admin-home.html','/sw.js','/manifest.webmanifest','/admin.webmanifest','/offline.html','/runtime-config.js')):
                 return self.redirect(self.server.app_origin+self.path)
             return super().do_GET()
         if path in ('/admin','/admin/') and getattr(self.server,'admin_origin',None):

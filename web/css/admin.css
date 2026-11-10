@@ -176,3 +176,26 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
   .adm-btn{min-height:44px}
   .adm-top-actions .adm-btn{min-height:38px;padding:0 12px}
 }
+
+/* ============ Dejoiy brand for the admin console: ink, hot pink, Bricolage, sticker buttons ============ */
+:root{--accent:#121212;--accent-ink:#fff;--pop:var(--dj-pop,#FF4FA3);--bg:#FBF6F9;--font:"Bricolage Grotesque","Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif}
+@media (prefers-color-scheme:dark){:root{--accent:#F5F2F0;--accent-ink:#121212;--bg:#141215;--surface:#1E1B20;--surface-2:#28242B}}
+body{-webkit-tap-highlight-color:transparent}
+.adm-btn{border-radius:999px;font-weight:700;transition:transform .15s,box-shadow .15s,background .2s}
+.adm-btn.primary{box-shadow:3px 3px 0 var(--pop);font-weight:800}
+.adm-btn.primary:hover{filter:none;transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--pop)}
+.adm-btn:active{transform:translate(2px,2px)!important;box-shadow:none!important}
+.adm-nav a.active{background:color-mix(in srgb,var(--pop) 22%,transparent);color:var(--ink)}
+.adm-nav a.active .ui-icon{color:var(--ink)}
+.adm-card,.adm-stat{border-radius:20px}
+.adm-main h1{letter-spacing:-.03em;font-weight:800}
+.adm-pill.good{background:color-mix(in srgb,#3ddc84 22%,transparent);color:var(--ink)}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--pop)!important;box-shadow:0 0 0 3px color-mix(in srgb,var(--pop) 28%,transparent)!important}
+.adm-tabs button[aria-selected="true"],.adm-tabs .on{color:var(--ink)!important;border-color:var(--pop)!important}
+/* phones: one tidy top bar */
+@media (max-width:640px){
+  .adm-top{height:auto;min-height:56px;padding:8px 12px calc(8px);padding-top:calc(8px + env(safe-area-inset-top));flex-wrap:nowrap;gap:8px}
+  .adm-brand img{height:24px}
+  .adm-top-actions{margin-left:auto;flex-wrap:nowrap;gap:6px}
+  .adm-nav{position:sticky;top:0;z-index:3}
+}
