@@ -1,4 +1,4 @@
-/* ============ Dejoiy Mail — themes.js : 47 themes (12 live animated) + brightness + custom background ============ */
+/* ============ Dejoiy Mail — themes.js : 54 themes (12 live animated) + brightness + custom background ============ */
 (function(){
 "use strict";
 
@@ -14,7 +14,15 @@ const LIVE_THEMES = (window.LiveThemes ? window.LiveThemes.list() : []).map(t=>(
 const THEMES = [
   ...LIVE_THEMES,
   ...PHOTO_THEMES,
-  {id:"pearl", name:"Dejoiy Pink", kind:"color"},
+  // Dejoiy colours: the brand look in eight pops
+  {id:"pearl",    name:"Dejoiy Pink",   kind:"dejoiy"},
+  {id:"djgreen",  name:"Dejoiy Green",  kind:"dejoiy"},
+  {id:"djyellow", name:"Dejoiy Yellow", kind:"dejoiy"},
+  {id:"djblue",   name:"Dejoiy Blue",   kind:"dejoiy"},
+  {id:"djorange", name:"Dejoiy Orange", kind:"dejoiy"},
+  {id:"djlilac",  name:"Dejoiy Lilac",  kind:"dejoiy"},
+  {id:"djmint",   name:"Dejoiy Mint",   kind:"dejoiy"},
+  {id:"djred",    name:"Dejoiy Red",    kind:"dejoiy"},
   // 13 colour / gradient header themes
   {id:"aol",        name:"Cobalt",         kind:"color"},
   {id:"yellow",     name:"Yellow",         kind:"color"},
@@ -48,7 +56,7 @@ const THEMES = [
   {id:"sunset",     name:"Sunset",         kind:"scenic"}
 ];
 const THEME_CSS = {
-  pearl:"#ff4fa3",
+  pearl:"#ff4fa3", djgreen:"#3ddc84", djyellow:"#ffd23f", djblue:"#4da3ff", djorange:"#ff8a3d", djlilac:"#b892ff", djmint:"#2dd4bf", djred:"#ff5a5f",
   aol:"#2f7cf6", yellow:"#f7b733", highcontrast:"#111111", simple:"#c9d2e2", aim:"#e33d2e",
   aoldotcom:"#00a9e0", purple:"#9b5cf6", sunrise:"#ff9a56", aquagreen:"#34d399", aquablue:"#38bdf8",
   deeppurple:"#6d28d9", bluenight:"#1e3a8a", darkgrey:"#6b7280",
@@ -146,6 +154,7 @@ const Themes = {
         <div class="theme-sw" style="background:${this.preview(t.id)}"></div>
         <div class="theme-nm">${esc(t.name)} ${p.theme===t.id && !p.customBg ? "✓":""}</div>
       </div>`;
+    const brand = THEMES.filter(t=>t.kind==="dejoiy").map(cell).join("");
     const lives = THEMES.filter(t=>t.kind==="live").map(cell).join("");
     const photos = THEMES.filter(t=>t.kind==="photo").map(cell).join("");
     const colors = THEMES.filter(t=>t.kind==="color").map(cell).join("");
@@ -156,6 +165,7 @@ const Themes = {
           ${["light","medium","dark"].map(b=>`<button data-b="${b}" class="${p.brightness===b?"on":""}">${b[0].toUpperCase()+b.slice(1)}</button>`).join("")}
         </div></div>
       ${this.glassControl()}
+      <div class="theme-sec">Dejoiy colours</div><div class="theme-grid">${brand}</div>
       <div class="theme-sec">Live animated</div><div class="theme-grid photo-grid">${lives}</div>
       <div class="theme-sec">Photo backgrounds</div><div class="theme-grid photo-grid">${photos}</div>
       <div class="theme-sec">Colour themes</div><div class="theme-grid">${colors}</div>

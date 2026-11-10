@@ -128,3 +128,4 @@ input:focus{outline:none;box-shadow:4px 4px 0 var(--pink)}
   .su-foot{padding-left:16px;padding-right:16px}
 }
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}html{scroll-behavior:auto}}
+.su-plan{display:inline-block;margin:0 0 18px!important;padding:8px 14px;border-radius:999px;background:var(--pink-soft);color:var(--ink)!important;font-size:14px;font-weight:600}

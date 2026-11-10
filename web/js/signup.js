@@ -44,10 +44,16 @@ function step(n){ document.body.dataset.step = n;
   document.querySelectorAll(".su-steps li").forEach(li => { const k=+li.dataset.step; li.className = k<n ? "done" : k===n ? "on" : ""; }); }
 function busy(form, on){ form.querySelectorAll("button,input").forEach(x => x.disabled = on); }
 
+// The plan picked on the pricing page; billing is arranged after setup, so this is shown, not charged.
+const PLANS = {starter:["Starter","₹79/month","3 mailboxes"], team:["Team","₹249/month","10 mailboxes"], business:["Business","₹599/month","30 mailboxes"]};
+function planLine(){
+  const p = PLANS[new URLSearchParams(location.search).get("plan")];
+  return p ? `<p class="su-plan">Plan: <b>${p[0]}</b> · ${p[1]} · up to ${p[2]} · <a href="/home#pricing">change</a></p>` : "";
+}
 function company(prefill){
   step(1);
   body.innerHTML = `<form id="su-form">
-    <h2>Tell us about your company</h2>
+    <h2>Tell us about your company</h2>${planLine()}
     <label>Company name<input name="company" maxlength="120" required value="${esc(prefill?.company)}" autocomplete="organization"></label>
     <label>Company domain<input name="domain" required placeholder="yourcompany.com" value="${esc(prefill?.domain)}" autocapitalize="off" spellcheck="false" inputmode="url"></label>
     <label>Your name<input name="name" maxlength="200" required value="${esc(prefill?.name)}" autocomplete="name"></label>

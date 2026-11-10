@@ -9,13 +9,21 @@ body{font-family:var(--font)}
 .r-body,.tm-content,#compose-body{font-family:var(--read-font)}
 ::selection{background:#ffc2df;color:#121212}
 
-/* default theme = brand: pink accent with readable contrast on white */
-html[data-theme="pearl"]{--hdr1:#ff4fa3;--hdr2:#121212;--accent:#c4166c;--accent-ink:#fff}
-html[data-theme="pearl"][data-brightness="light"] body{--active:#ffe3f0;--hover:#fff5fa}
-html[data-theme="pearl"][data-brightness="dark"]{--accent:#ff7dbb;--accent-ink:#121212}
-html[data-theme="pearl"][data-brightness="dark"] body{--active:#3a1d2c;--hover:#2a1820}
-html[data-theme="pearl"] :is(.compose-btn,.fab){background:var(--pink);color:#121212;box-shadow:0 10px 24px -10px rgba(196,22,108,.55)}
-html[data-theme="pearl"] .avatar{background:var(--pink);color:#121212;font-weight:800}
+/* Dejoiy colours: one bright "pop" for Compose, avatars and the header, a deeper accent that reads on white */
+html[data-theme="pearl"]{--pop:#ff4fa3;--accent:#c4166c;--pop-soft:#ffe3f0;--pop-hover:#fff5fa;--pop-dark:#3a1d2c}
+html[data-theme="djgreen"]{--pop:#3ddc84;--accent:#12804a;--pop-soft:#dcf8e8;--pop-hover:#f2fcf6;--pop-dark:#14321f}
+html[data-theme="djyellow"]{--pop:#ffd23f;--accent:#8a6200;--pop-soft:#fff3c4;--pop-hover:#fffbea;--pop-dark:#352c0f}
+html[data-theme="djblue"]{--pop:#4da3ff;--accent:#1257c7;--pop-soft:#e0edff;--pop-hover:#f3f8ff;--pop-dark:#14273f}
+html[data-theme="djorange"]{--pop:#ff8a3d;--accent:#b04a06;--pop-soft:#ffe7d6;--pop-hover:#fff6f0;--pop-dark:#3a2415}
+html[data-theme="djlilac"]{--pop:#b892ff;--accent:#6b3fc9;--pop-soft:#eee5ff;--pop-hover:#f8f4ff;--pop-dark:#272040}
+html[data-theme="djmint"]{--pop:#2dd4bf;--accent:#0f766e;--pop-soft:#d5f7f2;--pop-hover:#f0fcfa;--pop-dark:#113230}
+html[data-theme="djred"]{--pop:#ff5a5f;--accent:#c21d2b;--pop-soft:#ffe1e2;--pop-hover:#fff5f5;--pop-dark:#3a1a1c}
+html:is([data-theme="pearl"],[data-theme^="dj"]){--hdr1:var(--pop);--hdr2:#121212;--accent-ink:#fff}
+html:is([data-theme="pearl"],[data-theme^="dj"])[data-brightness="light"] body{--active:var(--pop-soft);--hover:var(--pop-hover)}
+html:is([data-theme="pearl"],[data-theme^="dj"]):is([data-brightness="dark"],[data-brightness="medium"]){--accent:var(--pop);--accent-ink:#121212}
+html:is([data-theme="pearl"],[data-theme^="dj"]):is([data-brightness="dark"],[data-brightness="medium"]) body{--active:var(--pop-dark);--hover:color-mix(in srgb,var(--pop-dark) 55%,transparent)}
+html:is([data-theme="pearl"],[data-theme^="dj"]) :is(.compose-btn,.fab){background:var(--pop);color:#121212;box-shadow:0 10px 24px -10px color-mix(in srgb,var(--pop) 70%,#000)}
+html:is([data-theme="pearl"],[data-theme^="dj"]) .avatar{background:var(--pop);color:#121212;font-weight:800}
 
 /* one logo, not two: the :D Mail lockup already carries the mark */
 .brand-mark:not([data-logo-applied]){display:none}
@@ -32,7 +40,7 @@ html[data-theme="pearl"] .avatar{background:var(--pink);color:#121212;font-weigh
 /* ---------- compact layouts: phones, tablets and narrow windows ---------- */
 @media (max-width:1023px), (max-width:1199px) and (pointer:coarse){
   /* unread mail gets a pink dot on the avatar */
-  .msg-row.unread .m-avatar::after{content:"";position:absolute;top:-3px;right:-3px;width:12px;height:12px;border-radius:50%;background:var(--pink);border:2.5px solid var(--surface)}
+  .msg-row.unread .m-avatar::after{content:"";position:absolute;top:-3px;right:-3px;width:12px;height:12px;border-radius:50%;background:var(--pop,var(--pink));border:2.5px solid var(--surface)}
   .msg-row{transition:background .2s}
   .msg-row:active{background:var(--active)}
   .msg-row .m-from{font-weight:600}

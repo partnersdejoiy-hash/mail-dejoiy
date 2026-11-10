@@ -59,6 +59,35 @@
     pick(0);
   }
 
+  /* pricing: monthly or yearly, and a team-size slider that names the plan and the saving */
+  const plans = $$(".lp-plan");
+  if(plans.length){
+    const inr = n => "₹" + Math.round(n).toLocaleString("en-IN");
+    const seats = document.getElementById("lp-seats"), out = document.getElementById("lp-seats-out"), calc = document.getElementById("lp-calc-out");
+    let yearly = false;
+    const monthly = el => yearly ? +el.dataset.year / 12 : +el.dataset.month;
+    const render = () => {
+      plans.forEach(el => {
+        el.querySelector("[data-amount]").textContent = (yearly ? +el.dataset.year : +el.dataset.month).toLocaleString("en-IN");
+        el.querySelector("[data-per]").textContent = yearly ? "/year" : "/month";
+        el.querySelector("[data-head]").textContent = Math.round(monthly(el) / +el.dataset.seats);
+      });
+      const n = +seats.value, plan = plans.find(el => n <= +el.dataset.seats) || plans[plans.length - 1];
+      plans.forEach(el => el.classList.toggle("is-pick", el === plan));
+      out.textContent = n;
+      const ours = monthly(plan);
+      calc.innerHTML = `<b>${plan.querySelector("h3").firstChild.textContent.trim()}</b> fits. You pay <b>${inr(ours)} a month</b> for everyone (${inr(ours / n)} a person). ` +
+        `The same team on Zoho Mail Lite: ${inr(59 * n)}. On Google Workspace Starter: ${inr(270 * n)}.`;
+    };
+    seats.addEventListener("input", render);
+    $$("[data-bill]").forEach(b => b.addEventListener("click", () => {
+      yearly = b.dataset.bill === "year";
+      $$("[data-bill]").forEach(x => x.setAttribute("aria-checked", x === b));
+      render();
+    }));
+    render();
+  }
+
   /* claim form: tidy what was typed before it goes to sign-up */
   const claim = document.querySelector(".lp-claim-form");
   if(claim) claim.addEventListener("submit", () => {

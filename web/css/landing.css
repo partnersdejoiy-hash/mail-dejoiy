@@ -243,3 +243,39 @@ body.lp-admin .lp-mark circle:first-child{stroke:#f5f2f0}
 .lp-tile-pic img.fill{width:100%;height:100%;object-fit:cover;object-position:left top;border:0;border-radius:0;transform:none}
 body.lp-admin .t3 .lp-tile-pic img.fill{object-position:right top}
 @media (max-width:680px){body.lp-admin .lp-actions .ghost,body.lp-admin .lp-tag{display:none}.lp-nav{gap:12px}}
+
+/* ---------- pricing: flat per company, the popular plan is the pink sticker ---------- */
+.lp-pricing{width:min(var(--max),100%);margin:0 auto;padding:clamp(96px,16vh,200px) var(--m) 20px}
+.lp-price-head h2{font-size:clamp(36px,4.4vw,64px);line-height:1;letter-spacing:-.04em;font-weight:800}
+.lp-price-head p{margin-top:12px;color:var(--muted);font-size:18px;max-width:52ch}
+.lp-bill{display:inline-flex;gap:4px;margin-top:22px;padding:5px;border:2px solid var(--edge);border-radius:999px;background:var(--surface)}
+.lp-bill button{border:0;border-radius:999px;padding:10px 18px;background:none;color:var(--text);font:inherit;font-size:16px;font-weight:700;cursor:pointer;transition:background .25s,color .25s}
+.lp-bill button[aria-checked="true"]{background:var(--ink);color:#fff}
+.lp-calc{margin-top:34px;max-width:720px;padding:20px 22px;border-radius:22px;background:var(--soft)}
+.lp-calc label{display:block;font-size:22px;font-weight:800;letter-spacing:-.02em}
+.lp-calc output{display:inline-block;min-width:1.6em;padding:0 .25em;border-radius:.3em;background:var(--pink);color:#121212;text-align:center}
+.lp-calc input{width:100%;margin:16px 0 10px;accent-color:#c4166c;height:28px;cursor:pointer}
+.lp-calc p{font-size:16px;color:var(--text);max-width:62ch}
+.lp-calc p b{font-weight:800}
+.lp-plans{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:clamp(14px,2vw,26px);margin-top:40px;align-items:start}
+.lp-plan{display:flex;flex-direction:column;gap:10px;padding:26px 52px 26px 26px;border:2px solid var(--edge);border-radius:24px 90px 90px 24px;background:var(--surface);
+  transition:transform .3s var(--ease),box-shadow .3s var(--ease)}
+.lp-plan:hover{transform:translateY(-4px);box-shadow:6px 6px 0 var(--edge)}
+.lp-plan.is-pop{background:var(--pink);color:#121212;border-color:#121212;transform:rotate(-1.2deg);box-shadow:8px 8px 0 #121212}
+.lp-plan.is-pop:hover{transform:rotate(-1.2deg) translateY(-4px)}
+.lp-plan.is-pick{outline:4px solid var(--pink);outline-offset:4px}
+.lp-plan.is-pop.is-pick{outline-color:var(--edge)}
+.lp-plan h3{font-size:22px;letter-spacing:-.02em;font-weight:800;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.lp-flag{font-size:16px;font-weight:600}
+.lp-price-line b{font-size:clamp(44px,4.4vw,63px);line-height:1;letter-spacing:-.04em;font-weight:800}
+.lp-price-line span[data-per]{font-size:18px;font-weight:600;margin-left:4px}
+.lp-per-head{font-size:16px;font-weight:600;color:var(--muted)}
+.lp-plan.is-pop .lp-per-head{color:#121212}
+.lp-plan ul{list-style:none;display:grid;gap:8px;margin:8px 0 14px;font-size:16px}
+.lp-plan li{display:flex;gap:10px;align-items:baseline}
+.lp-plan li::before{content:"";flex:none;width:.8em;aspect-ratio:150/140;border-radius:var(--d-radius);background:var(--pink);transform:translateY(.1em)}
+.lp-plan.is-pop li::before{background:#121212}
+.lp-plan .lp-btn{margin-top:auto;align-self:flex-start}
+.lp-plan.is-pop .lp-btn{background:#121212;color:#fff;border-color:#121212;box-shadow:3px 3px 0 #fff}
+.lp-fine{margin-top:26px;font-size:14px;color:var(--muted);max-width:68ch}
+@media (max-width:1100px){.lp-plans{grid-template-columns:1fr;max-width:560px}}

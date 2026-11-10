@@ -14,7 +14,7 @@
 <link rel="manifest" href="manifest.webmanifest" />
 <link rel="preload" href="assets/fonts/bricolage-grotesque-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
 <link rel="stylesheet" href="css/font.css?v=20261110b" />
-<link rel="stylesheet" href="css/landing.css?v=20261110c" />
+<link rel="stylesheet" href="css/landing.css?v=20261110d" />
 <script>document.documentElement.classList.add("js")</script>
 </head>
 <body class="lp">
@@ -22,7 +22,7 @@
 <div class="lp-page">
 <header class="lp-nav">
   <a class="lp-logo" href="/home" aria-label="Dejoiy Mail home"><picture><source srcset="assets/brand/dejoiy-mail-on-dark.svg?v=20261110a" media="(prefers-color-scheme: dark)"><img src="assets/brand/dejoiy-mail.svg?v=20261110a" alt="Dejoiy Mail" height="36"></picture></a>
-  <nav class="lp-links" aria-label="Page"><a href="#features">Features</a><a href="#how">How it works</a><a href="https://admin-mail.dejoiy.com">For admins</a></nav>
+  <nav class="lp-links" aria-label="Page"><a href="#features">Features</a><a href="#how">How it works</a><a href="#pricing">Pricing</a><a href="https://admin-mail.dejoiy.com">For admins</a></nav>
   <div class="lp-actions"><a class="lp-btn ghost" href="/?signin">Sign in</a><a class="lp-btn" href="/signup">Sign up</a></div>
 </header>
 
@@ -105,6 +105,45 @@
     </div>
   </section>
 
+  <section id="pricing" class="lp-pricing" aria-labelledby="price-title">
+    <div class="lp-price-head">
+      <h2 id="price-title" class="rv">Cheap. Like, really.</h2>
+      <p class="rv">One flat price for your company, not per person. Prices are before 18% GST.</p>
+      <div class="lp-bill rv" role="radiogroup" aria-label="Billing">
+        <button role="radio" aria-checked="true" data-bill="month">Monthly</button><button role="radio" aria-checked="false" data-bill="year">Yearly · 2 months free</button>
+      </div>
+    </div>
+    <div class="lp-calc rv">
+      <label for="lp-seats">My team is <output id="lp-seats-out">8</output> people</label>
+      <input id="lp-seats" type="range" min="1" max="30" value="8">
+      <p id="lp-calc-out" aria-live="polite"></p>
+    </div>
+    <div class="lp-plans">
+      <article class="lp-plan rv" data-plan="starter" data-month="79" data-year="790" data-seats="3">
+        <h3>Starter</h3>
+        <p class="lp-price-line"><b>₹<span data-amount>79</span></b><span data-per>/month</span></p>
+        <p class="lp-per-head">₹<span data-head>26</span> per mailbox · up to 3</p>
+        <ul><li>3 mailboxes, 5 GB each</li><li>Your own domain</li><li>Aliases like hello@</li><li>Every theme, light and dark</li><li>Phone, tablet and desktop</li></ul>
+        <a class="lp-btn ghost" href="/signup?plan=starter">Choose Starter</a>
+      </article>
+      <article class="lp-plan is-pop rv" data-plan="team" data-month="249" data-year="2490" data-seats="10">
+        <h3>Team</h3>
+        <p class="lp-price-line"><b>₹<span data-amount>249</span></b><span data-per>/month</span></p>
+        <p class="lp-per-head">₹<span data-head>25</span> per mailbox · up to 10 · <b>most picked</b></p>
+        <ul><li>10 mailboxes, 5 GB each</li><li>Everything in Starter</li><li>Team lists like sales@ and team@</li><li>Admin console on your phone</li><li>Live DNS health checks</li></ul>
+        <a class="lp-btn" href="/signup?plan=team">Choose Team</a>
+      </article>
+      <article class="lp-plan rv" data-plan="business" data-month="599" data-year="5990" data-seats="30">
+        <h3>Business</h3>
+        <p class="lp-price-line"><b>₹<span data-amount>599</span></b><span data-per>/month</span></p>
+        <p class="lp-per-head">₹<span data-head>20</span> per mailbox · up to 30</p>
+        <ul><li>30 mailboxes, 10 GB each</li><li>Everything in Team</li><li>Roles and per-person storage</li><li>Forwarding and shared addresses</li><li>Priority setup help</li></ul>
+        <a class="lp-btn ghost" href="/signup?plan=business">Choose Business</a>
+      </article>
+    </div>
+    <p class="lp-fine">Compared with list prices on annual plans before GST, November 2026: Zoho Mail Lite 5 GB at ₹59 per user a month and Google Workspace Business Starter at ₹270 per user a month.</p>
+  </section>
+
   <section class="lp-claim" aria-labelledby="claim-title">
     <form class="lp-claim-form" action="/signup" method="get">
       <h2 id="claim-title" class="sr">Claim your address</h2>
@@ -125,11 +164,11 @@
     <path class="rv" fill-rule="evenodd" d="M230 50H420A55 55 0 0 1 420 160H230Z M296 84H404A21 21 0 0 1 404 126H296Z" fill="#121212"/>
   </svg>
   <div class="lp-foot-grid">
-    <nav aria-label="Footer"><a href="/?signin">Sign in</a><a href="/signup">Create business email</a><a href="https://admin-mail.dejoiy.com">Dejoiy Mail Admin</a><a href="/third-party-notices.html">Notices</a></nav>
+    <nav aria-label="Footer"><a href="/?signin">Sign in</a><a href="#pricing">Pricing</a><a href="/signup">Create business email</a><a href="https://admin-mail.dejoiy.com">Dejoiy Mail Admin</a><a href="/third-party-notices.html">Notices</a></nav>
     <p>Dejoiy India Private Limited<br>New Delhi, India</p>
   </div>
   <div class="lp-foot-last"><span>© 2026 Dejoiy India Private Limited</span><a class="lp-btn small" href="/signup">Sign up</a></div>
 </footer>
-<script src="js/landing.js?v=20261110c"></script>
+<script src="js/landing.js?v=20261110d"></script>
 </body>
 </html>
