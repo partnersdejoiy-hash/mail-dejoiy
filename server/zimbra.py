@@ -18,6 +18,7 @@ import xml.etree.ElementTree as ET
 from http.cookies import SimpleCookie
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+import dcalendar
 from html.parser import HTMLParser
 
 SOAP = 'http://www.w3.org/2003/05/soap-envelope'
@@ -75,6 +76,7 @@ def clean_appearance(data):
     return out
 
 UPDATES_LOCK=threading.Lock()
+BOOKING_LOCK=threading.Lock(); DELEGATED={}
 UPDATE_KINDS=('news','feature','policy','notice','tip','event')
 MAX_UPDATE_FILES=10*1024*1024
 # Shown in Dejoiy Updates until the Dejoiy team posts or deletes anything there.
@@ -1412,6 +1414,7 @@ class Handler(SimpleHTTPRequestHandler):
                     posts=[p for p in posts if p.get('audience','both')!='internal']
                     return self.reply(200,{'posts':[{k:p.get(k) for k in ('id','kind','title','body','date','pinned','link','files','photo')} for p in posts[:12]]})
                 if self.path.startswith('/api/public/photo/'): return self.update_photo(self.path.rsplit('/',1)[1])
+                if self.path.startswith('/api/public/booking/'): return self.reply(200,self.public_booking(self.path.rsplit('/',1)[1]))
                 if self.path.startswith('/api/public/update-file?'):
                     return self.update_file(None,urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get('id',[''])[0])
                 _,s=self.session()
@@ -1421,6 +1424,15 @@ class Handler(SimpleHTTPRequestHandler):
                 if self.path=='/api/mail': return self.reply(200,self.server.zimbra.messages(s['token']))
                 if self.path=='/api/contacts': return self.reply(200,self.server.zimbra.contacts(s['token'],self.domain(s)))
                 if self.path=='/api/updates': return self.reply(200,self.updates_view(s))
+                if self.path.startswith('/api/calendar?'):
+                    q=urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+                    try: start,end=int(q.get('start',['0'])[0]),int(q.get('end',['0'])[0])
+                    except ValueError: raise APIError('Invalid dates.')
+                    return self.reply(200,{'events':self.cal(dcalendar.events,self.server.zimbra,s['token'],start,end)})
+                if self.path.startswith('/api/calendar/event?'):
+                    ident=urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get('id',[''])[0]
+                    return self.reply(200,self.cal(dcalendar.event_detail,self.server.zimbra,s['token'],ident))
+                if self.path=='/api/booking': return self.reply(200,self.booking_view(s))
                 if self.path.startswith('/api/updates/file?'):
                     return self.update_file(s,urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get('id',[''])[0])
                 if self.path=='/api/preferences': return self.reply(200,self.server.zimbra.preferences(s['token']))
@@ -1488,6 +1500,7 @@ class Handler(SimpleHTTPRequestHandler):
             self.path='/home.html'
         if path in ('/terms','/privacy'):
             self.path=path+'.html'
+        if re.fullmatch(r'/book/[a-z0-9-]{3,40}',path): self.path='/booking.html'
         if path=='/admin/':
             return self.redirect('/admin')
         if path=='/signup':
@@ -1621,6 +1634,57 @@ class Handler(SimpleHTTPRequestHandler):
             else: raise APIError('Unsupported update operation.')
             self.server.updates.put(key,{'posts':posts})
         return self.updates_view(session)
+    # ---------- calendar and booking links ----------
+    def cal(self, fn, *args):
+        try: return fn(*args)
+        except dcalendar.CalendarError as e: raise APIError(str(e),e.code)
+    def delegated(self, email):
+        """A short-lived mailbox token for the booking owner, issued by the service admin: public
+        visitors never hold a token, and the owner doesn't need to be signed in."""
+        provisioner=getattr(self.server,'provisioner',None)
+        if not provisioner: raise APIError('Booking links are not set up on this server yet.',503)
+        cached=DELEGATED.get(email)
+        if cached and cached[1]>time.time()+60: return cached[0]
+        r=node(ADMIN,'DelegateAuthRequest',{'duration':'3600'}); r.append(node(ADMIN,'account',{'by':'name'},email))
+        token=provisioner.admin.call(r,provisioner.token()).findtext('{'+ADMIN+'}authToken')
+        if not token: raise APIError('Booking is unavailable right now.',502)
+        DELEGATED[email]=(token,time.time()+3600); return token
+    def booking_view(self, session):
+        email=session['user']['email']; store=self.server.booking; saved=store.get('user:'+email)
+        if not saved.get('slug'):
+            slug=dcalendar.make_slug(email,lambda x:bool(store.get('slug:'+x)))
+            saved={**dcalendar.DEFAULT_BOOKING,'slug':slug,'name':session['user'].get('name') or email}
+            store.put('user:'+email,saved); store.put('slug:'+slug,{'email':email})
+        return {**{k:saved.get(k,v) for k,v in dcalendar.DEFAULT_BOOKING.items()},'slug':saved['slug'],'url':self.server.app_origin+'/book/'+saved['slug'],
+            'ready':bool(getattr(self.server,'provisioner',None))}
+    def save_booking(self, session, data):
+        email=session['user']['email']; store=self.server.booking; current=store.get('user:'+email) or self.booking_view(session) and store.get('user:'+email)
+        settings=self.cal(dcalendar.clean_booking,data,current)
+        slug=str(data.get('slug',current['slug'])).strip().lower()
+        if slug!=current['slug']:
+            if not dcalendar.SLUG.fullmatch(slug): raise APIError('Use 3 to 40 lowercase letters, numbers and dashes for your link.')
+            if store.get('slug:'+slug).get('email') not in (None,email): raise APIError('That link is taken. Try another.')
+            store.put('slug:'+current['slug'],{}); store.put('slug:'+slug,{'email':email})
+        store.put('user:'+email,{**settings,'slug':slug,'name':session['user'].get('name') or email})
+        return self.booking_view(session)
+    def booking_owner(self, slug):
+        email=self.server.booking.get('slug:'+slug).get('email') if dcalendar.SLUG.fullmatch(slug or '') else None
+        settings=self.server.booking.get('user:'+email) if email else {}
+        if not settings.get('enabled'): raise APIError('This booking link is not available.',404)
+        return email,settings
+    def free_slots(self, email, settings):
+        now=int(time.time()*1000); end=now+(settings['window']+2)*dcalendar.DAY_MS
+        busy=self.cal(dcalendar.busy,self.server.zimbra,self.delegated(email),email,now,end)
+        return self.cal(dcalendar.slots,settings,busy,now)
+    def public_booking(self, slug):
+        email,settings=self.booking_owner(slug)
+        return {'name':settings.get('name',''),'title':settings['title'],'duration':settings['duration'],'tz':settings['tz'],
+            'description':settings.get('description',''),'location':settings.get('location',''),'slots':self.free_slots(email,settings)}
+    def make_booking(self, slug, data):
+        email,settings=self.booking_owner(slug)
+        with BOOKING_LOCK:  # two visitors can't take the same time
+            free=self.free_slots(email,settings)
+            return self.cal(dcalendar.book,self.server.zimbra,self.delegated(email),email,settings,data,free)
     def store_update_files(self, files, box, post):
         """Files attached to an update: up to 6, 10 MB together, kept with the post's box so only
         people who can see that box can open them."""
@@ -1684,7 +1748,8 @@ class Handler(SimpleHTTPRequestHandler):
             data=json.loads(self.rfile.read(length))
             if not isinstance(data,dict): raise APIError('JSON object required')
             if not self.server.zimbra: raise APIError('Mail server setup is pending. Contact your administrator.',503)
-            if self.path in ('/api/login','/api/admin/login') or self.path.startswith('/api/signup/'):
+            booking=self.path.startswith('/api/public/booking/')
+            if self.path in ('/api/login','/api/admin/login') or self.path.startswith('/api/signup/') or booking:
                 with LOCK:
                     now=time.time(); attempts=self.server.attempts
                     for key in list(attempts):
@@ -1694,10 +1759,11 @@ class Handler(SimpleHTTPRequestHandler):
                     if ipaddress.ip_address(key).is_loopback and self.headers.get('X-Real-IP'):
                         key=str(ipaddress.ip_address(self.headers['X-Real-IP']))
                     # Sign-up polls DNS, so it gets its own, larger allowance than password attempts.
-                    signup=self.path.startswith('/api/signup/'); key+='#signup' if signup else ''
-                    if len(attempts.get(key,[]))>=(30 if signup else 10): raise APIError('Too many attempts; wait one minute',429)
+                    signup=self.path.startswith('/api/signup/'); key+='#signup' if signup else '#book' if booking else ''
+                    if len(attempts.get(key,[]))>=(30 if signup else 5 if booking else 10): raise APIError('Too many attempts; wait one minute',429)
                     attempts.setdefault(key,[]).append(now)
             if self.path.startswith('/api/signup/'): return self.signup(self.path[len('/api/signup/'):],data)
+            if booking: return self.reply(200,self.make_booking(self.path.rsplit('/',1)[1],data))
             if self.path=='/api/login':
                 email=str(data.get('email','')).strip(); password=str(data.get('password',''))
                 if not email or len(email)>320 or not password or len(password)>4096: raise APIError('Enter an email and password')
@@ -1739,6 +1805,10 @@ class Handler(SimpleHTTPRequestHandler):
                 except APIError: pass  # the message went out; a missed contact is not worth an error
                 return self.reply(200,result)
             if self.path=='/api/updates': return self.reply(200,self.post_update(s,data))
+            if self.path=='/api/calendar':
+                if data.get('op')=='delete': return self.reply(200,self.cal(dcalendar.delete_event,self.server.zimbra,s['token'],data))
+                return self.reply(200,self.cal(dcalendar.save_event,self.server.zimbra,s['token'],data,s['user']['email']))
+            if self.path=='/api/booking': return self.reply(200,self.save_booking(s,data))
             if self.path=='/api/draft': return self.reply(200,self.server.zimbra.write_message(s['token'],data,True))
             if self.path=='/api/action': return self.reply(200,self.server.zimbra.action(s['token'],data))
             if self.path=='/api/contacts': return self.reply(200,self.server.zimbra.contact_action(s['token'],data))
@@ -1791,6 +1861,7 @@ def serve():
     server.appearance=AppearanceStore(os.environ.get('APPEARANCE_DB') or (str(Path(os.environ['SESSION_DB']).with_name('appearance.sqlite')) if os.environ.get('SESSION_DB') else None))
     url=os.environ.get('ZIMBRA_URL'); server.zimbra=Zimbra(url) if url else None
     server.update_files=AppearanceStore((str(Path(os.environ['SESSION_DB']).with_name('update-files.sqlite')) if os.environ.get('SESSION_DB') else None),'files')
+    server.booking=AppearanceStore((str(Path(os.environ['SESSION_DB']).with_name('booking.sqlite')) if os.environ.get('SESSION_DB') else None),'booking')
     server.updates=AppearanceStore((str(Path(os.environ['SESSION_DB']).with_name('updates.sqlite')) if os.environ.get('SESSION_DB') else None),'updates')
     server.ui_settings=AppearanceStore((str(Path(os.environ['SESSION_DB']).with_name('settings.sqlite')) if os.environ.get('SESSION_DB') else None),'ui_settings')
     server.mail_host=os.environ.get('MAIL_HOST') or parsed.hostname
