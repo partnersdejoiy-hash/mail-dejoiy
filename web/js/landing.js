@@ -169,6 +169,7 @@
               ${p.link ? `<a class="lp-btn small" href="${esc(safe(p.link.url))}">${esc(p.link.label || "Open")}</a>` : ""}</div></div></article>`;
         }).join("");
         news.closest("section").hidden = false;
+        document.querySelectorAll(".lp-upd").forEach(b => { b.hidden = false; const n = b.querySelector("[data-news-count]"); if (n) n.textContent = posts.length; });
       }).catch(() => {});
   }
 })();

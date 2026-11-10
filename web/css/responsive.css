@@ -435,3 +435,10 @@ figure.upd-cover.is-gone img,figure.upd-cover.is-gone figcaption{display:none}
 .upd-hero figure.upd-cover .upd-sticker{left:auto;top:auto;right:20px;bottom:20px;width:84px;height:84px;font-size:44px;transform:rotate(-6deg)}
 .upd-hero:hover figure.upd-cover .upd-sticker{transform:rotate(4deg) scale(1.06)}
 .upd-hero figure.upd-cover img{position:absolute;inset:0;max-height:none}
+.upd-aud{font-size:12px;font-weight:800;padding:4px 10px;border-radius:999px;background:var(--surface-2);border:1.5px dashed var(--line);color:var(--ink)}
+.upd-hero .upd-aud{background:#fff;color:#121212}
+.upd-auds{align-items:center}
+.upd-auds-lab{flex:none;font-size:13px;font-weight:800;color:var(--ink-3);margin-right:2px}
+.upd-auds .upd-kind-pick{--k:var(--pop,#ff4fa3)}
+/* the mail Compose button stays out of the way on the update pages */
+body:is([data-route="news"],[data-route="company"]) .fab{display:none!important}

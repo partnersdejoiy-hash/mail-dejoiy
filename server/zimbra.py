@@ -1397,6 +1397,7 @@ class Handler(SimpleHTTPRequestHandler):
                 # Dejoiy Updates are public news, shown on the home and admin landing pages too. Company boxes never are.
                 if self.path=='/api/public/updates':
                     saved=self.server.updates.get('dejoiy'); posts=saved['posts'] if 'posts' in saved else DEFAULT_UPDATES
+                    posts=[p for p in posts if p.get('audience','both')!='internal']
                     return self.reply(200,{'posts':[{k:p.get(k) for k in ('id','kind','title','body','date','pinned','link','files','photo')} for p in posts[:12]]})
                 if self.path.startswith('/api/public/photo/'): return self.update_photo(self.path.rsplit('/',1)[1])
                 if self.path.startswith('/api/public/update-file?'):
@@ -1458,6 +1459,7 @@ class Handler(SimpleHTTPRequestHandler):
             if path in ('/','/index.html'): self.path='/admin-home.html'
             elif path=='/signin': self.path='/index.html'
             elif path in ('/terms','/privacy'): self.path=path+'.html'
+            elif path=='/home': self.path='/admin-home.html'
             elif path=='/admin/': return self.redirect('/admin')
             elif path=='/admin' or path in ADMIN_ASSETS:
                 try: _,s=self.session()
@@ -1565,8 +1567,11 @@ class Handler(SimpleHTTPRequestHandler):
         session['org']=info; return info
     def updates_view(self, session):
         org=self.org(session); domain=self.domain(session); store=self.server.updates
-        saved=store.get('dejoiy')
-        return {'dejoiy':saved['posts'] if 'posts' in saved else [dict(p) for p in DEFAULT_UPDATES],'company':{'name':org['box'] or 'Company updates','domain':domain,
+        saved=store.get('dejoiy'); team=session['user'].get('canManageRoles') is True
+        dejoiy=saved['posts'] if 'posts' in saved else [dict(p) for p in DEFAULT_UPDATES]
+        # Home-page-only posts stay out of mailboxes; the Dejoiy team still sees them, to manage them.
+        if not team: dejoiy=[p for p in dejoiy if p.get('audience','both')!='external']
+        return {'dejoiy':dejoiy,'company':{'name':org['box'] or 'Company updates','domain':domain,
             'posts':store.get('company:'+domain).get('posts',[])},'can':{'dejoiy':session['user'].get('canManageRoles') is True,'company':org['post']}}
     def post_update(self, session, data):
         box=data.get('box'); domain=self.domain(session)
@@ -1596,7 +1601,9 @@ class Handler(SimpleHTTPRequestHandler):
                     if not (re.fullmatch(r'https://[^\s<>"]{3,500}',url) or re.fullmatch(r'/[A-Za-z0-9/#?=&._-]{0,200}',url)): raise APIError('Links must start with https://')
                     link={'url':url,'label':str(data['link'].get('label','')).strip()[:40] or 'Open link'}
                 post={'id':secrets.token_hex(8),'kind':kind,'title':title,'body':body,'author':session['user'].get('name') or session['user']['email'],
-                    'email':session['user']['email'],'date':int(time.time()*1000),'pinned':False,'link':link,'files':[]}
+                    'email':session['user']['email'],'date':int(time.time()*1000),'pinned':False,'link':link,'files':[],
+                    # Dejoiy Updates can go to mailboxes (internal), the home pages (external) or both; company posts stay inside.
+                    'audience':(data.get('audience') if data.get('audience') in ('internal','external','both') else 'both') if box=='dejoiy' else 'internal'}
                 post['files']=self.store_update_files(data.get('files'),key,post['id'])
                 posts=[post,*posts][:100]
             else: raise APIError('Unsupported update operation.')

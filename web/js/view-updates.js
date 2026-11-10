@@ -14,6 +14,8 @@ const BOX = {
   company:{lede:"Updates for everyone in your company."}
 };
 const MAX_FILES = 6, MAX_BYTES = 10*1024*1024;
+/* Where a Dejoiy Update shows: inside mailboxes, on the public home pages, or both. */
+const AUDIENCES = {internal:["📬","Inside mailboxes"], external:["🌐","Home pages only"], both:["✨","Mailboxes + home pages"]};
 const ago = ms => { const m=Math.round((Date.now()-ms)/60000);
   return m<1?"just now":m<60?m+" min ago":m<1440?Math.round(m/60)+" h ago":new Date(ms).toLocaleDateString([], {day:"numeric", month:"short", year:"numeric"}); };
 const size = n => n<1024?n+" B":n<1048576?Math.round(n/1024)+" KB":(n/1048576).toFixed(1)+" MB";
@@ -43,7 +45,7 @@ const readFile = file => new Promise((ok,fail)=>{ const r=new FileReader(); r.on
 
 Views.updates = function(el, box){
   const route = box==="dejoiy" ? "news" : "company";
-  let view = null, filter = "all", picked = [], kind = box==="dejoiy" ? "news" : "news", composing = false;
+  let view = null, filter = "all", picked = [], kind = "news", audience = "both", composing = false;
   el.innerHTML = `<div class="upd"><div class="upd-skel" aria-hidden="true"><i></i><i></i><i></i></div></div>`;
   load().then(v=>{ if(App.route!==route) return; view=v; App.companyName=v.company?.name; App.refreshNav(); draw(); })
     .catch(error=>{ el.innerHTML = `<div class="empty-note">${esc(error.message)}</div>`; });
@@ -63,7 +65,7 @@ Views.updates = function(el, box){
             <span class="upd-sticker">${K.emoji}</span><figcaption><a href="${esc(post.photo.page)}" target="_blank" rel="noopener">Photo${post.photo.credit?" by "+esc(post.photo.credit):""} · Unsplash</a></figcaption></figure>`
         : `<div class="upd-cover" aria-hidden="true"><span class="upd-sticker">${K.emoji}</span><i></i><i></i><i></i></div>`}
       <div class="upd-body">
-        <div class="upd-tags"><span class="upd-kind">${K.emoji} ${K.label}</span>${post.pinned?`<span class="upd-pin">📌 Pinned</span>`:""}</div>
+        <div class="upd-tags"><span class="upd-kind">${K.emoji} ${K.label}</span>${post.pinned?`<span class="upd-pin">📌 Pinned</span>`:""}${box==="dejoiy"&&mine?`<span class="upd-aud">${AUDIENCES[post.audience||"both"].join(" ")}</span>`:""}</div>
         <h2>${esc(post.title)}</h2>
         <div class="upd-text${long?" is-clamped":""}">${paragraphs(post.body)}</div>
         ${long?`<button class="upd-more" type="button">Read more</button>`:""}
@@ -102,6 +104,8 @@ Views.updates = function(el, box){
     return `<form class="upd-compose" id="upd-form" novalidate>
       <div class="upd-kinds" role="radiogroup" aria-label="Type of update">${Object.entries(KINDS).map(([k,K])=>
         `<button type="button" role="radio" class="upd-kind-pick" data-kind="${k}" aria-checked="${kind===k}">${K.emoji} ${K.label}</button>`).join("")}</div>
+      ${box==="dejoiy"?`<div class="upd-kinds upd-auds" role="radiogroup" aria-label="Where it shows"><span class="upd-auds-lab">Show on</span>${Object.entries(AUDIENCES).map(([k,[e,l]])=>
+        `<button type="button" role="radio" class="upd-kind-pick" data-aud="${k}" aria-checked="${audience===k}">${e} ${l}</button>`).join("")}</div>`:""}
       <input name="title" maxlength="120" placeholder="Title" required aria-label="Title">
       <textarea name="body" maxlength="4000" rows="4" placeholder="What should everyone know?" required aria-label="Update text"></textarea>
       <div class="upd-row"><input name="url" type="url" inputmode="url" placeholder="Link (optional), https://…" aria-label="Link"><input name="label" maxlength="40" placeholder="Button text" aria-label="Link button text"></div>
@@ -109,7 +113,7 @@ Views.updates = function(el, box){
       <p class="upd-error" role="alert"></p>
       <div class="upd-compose-foot">
         <label class="upd-attach">📎 Add files<input type="file" id="upd-files" multiple class="sr"></label>
-        <span class="upd-who">Posting to ${box==="dejoiy"?"every Dejoiy Mail user":"everyone at "+esc(view.company.domain||"your company")}</span>
+        <span class="upd-who">${box==="dejoiy"?{internal:"Shows inside every Dejoiy Mail mailbox",external:"Shows only on mail.dejoiy.com/home and the admin home page",both:"Shows inside every mailbox and on the home pages"}[audience]:"Posting to everyone at "+esc(view.company.domain||"your company")}</span>
         <button class="upd-post-btn">Post update</button></div>
     </form>`;
   }
@@ -128,6 +132,7 @@ Views.updates = function(el, box){
     const keep = ()=>({title:form.elements.title.value, body:form.elements.body.value, url:form.elements.url.value, label:form.elements.label.value});
     const restore = v=>{ const f=el.querySelector("#upd-form"); for(const k in v) f.elements[k].value=v[k]; };
     form.querySelectorAll("[data-kind]").forEach(b=>b.addEventListener("click",()=>{ const v=keep(); kind=b.dataset.kind; draw(); restore(v); }));
+    form.querySelectorAll("[data-aud]").forEach(b=>b.addEventListener("click",()=>{ const v=keep(); audience=b.dataset.aud; draw(); restore(v); }));
     form.querySelectorAll("[data-unpick]").forEach(b=>b.addEventListener("click",()=>{ const v=keep(); picked.splice(+b.dataset.unpick,1); draw(); restore(v); }));
     form.querySelector("#upd-files").addEventListener("change", ev=>{
       const v=keep(), add=[...ev.target.files];
@@ -142,7 +147,7 @@ Views.updates = function(el, box){
       const button=form.querySelector(".upd-post-btn"); button.disabled=true; button.textContent=picked.length?"Uploading…":"Posting…";
       try{
         const files = await Promise.all(picked.map(async f=>({name:f.name, type:f.type, size:f.size, data:await readFile(f)})));
-        view = await send({box, op:"post", kind, title:v.title, body:v.body, link:v.url.trim()?{url:v.url.trim(), label:v.label}:null, files});
+        view = await send({box, op:"post", kind, audience, title:v.title, body:v.body, link:v.url.trim()?{url:v.url.trim(), label:v.label}:null, files});
         picked=[]; composing=false; filter="all"; draw(); App.toast("Update posted.");
       }catch(error){ err.textContent=error.message; button.disabled=false; button.textContent="Post update"; }
     });

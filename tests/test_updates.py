@@ -63,4 +63,13 @@ class UpdateTests(unittest.TestCase):
         with self.assertRaises(z.APIError): handler(self.store).update_photo('https://evil.example/x')
         with self.assertRaises(z.APIError): handler(self.store).update_photo('nope')
 
+    def test_audience_internal_external_both(self):
+        h = handler(self.store); team = session('root@dejoiy.com', platform=True)
+        for title, audience in (('inside', 'internal'), ('outside', 'external'), ('everywhere', 'both')):
+            h.post_update(team, {'box': 'dejoiy', 'op': 'post', 'title': title, 'body': title, 'audience': audience})
+        mailbox = [p['title'] for p in h.updates_view(session('priya@kaalitea.in'))['dejoiy']][:3]
+        self.assertEqual(mailbox[:2], ['everywhere', 'inside'])
+        self.assertIn('outside', [p['title'] for p in h.updates_view(team)['dejoiy']])  # the team still sees it to manage it
+        self.assertEqual(h.post_update(session('boss@kaalitea.in', admin=True), {'box': 'company', 'op': 'post', 'title': 'c', 'body': 'c', 'audience': 'external'})['company']['posts'][0]['audience'], 'internal')
+
 if __name__ == '__main__': unittest.main()
