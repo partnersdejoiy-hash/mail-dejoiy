@@ -42,6 +42,7 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(post['kind'], 'event'); self.assertEqual([f['image'] for f in post['files']], [True, False])
         record = FILES.get('file:' + post['files'][0]['id']); self.assertEqual(record['box'], 'company:kaalitea.in')
         with self.assertRaises(z.APIError): handler(self.store).update_file(session('anu@other.in'), post['files'][0]['id'])
+        with self.assertRaises(z.APIError): handler(self.store).update_file(None, post['files'][0]['id'])  # the public pages never get company files
 
     def test_bad_links_and_big_files_are_refused(self):
         with self.assertRaises(z.APIError):

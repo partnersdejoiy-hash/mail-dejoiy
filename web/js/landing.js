@@ -144,4 +144,29 @@
       }, reduce ? 0 : 450 * (k + 1)));
     });
   }
+
+  /* ---------- Dejoiy Updates: the same posts every mailbox sees, newest pinned first ---------- */
+  const news = document.querySelector("[data-news]");
+  if (news) {
+    const KINDS = {news:["📣","News"], feature:["✨","New feature"], policy:["📜","Policy"], notice:["🔔","Notice"], tip:["💡","Tip"], event:["🎉","Event"]};
+    const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]);
+    const when = ms => new Date(ms).toLocaleDateString([], {day:"numeric", month:"short", year:"numeric"});
+    // On the admin site, mail-site links (like /terms) keep working because both sites serve them.
+    const safe = url => /^(https:\/\/|\/)/.test(url || "") ? url : "#";
+    fetch("/api/public/updates", {headers:{Accept:"application/json"}}).then(r => r.ok ? r.json() : Promise.reject())
+      .then(({posts}) => {
+        if (!posts?.length) return;
+        posts = [...posts.filter(p => p.pinned), ...posts.filter(p => !p.pinned)].slice(0, 8);
+        news.innerHTML = posts.map((p, i) => {
+          const [emoji, label] = KINDS[p.kind] || KINDS.news, cover = (p.files || []).find(f => f.image);
+          return `<article class="lp-post${i === 0 ? " is-first" : ""}" data-kind="${esc(KINDS[p.kind] ? p.kind : "news")}">
+            <div class="lp-post-art">${cover ? `<img src="/api/public/update-file?id=${encodeURIComponent(cover.id)}" alt="" loading="lazy">` : `<span>${emoji}</span>`}</div>
+            <div class="lp-post-body"><p class="lp-post-kind">${emoji} ${esc(label)}${p.pinned ? " · 📌 Pinned" : ""}</p>
+              <h3>${esc(p.title)}</h3><p class="lp-post-text">${esc(p.body).replace(/\n+/g, " ")}</p>
+              <div class="lp-post-foot"><time datetime="${new Date(p.date).toISOString()}">${when(p.date)}</time>
+              ${p.link ? `<a class="lp-btn small" href="${esc(safe(p.link.url))}">${esc(p.link.label || "Open")}</a>` : ""}</div></div></article>`;
+        }).join("");
+        news.closest("section").hidden = false;
+      }).catch(() => {});
+  }
 })();

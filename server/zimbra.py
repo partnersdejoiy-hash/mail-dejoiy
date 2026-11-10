@@ -1392,6 +1392,12 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path.startswith('/api/'):
             try:
                 if self.path=='/api/config': return self.reply(200,{'mode':'live','configured':bool(self.server.zimbra)})
+                # Dejoiy Updates are public news, shown on the home and admin landing pages too. Company boxes never are.
+                if self.path=='/api/public/updates':
+                    saved=self.server.updates.get('dejoiy'); posts=saved['posts'] if 'posts' in saved else DEFAULT_UPDATES
+                    return self.reply(200,{'posts':[{k:p.get(k) for k in ('id','kind','title','body','date','pinned','link','files')} for p in posts[:12]]})
+                if self.path.startswith('/api/public/update-file?'):
+                    return self.update_file(None,urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get('id',[''])[0])
                 _,s=self.session()
                 if self.path=='/api/session':
                     capabilities=self.server.zimbra.capabilities(s['token'])
@@ -1617,7 +1623,8 @@ class Handler(SimpleHTTPRequestHandler):
         return saved
     def update_file(self, session, ident):
         found=self.server.update_files.get('file:'+ident) if re.fullmatch(r'[0-9a-f]{24}',ident or '') else {}
-        if not found or found.get('box') not in ('dejoiy','company:'+self.domain(session)): raise APIError('File not found.',404)
+        allowed=('dejoiy',) if session is None else ('dejoiy','company:'+self.domain(session))
+        if not found or found.get('box') not in allowed: raise APIError('File not found.',404)
         raw=base64.b64decode(found['data'])
         if found.get('image'): return self.image(raw,IMAGE_MIME['jpg' if found['image']=='jpeg' else found['image']],'private, max-age=86400')
         self.send_response(200); self.send_header('Content-Type','application/octet-stream')
