@@ -1,0 +1,134 @@
+[
+ {
+  "id": "welcome",
+  "kind": "news",
+  "title": "Welcome to Dejoiy Mail :D",
+  "body": "Business email on your own domain, made to feel like an app.\n\nThis page is where the Dejoiy team shares new features, policies and service notices. Your company has its own box too, for updates from your team.",
+  "author": "Dejoiy team",
+  "email": "",
+  "date": 1794304800000,
+  "pinned": true,
+  "link": null,
+  "files": []
+ },
+ {
+  "id": "trial",
+  "kind": "notice",
+  "title": "11 days free on every plan",
+  "body": "Try Starter, Team or Business free for 11 days, no card needed. After that, pay monthly or save up to 33% yearly. Prices are for the whole company, not per person.",
+  "author": "Dejoiy team",
+  "email": "",
+  "date": 1794304200000,
+  "pinned": false,
+  "link": {
+   "url": "/home#pricing",
+   "label": "See plans and prices"
+  },
+  "files": []
+ },
+ {
+  "id": "terms",
+  "kind": "policy",
+  "title": "Our Terms of Service",
+  "body": "The agreement for using Dejoiy Mail: your free trial and plans, billing and cancellation, what you may not send, who owns your mail, and how to reach our Grievance Officer.",
+  "author": "Dejoiy team",
+  "email": "",
+  "date": 1794303600000,
+  "pinned": false,
+  "link": {
+   "url": "/terms",
+   "label": "Read the Terms"
+  },
+  "files": []
+ },
+ {
+  "id": "privacy",
+  "kind": "policy",
+  "title": "Privacy Policy",
+  "body": "What we collect, why, who we share it with and how long we keep it, under India's Digital Personal Data Protection Act, 2023. In short: we don't sell your data or show ads.",
+  "author": "Dejoiy team",
+  "email": "",
+  "date": 1794303000000,
+  "pinned": false,
+  "link": {
+   "url": "/privacy",
+   "label": "Read the Privacy Policy"
+  },
+  "files": []
+ },
+ {
+  "id": "no-spam",
+  "kind": "policy",
+  "title": "No spam, ever",
+  "body": "Send marketing mail only to people who agreed to get it, with a way to unsubscribe. Spam, phishing and bought lists can get sending paused, so every Dejoiy Mail address stays out of spam folders.",
+  "author": "Dejoiy team",
+  "email": "",
+  "date": 1794302400000,
+  "pinned": false,
+  "link": {
+   "url": "/terms#use",
+   "label": "Acceptable use rules"
+  },
+  "files": []
+ },
+ {
+  "id": "colours",
+  "kind": "feature",
+  "title": "Every mail now has a colour",
+  "body": "Important mail is pink, Work is yellow, Money is orange, Personal is green, Ideas are lilac and Updates are blue. Mail without a label gets a colour from what it says, or your own Dejoiy colour.",
+  "author": "Dejoiy team",
+  "email": "",
+  "date": 1794301800000,
+  "pinned": false,
+  "link": null,
+  "files": []
+ },
+ {
+  "id": "labels",
+  "kind": "feature",
+  "title": "Pick a label while you write",
+  "body": "Compose has a Label row. Choose Important, Work, Money and more, or leave it on Auto. Mail you send to Gmail and other inboxes arrives in a card in the label colour.",
+  "author": "Dejoiy team",
+  "email": "",
+  "date": 1794301200000,
+  "pinned": false,
+  "link": null,
+  "files": []
+ },
+ {
+  "id": "contacts",
+  "kind": "feature",
+  "title": "Contacts that fill themselves",
+  "body": "Everyone you write to is saved to Contacts automatically. People at your company show under Work family, everyone else under Others.",
+  "author": "Dejoiy team",
+  "email": "",
+  "date": 1794300600000,
+  "pinned": false,
+  "link": null,
+  "files": []
+ },
+ {
+  "id": "look",
+  "kind": "tip",
+  "title": "Make it yours",
+  "body": "Choose a Dejoiy colour on the home page and the logo, sign-in and app follow it. Add a background theme in Settings, and tap your photo to change your profile picture.",
+  "author": "Dejoiy team",
+  "email": "",
+  "date": 1794300000000,
+  "pinned": false,
+  "link": null,
+  "files": []
+ },
+ {
+  "id": "safety",
+  "kind": "tip",
+  "title": "Keep your mailbox safe",
+  "body": "Use a strong password you don't use anywhere else. Dejoiy will never ask for your password by email. If something looks off, tell your company admin straight away.",
+  "author": "Dejoiy team",
+  "email": "",
+  "date": 1794299400000,
+  "pinned": false,
+  "link": null,
+  "files": []
+ }
+]

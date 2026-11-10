@@ -75,21 +75,10 @@ def clean_appearance(data):
     return out
 
 UPDATES_LOCK=threading.Lock()
-# Shown in Dejoiy Updates until the Dejoiy team posts or deletes anything there (dates: 10 Nov 2026, IST).
-DEFAULT_UPDATES=[
-    {'id':'welcome','title':'Welcome to Dejoiy Mail :D','author':'Dejoiy team','email':'','date':1794297600000,
-     'body':'Business email on your own domain, made to feel like an app.\n\nThis page is where the Dejoiy team shares new features, tips and service notices. Your company has its own box too, right below this one in the menu, for updates from your team.'},
-    {'id':'colours','title':'Every mail now has a colour','author':'Dejoiy team','email':'','date':1794296700000,
-     'body':'Important mail is pink, Work is yellow, Money is orange, Personal is green, Ideas are lilac and Updates are blue. Mail without a label gets a colour from what it says, or your own Dejoiy colour.\n\nOpen a mail and it opens in the same colour.'},
-    {'id':'labels','title':'Pick a label while you write','author':'Dejoiy team','email':'','date':1794295800000,
-     'body':'Compose has a Label row. Choose Important, Work, Money and more, or leave it on Auto and Dejoiy Mail picks one from your message.\n\nMail you send to Gmail and other inboxes arrives in a card in the label colour, with the Dejoiy Mail banner.'},
-    {'id':'contacts','title':'Contacts that fill themselves','author':'Dejoiy team','email':'','date':1794294900000,
-     'body':'Everyone you write to is saved to Contacts automatically. People at your company show under Work family, everyone else under Others.'},
-    {'id':'look','title':'Make it yours','author':'Dejoiy team','email':'','date':1794294000000,
-     'body':'Choose a Dejoiy colour on the home page and the logo, sign-in and app follow it on this browser. Add a background theme in Settings, and tap your photo to change your profile picture.'},
-    {'id':'safety','title':'Keep your mailbox safe','author':'Dejoiy team','email':'','date':1794293100000,
-     'body':'Use a strong password you don\'t use anywhere else. Dejoiy will never ask for your password by email. If something looks off, tell your company admin straight away.'},
-]
+UPDATE_KINDS=('news','feature','policy','notice','tip','event')
+MAX_UPDATE_FILES=10*1024*1024
+# Shown in Dejoiy Updates until the Dejoiy team posts or deletes anything there.
+DEFAULT_UPDATES=json.loads((Path(__file__).with_name('default-updates.json')).read_text(encoding='utf-8'))
 class AppearanceStore:
     """Per-mailbox appearance, keyed by the upstream account id so it follows the user across devices."""
     def __init__(self, path=None, table='appearance'):
@@ -1410,6 +1399,8 @@ class Handler(SimpleHTTPRequestHandler):
                 if self.path=='/api/mail': return self.reply(200,self.server.zimbra.messages(s['token']))
                 if self.path=='/api/contacts': return self.reply(200,self.server.zimbra.contacts(s['token'],self.domain(s)))
                 if self.path=='/api/updates': return self.reply(200,self.updates_view(s))
+                if self.path.startswith('/api/updates/file?'):
+                    return self.update_file(s,urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get('id',[''])[0])
                 if self.path=='/api/preferences': return self.reply(200,self.server.zimbra.preferences(s['token']))
                 if self.path=='/api/appearance': return self.reply(200,self.server.appearance.get(self.account(s)))
                 if self.path=='/api/settings':
@@ -1578,16 +1569,61 @@ class Handler(SimpleHTTPRequestHandler):
             saved=self.server.updates.get(key)
             posts=saved['posts'] if 'posts' in saved else ([dict(p) for p in DEFAULT_UPDATES] if key=='dejoiy' else [])
             if data.get('op')=='delete':
+                for p in posts:
+                    if p.get('id')==data.get('id'):
+                        for f in p.get('files') or []: self.server.update_files.put('file:'+f['id'],{})
                 posts=[p for p in posts if p.get('id')!=data.get('id')]
+            elif data.get('op')=='pin':
+                # One pinned post per box: pinning another moves the pin; pinning the pinned one unpins it.
+                posts=[{**p,'pinned':p.get('id')==data.get('id') and not p.get('pinned')} for p in posts]
             elif data.get('op')=='post':
                 title=str(data.get('title','')).strip(); body=str(data.get('body','')).strip()
                 if not 1<=len(title)<=120 or any(ord(c)<32 for c in title): raise APIError('Give the update a title of up to 120 characters.')
                 if not 1<=len(body)<=4000: raise APIError('Write the update in up to 4000 characters.')
-                posts=[{'id':secrets.token_hex(8),'title':title,'body':body,'author':session['user'].get('name') or session['user']['email'],
-                    'email':session['user']['email'],'date':int(time.time()*1000)},*posts][:100]
+                kind=data.get('kind') if data.get('kind') in UPDATE_KINDS else 'news'
+                link=None
+                if data.get('link'):
+                    url=str(data['link'].get('url','')).strip() if isinstance(data['link'],dict) else ''
+                    if not (re.fullmatch(r'https://[^\s<>"]{3,500}',url) or re.fullmatch(r'/[A-Za-z0-9/#?=&._-]{0,200}',url)): raise APIError('Links must start with https://')
+                    link={'url':url,'label':str(data['link'].get('label','')).strip()[:40] or 'Open link'}
+                post={'id':secrets.token_hex(8),'kind':kind,'title':title,'body':body,'author':session['user'].get('name') or session['user']['email'],
+                    'email':session['user']['email'],'date':int(time.time()*1000),'pinned':False,'link':link,'files':[]}
+                post['files']=self.store_update_files(data.get('files'),key,post['id'])
+                posts=[post,*posts][:100]
             else: raise APIError('Unsupported update operation.')
             self.server.updates.put(key,{'posts':posts})
         return self.updates_view(session)
+    def store_update_files(self, files, box, post):
+        """Files attached to an update: up to 6, 10 MB together, kept with the post's box so only
+        people who can see that box can open them."""
+        if not files: return []
+        if not isinstance(files,list) or len(files)>6: raise APIError('Attach up to 6 files.')
+        decoded=[]; total=0
+        for item in files:
+            if not isinstance(item,dict): raise APIError('Invalid file.')
+            try: raw=base64.b64decode(str(item.get('data','')),validate=True)
+            except (ValueError,binascii.Error): raise APIError('Invalid file data.')
+            total+=len(raw)
+            if not raw or total>MAX_UPDATE_FILES: raise APIError('Files must total 10 MB or less.')
+            name=str(item.get('name','file')).strip()[:120] or 'file'
+            if any(ord(c)<32 or c in '/\\' for c in name): raise APIError('Invalid file name.')
+            decoded.append((raw,name))
+        saved=[]
+        for raw,name in decoded:
+            image=next((k for k,test in IMAGE_MAGIC.items() if test(raw)),None)  # images by their bytes, never by name
+            ident=secrets.token_hex(12)
+            self.server.update_files.put('file:'+ident,{'box':box,'post':post,'name':name,'image':image,'data':base64.b64encode(raw).decode()})
+            saved.append({'id':ident,'name':name,'size':len(raw),'image':bool(image)})
+        return saved
+    def update_file(self, session, ident):
+        found=self.server.update_files.get('file:'+ident) if re.fullmatch(r'[0-9a-f]{24}',ident or '') else {}
+        if not found or found.get('box') not in ('dejoiy','company:'+self.domain(session)): raise APIError('File not found.',404)
+        raw=base64.b64decode(found['data'])
+        if found.get('image'): return self.image(raw,IMAGE_MIME['jpg' if found['image']=='jpeg' else found['image']],'private, max-age=86400')
+        self.send_response(200); self.send_header('Content-Type','application/octet-stream')
+        self.send_header('Content-Disposition',"attachment; filename*=UTF-8''"+urllib.parse.quote(found['name'],safe=''))
+        self.send_header('X-Content-Type-Options','nosniff'); self.send_header('Cache-Control','private, no-store')
+        self.send_header('Content-Length',str(len(raw))); self.end_headers(); self.wfile.write(raw)
     def admin_session(self, session):
         client=getattr(self.server,'admin',None)
         if not client: raise APIError('Mail administration is not configured on this server.',503)
@@ -1710,6 +1746,7 @@ def serve():
     server.admin_origin=(os.environ.get('ADMIN_ORIGIN') or (f'{parsed.scheme}://admin-{host}' if host.startswith('mail.') else '')).rstrip('/') or None
     server.appearance=AppearanceStore(os.environ.get('APPEARANCE_DB') or (str(Path(os.environ['SESSION_DB']).with_name('appearance.sqlite')) if os.environ.get('SESSION_DB') else None))
     url=os.environ.get('ZIMBRA_URL'); server.zimbra=Zimbra(url) if url else None
+    server.update_files=AppearanceStore((str(Path(os.environ['SESSION_DB']).with_name('update-files.sqlite')) if os.environ.get('SESSION_DB') else None),'files')
     server.updates=AppearanceStore((str(Path(os.environ['SESSION_DB']).with_name('updates.sqlite')) if os.environ.get('SESSION_DB') else None),'updates')
     server.ui_settings=AppearanceStore((str(Path(os.environ['SESSION_DB']).with_name('settings.sqlite')) if os.environ.get('SESSION_DB') else None),'ui_settings')
     server.mail_host=os.environ.get('MAIL_HOST') or parsed.hostname
