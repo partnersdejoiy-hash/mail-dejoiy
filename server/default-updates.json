@@ -1,5 +1,17 @@
 [
  {
+  "id": "joi",
+  "kind": "feature",
+  "title": "Meet Joi, your email assistant :D",
+  "author": "Dejoiy team",
+  "email": "",
+  "date": 1794310200000,
+  "pinned": true,
+  "link": null,
+  "files": [],
+  "body": "Joi is coming soon to Dejoiy Mail.\n\nYour own email assistant, right inside your inbox: help writing replies, quick summaries of long threads, and the mail that needs you first.\n\nWatch this page. We'll tell you here the day Joi arrives."
+ },
+ {
   "id": "welcome",
   "kind": "news",
   "title": "Welcome to Dejoiy Mail :D",
@@ -7,7 +19,7 @@
   "author": "Dejoiy team",
   "email": "",
   "date": 1794304800000,
-  "pinned": true,
+  "pinned": false,
   "link": null,
   "files": []
  },

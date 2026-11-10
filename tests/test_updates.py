@@ -19,7 +19,7 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(view['dejoiy'][0]['title'], 'New themes'); self.assertEqual(len(view['dejoiy']), len(z.DEFAULT_UPDATES) + 1); self.assertFalse(view['can']['dejoiy'])
 
     def test_first_visit_shows_default_updates_until_team_edits(self):
-        self.assertEqual(handler(self.store).updates_view(session('priya@kaalitea.in'))['dejoiy'][0]['id'], 'welcome')
+        self.assertIn('welcome', [p['id'] for p in handler(self.store).updates_view(session('priya@kaalitea.in'))['dejoiy']])
         handler(self.store).post_update(session('root@dejoiy.com', platform=True), {'box': 'dejoiy', 'op': 'delete', 'id': 'welcome'})
         ids = [p['id'] for p in handler(self.store).updates_view(session('priya@kaalitea.in'))['dejoiy']]
         self.assertNotIn('welcome', ids); self.assertIn('labels', ids)
