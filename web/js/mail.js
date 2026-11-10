@@ -111,12 +111,12 @@ const Mail = {
     Store.save();
   },
 
-  send({to, cc, subject, body, attachments}){
+  send({to, cc, subject, body, attachments, label, important}){
     const me = Store.state.user;
     const em = { id: uid("m"), from:{name:me.name, email:me.email},
       to: splitAddr(to), cc: splitAddr(cc), subject: subject||"(no subject)",
       body: body||"", folder:"sent", read:true, starred:false, date:Date.now(),
-      labels:[], hasAttachment:(attachments||[]).length>0, attachments:attachments||[] };
+      labels:label&&label!=="Important"?[label]:[], important:!!important, hasAttachment:(attachments||[]).length>0, attachments:attachments||[] };
     Store.state.emails.push(em); Store.save();
     App.sound("sent");
     return em;

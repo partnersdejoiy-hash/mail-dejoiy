@@ -134,3 +134,14 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
 .adm-dns-row dd{min-width:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .adm-dns-row code{font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-all;background:var(--surface-2);padding:2px 6px;border-radius:5px}
 .adm-dns-value{max-height:5.6em;overflow:auto;display:block}
+/* phones: roles stack, nothing scrolls sideways */
+@media (max-width:640px){
+  .adm-top{flex-wrap:wrap;gap:8px}
+  #adm-who{display:none}
+  #o-roles thead{display:none}
+  #o-roles tr{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:8px;padding:12px 0;border-bottom:1px solid var(--line,#e5e7eb)}
+  #o-roles td{padding:0;border:0}
+  #o-roles td:first-child{grid-column:1/-1}
+  #o-roles input{width:100%}
+  .adm-card .adm-table td small{word-break:break-all}
+}

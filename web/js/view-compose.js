@@ -32,6 +32,7 @@ Views.compose = function(el, arg){
     <div class="c-row" id="c-ccrow" style="display:${draft.cc?"flex":"none"}"><span class="c-lab">Cc</span><div class="chip-field" data-field="cc"><input id="c-cc" type="email" multiple placeholder="cc@example.com" autocomplete="off" aria-label="Cc"></div></div>
     <div class="c-row" id="c-bccrow" style="display:none"><span class="c-lab">Bcc</span><div class="chip-field" data-field="bcc"><input id="c-bcc" type="email" multiple placeholder="Hidden recipients" autocomplete="off" aria-label="Bcc"></div></div>
     <div class="c-row"><span class="c-lab">Subject</span><input id="c-subj" type="text" value="${esc(draft.subject)}" placeholder="Subject"></div>
+    <div class="c-row c-labels"><span class="c-lab">Label</span><div class="c-label-pills" id="c-labels" role="radiogroup" aria-label="Label"></div></div>
     <div class="fmt-bar" role="toolbar" aria-label="Formatting">
       ${[["bold","B"],["italic","I"],["underline","U"],["strikeThrough","S"],["insertUnorderedList","• List"],["insertOrderedList","1. List"],["createLink","🔗"]].map(([c,l])=>`<button class="icon-btn sm" data-fmt="${c}" title="${c}"><b>${l}</b></button>`).join("")}
       <span style="flex:1"></span>
@@ -80,7 +81,22 @@ Views.compose = function(el, arg){
       `<span class="attach-chip">📎 ${esc(a.name)} <span style="color:var(--ink-3)">${esc(a.size)}</span><button data-rmatt="${i}" aria-label="Remove">×</button></span>`).join("");
     el.querySelectorAll("[data-rmatt]").forEach(x=> x.addEventListener("click", async ()=>{ attachments.splice(+x.dataset.rmatt,1); renderAtt(); }));
   }
-  const collect = ()=>({ to:chips.to.value(), cc:chips.cc.value(), bcc:chips.bcc.value(), subject:$("c-subj").value,
+  /* Label: pick one, or leave it on Auto and the message is labelled from what it says. */
+  const PRESETS = [["Important","important"],["Urgent","danger"],["Work","work"],["Money","money"],["Personal","personal"],["Ideas","fun"]];
+  const own = [...new Set((Store.state.emails||[]).flatMap(e=>e.labels||[]))].filter(l=>!PRESETS.some(([n])=>n.toLowerCase()===String(l).toLowerCase())).slice(0,12);
+  let picked = restored?.data?.label || "";
+  const autoLabel = ()=>{ const t=window.MailTone?.autoTone({subject:$("c-subj").value, body:$("compose-body").innerHTML})||""; return {tone:t, name:window.MailTone?.toneName(t)||""}; };
+  const drawLabels = ()=>{
+    const a = autoLabel(), tone = n => PRESETS.find(([x])=>x===n)?.[1] || window.MailTone?.labelTone(n) || "";
+    $("c-labels").innerHTML = `<button type="button" role="radio" class="c-pill" data-label="" data-tone="${a.tone}" aria-checked="${!picked}">✨ Auto${a.name?" · "+esc(a.name):""}</button>`
+      + [...PRESETS.map(([n])=>n), ...own].map(n=>`<button type="button" role="radio" class="c-pill" data-label="${esc(n)}" data-tone="${tone(n)}" aria-checked="${picked===n}">${esc(n)}</button>`).join("");
+    $("c-labels").querySelectorAll("[data-label]").forEach(b=>b.addEventListener("click",()=>{ picked=b.dataset.label; drawLabels(); }));
+  };
+  const chosenLabel = ()=> picked || autoLabel().name;
+  let labelTimer; const relabel=()=>{ if(picked) return; clearTimeout(labelTimer); labelTimer=setTimeout(drawLabels,400); };
+  $("c-subj").addEventListener("input",relabel); $("compose-body").addEventListener("input",relabel);
+  drawLabels();
+  const collect = ()=>({ label:chosenLabel(), important:chosenLabel()==="Important", to:chips.to.value(), cc:chips.cc.value(), bcc:chips.bcc.value(), subject:$("c-subj").value,
     body:$("compose-body").innerHTML, inReplyTo:draft.inReplyTo||"", origId:draft.origId||"", replyType:draft.replyType||"", attachments:[...attachments] });
 
   /* The default text style (Settings → General) travels with the message, so the recipient sees it too. */

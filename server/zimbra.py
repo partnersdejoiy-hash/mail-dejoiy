@@ -469,6 +469,10 @@ class Zimbra:
             if not re.fullmatch(r'\d+',str(data['id'])): raise APIError('Invalid draft selection.')
             attrs['id' if draft else 'did']=str(data['id'])
         m=node(MAIL,'m',attrs)
+        # Important goes out as high priority, so the recipient's mail app shows it as important too.
+        if data.get('important') is True: m.set('f','!')
+        label=str(data.get('label') or '').strip()
+        if label and (len(label)>64 or ',' in label or any(ord(c)<32 for c in label)): raise APIError('Enter a label of up to 64 characters without commas.')
         for kind in ('to','cc','bcc'):
             for address in re.split(r'[,;\n]+', str(data.get(kind,''))):
                 address=address.strip()
@@ -520,6 +524,10 @@ class Zimbra:
             for item in existing: attach.append(node(MAIL,'mp',{'mid':str(item['mid']),'part':str(item['part'])}))
             m.append(attach)
         request.append(m); out=self.call(request,token); message=out.find('{'+MAIL+'}m')
+        if label and label!='Important' and not draft and message is not None and message.get('id'):
+            # The sent copy carries the label; a failed tag never fails a message that already went out.
+            try: self.action(token,{'ids':[message.get('id')],'op':'label','label':label})
+            except APIError: pass
         return {'id':message.get('id') if message is not None else None,'accepted':not draft,'draftRemoved':bool(not draft and data.get('id'))}
     def upload(self, token, raw, name, mime):
         filename=html.escape(name,quote=True).encode('ascii','xmlcharrefreplace').decode()
@@ -923,6 +931,13 @@ def whole(data, key, low, high, message):
     if isinstance(value,bool) or not isinstance(value,int) or not low<=value<=high: raise APIError(message)
     return value
 
+DEPARTMENT_MARK='dejoiy:department'
+DEFAULT_ROLES=[{'name':'Member','access':'User'},{'name':'Team lead','access':'User'},{'name':'Department head','access':'User'},{'name':'IT admin','access':'Domain admin'}]
+def read_roles(notes):
+    """Company roles live on the domain itself (its notes), so they stay with the mail server."""
+    try: roles=json.loads(notes).get('dejoiyRoles')
+    except (ValueError,AttributeError): roles=None
+    return roles if isinstance(roles,list) and roles else [dict(r) for r in DEFAULT_ROLES]
 class Admin(Zimbra):
     """Separate, upstream-authorized admin session; no shared service credentials."""
     mail_host='localhost'; dkim_dir=None
@@ -959,7 +974,7 @@ class Admin(Zimbra):
                 'status':a.get('zimbraAccountStatus','active'),
                 'role':'Admin' if a.get('zimbraIsAdminAccount')=='TRUE' else 'Domain admin' if a.get('zimbraIsDelegatedAdminAccount')=='TRUE' else 'User',
                 'aliases':[v.text for v in account.findall('{'+ADMIN+'}a') if v.get('n')=='zimbraMailAlias' and v.text],
-                'quota':a.get('zimbraMailQuota','0')})
+                'quota':a.get('zimbraMailQuota','0'),'department':a.get('ou',''),'title':a.get('title','')})
         def optional(build):
             try: return build()
             except APIError: return None
@@ -972,7 +987,8 @@ class Admin(Zimbra):
         def plans():
             return [{'id':c.get('id'),'name':c.get('name'),**cos_fields(attributes(c))} for c in self.call(node(ADMIN,'GetAllCosRequest'),token).findall('{'+ADMIN+'}cos')]
         def lists():
-            return [{'id':d.get('id'),'email':d.get('name'),'name':attributes(d).get('displayName','')} for d in self.call(in_domain(node(ADMIN,'GetAllDistributionListsRequest')),token).findall('{'+ADMIN+'}dl')]
+            return [{'id':d.get('id'),'email':d.get('name'),'name':attributes(d).get('displayName',''),
+                'department':attributes(d).get('zimbraNotes','')==DEPARTMENT_MARK} for d in self.call(in_domain(node(ADMIN,'GetAllDistributionListsRequest')),token).findall('{'+ADMIN+'}dl')]
         def services():
             # Internal component names never leave the server; the panel shows product-neutral labels.
             return [{'server':x.get('server'),'service':SERVICE_LABELS.get(x.get('service'),'Mail service component'),'running':(x.text or '').strip()=='1'} for x in self.call(node(ADMIN,'GetServiceStatusRequest'),token).findall('.//{'+ADMIN+'}status')]
@@ -981,10 +997,12 @@ class Admin(Zimbra):
             a=attributes(config)
             return {'maxMessageMB':round(int(a.get('zimbraMtaMaxMessageSize') or 0)/1048576),'uploadMaxMB':round(int(a.get('zimbraFileUploadMaxSize') or 0)/1048576),
                 'blockedExtensions':sorted({v.text for v in config.findall('{'+ADMIN+'}a') if v.get('n')=='zimbraMtaBlockedExtension' and v.text})}
+        every=optional(lists)
         return {'users':accounts,'domains':[{'id':d.get('id'),'domain':d.get('name'),
-            'status':attributes(d).get('zimbraDomainStatus','active')}
+            'status':attributes(d).get('zimbraDomainStatus','active'),'roles':read_roles(attributes(d).get('zimbraNotes',''))}
             for d in domains.findall('{'+ADMIN+'}domain')],
-            'plans':None if scope else optional(plans),'lists':optional(lists),'services':None if scope else optional(services),
+            'departments':None if every is None else [x for x in every if x['department']],
+            'plans':None if scope else optional(plans),'lists':None if every is None else [x for x in every if not x['department']],'services':None if scope else optional(services),
             'settings':None if scope else optional(settings),'scope':scope}
     def action(self, token, data, actor, scope=None, elevate=None):
         """elevate() returns a service-admin token for the few admin-flag changes a company admin may
@@ -1167,6 +1185,61 @@ class Admin(Zimbra):
             r.append(node(ADMIN,'a',{'n':'zimbraMtaMaxMessageSize'},str(size*1048576)))
             r.append(node(ADMIN,'a',{'n':'zimbraFileUploadMaxSize'},str(upload*1048576)))
             for x in sorted(set(extensions)) or ['']: r.append(node(ADMIN,'a',{'n':'zimbraMtaBlockedExtension'},x))
+        elif op=='create_department':
+            # A department is a team list (sales@…) marked as a department; its members are its people.
+            name=str(data.get('name','')).strip(); email=str(data.get('email','')).strip().lower()
+            if not 1<=len(name)<=64 or any(ord(c)<32 for c in name): raise APIError('Enter a department name of up to 64 characters.')
+            if len(email)>320 or not EMAIL.fullmatch(email): raise APIError('Enter the department email address, like sales@yourcompany.com.')
+            own(email)
+            r=node(ADMIN,'CreateDistributionListRequest'); r.append(node(ADMIN,'name',text=email))
+            r.append(node(ADMIN,'a',{'n':'displayName'},name)); r.append(node(ADMIN,'a',{'n':'zimbraNotes'},DEPARTMENT_MARK))
+        elif op in ('set_department','set_title'):
+            ident=str(data.get('id',''))
+            if not UUID.fullmatch(ident): raise APIError('Invalid mailbox selection.')
+            lookup=node(ADMIN,'GetAccountRequest'); lookup.append(node(ADMIN,'account',{'by':'id'},ident))
+            account=self.call(lookup,token).find('{'+ADMIN+'}account')
+            if account is None: raise APIError('Mailbox not found.',404)
+            email=own(account.get('name',''))
+            r=node(ADMIN,'ModifyAccountRequest'); r.append(node(ADMIN,'id',text=ident))
+            if op=='set_title':
+                title=str(data.get('title','')).strip()
+                if len(title)>64 or any(ord(c)<32 for c in title): raise APIError('Choose a role of up to 64 characters.')
+                r.append(node(ADMIN,'a',{'n':'title'},title))
+            else:
+                target=str(data.get('department',''))
+                if target and not UUID.fullmatch(target): raise APIError('Choose a department.')
+                found=node(ADMIN,'GetAllDistributionListsRequest'); found.append(node(ADMIN,'domain',{'by':'name'},email.split('@')[1]))
+                departments=[d for d in self.call(found,token).findall('{'+ADMIN+'}dl')
+                    if any(a.get('n')=='zimbraNotes' and a.text==DEPARTMENT_MARK for a in d.findall('{'+ADMIN+'}a'))]
+                chosen=next((d for d in departments if d.get('id')==target),None)
+                if target and chosen is None: raise APIError('Department not found.',404)
+                # One department per person: leave the others' team lists, join the chosen one.
+                for d in departments:
+                    member=node(ADMIN,'RemoveDistributionListMemberRequest' if d is not chosen else 'AddDistributionListMemberRequest')
+                    member.append(node(ADMIN,'id',text=d.get('id'))); member.append(node(ADMIN,'dlm',text=email))
+                    try: self.call(member,token)
+                    except APIError: pass  # not a member, or already one
+                name=next((a.text or '' for a in chosen.findall('{'+ADMIN+'}a') if a.get('n')=='displayName'),'') if chosen is not None else ''
+                r.append(node(ADMIN,'a',{'n':'ou'},name or (chosen.get('name','') if chosen is not None else '')))
+        elif op=='save_roles':
+            domain=str(data.get('domain','')).strip().lower()
+            if not DOMAIN_NAME.fullmatch(domain) or (scope and domain!=scope): raise APIError('You can only change roles for your own domain.',403)
+            roles=data.get('roles')
+            if not isinstance(roles,list) or not 1<=len(roles)<=30: raise APIError('Keep between 1 and 30 roles.')
+            clean=[]
+            for role in roles:
+                if not isinstance(role,dict): raise APIError('Invalid role.')
+                name=str(role.get('name','')).strip(); access=role.get('access','User')
+                if not 1<=len(name)<=40 or any(ord(c)<32 for c in name): raise APIError('Role names must be 1 to 40 characters.')
+                if access not in ('User','Domain admin'): raise APIError('A role can give mail access or company admin access.')
+                if any(x['name'].lower()==name.lower() for x in clean): raise APIError(f'"{name}" is listed twice.')
+                clean.append({'name':name,'access':access})
+            lookup=node(ADMIN,'GetDomainRequest'); lookup.append(node(ADMIN,'domain',{'by':'name'},domain))
+            found=self.call(lookup,token).find('{'+ADMIN+'}domain')
+            if found is None: raise APIError('Domain not found.',404)
+            r=node(ADMIN,'ModifyDomainRequest'); r.append(node(ADMIN,'id',text=found.get('id')))
+            r.append(node(ADMIN,'a',{'n':'zimbraNotes'},json.dumps({'dejoiyRoles':clean},separators=(',',':'))))
+            self.call(r,privileged()); return {'ok':True,'roles':clean}
         else: raise APIError('Unsupported administration operation.')
         self.call(r,token)
         return {'ok':True}
@@ -1252,11 +1325,21 @@ class Handler(SimpleHTTPRequestHandler):
             return self.image(raw,IMAGE_MIME[path.rsplit('.',1)[1]],'public, max-age=31536000, immutable')
         host=(self.headers.get('Host') or '').split(':')[0].lower()
         if host.startswith('admin-mail.'):
-            # The admin site is a landing page only; everything that needs a session lives on the mail origin.
+            # The admin site: its landing page, a sign-in page and the console itself.
             if path in ('/','/index.html'): self.path='/admin-home.html'
-            elif path in ADMIN_ASSETS or not (path.startswith(('/css/','/js/','/assets/')) or path=='/admin-home.html'):
+            elif path=='/signin': self.path='/index.html'
+            elif path=='/admin/': return self.redirect('/admin')
+            elif path=='/admin' or path in ADMIN_ASSETS:
+                try: _,s=self.session()
+                except APIError: return self.redirect('/signin?next=admin') if path=='/admin' else self.send_error(404)
+                if s['user'].get('isAdmin') is not True: return self.redirect(self.server.app_origin+'/') if path=='/admin' else self.send_error(404)
+                if path=='/admin': self.path='/admin.html'
+            elif not (path.startswith(('/css/','/js/','/assets/')) or path in ('/admin-home.html','/sw.js','/manifest.webmanifest','/runtime-config.js')):
                 return self.redirect(self.server.app_origin+self.path)
             return super().do_GET()
+        if path in ('/admin','/admin/') and getattr(self.server,'admin_origin',None):
+            # The console lives on the admin site; mailboxes never show it.
+            return self.redirect(self.server.admin_origin+'/admin')
         if path=='/home':
             self.path='/home.html'
         if path=='/admin/':
@@ -1339,7 +1422,7 @@ class Handler(SimpleHTTPRequestHandler):
     def do_POST(self):
         try:
             origin=self.headers.get('Origin')
-            if origin != self.server.app_origin: raise APIError('Invalid request origin',403)
+            if origin not in (self.server.app_origin,getattr(self.server,'admin_origin',None)) or not origin: raise APIError('Invalid request origin',403)
             if self.headers.get('Content-Type','').split(';')[0]!='application/json': raise APIError('JSON required',415)
             length=int(self.headers.get('Content-Length','0'))
             if not 0<length<=MAX_REQUEST_BYTES: raise APIError('Request too large or empty',413)
@@ -1442,6 +1525,8 @@ def serve():
         raise ValueError('Public APP_ORIGIN must use HTTPS')
     server=ThreadingHTTPServer((os.environ.get('BIND','127.0.0.1'),port),Handler)
     server.app_origin=origin.rstrip('/'); server.attempts={}
+    host=parsed.hostname or ''
+    server.admin_origin=(os.environ.get('ADMIN_ORIGIN') or (f'{parsed.scheme}://admin-{host}' if host.startswith('mail.') else '')).rstrip('/') or None
     server.appearance=AppearanceStore(os.environ.get('APPEARANCE_DB') or (str(Path(os.environ['SESSION_DB']).with_name('appearance.sqlite')) if os.environ.get('SESSION_DB') else None))
     url=os.environ.get('ZIMBRA_URL'); server.zimbra=Zimbra(url) if url else None
     server.ui_settings=AppearanceStore((str(Path(os.environ['SESSION_DB']).with_name('settings.sqlite')) if os.environ.get('SESSION_DB') else None),'ui_settings')

@@ -287,6 +287,7 @@ Views.mail = function(el, folder){
     const found=(e.labels||[]).map(labelTone).filter(Boolean);
     return ["danger","money","work","personal","fun"].find(t=>found.includes(t)) || autoTone(e); }
   function toneName(t){ return {important:"Important", danger:"Urgent", security:"Security", money:"Money", work:"Work", personal:"Personal", fun:"Ideas", updates:"Updates"}[t]||""; }
+  window.MailTone = {autoTone, labelTone, toneName};
   function chip(l){ return `<span class="lbl" data-tone="${labelTone(l)}">${esc(l)}</span>`; }
   const me = ()=> (Store.state.user.email||"").toLowerCase();
   const recipients = m=> [...(m.to||[]),...(m.cc||[])].map(a=>a.toLowerCase()===me()?"me":a).join(", ") || "undisclosed recipients";

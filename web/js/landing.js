@@ -88,7 +88,7 @@
         const m = +el.dataset.month, y = +el.dataset.year;
         el.querySelector("[data-amount]").textContent = (yearly ? y : m).toLocaleString("en-IN");
         el.querySelector("[data-per]").textContent = yearly ? "/year" : "/month";
-        el.querySelector("[data-alt]").textContent = yearly ? `or ${inr(m)}/month` : `or ${inr(y)}/year · 2 months free`;
+        el.querySelector("[data-alt]").textContent = yearly ? `${inr(y / 12)} a month, billed yearly` : `or ${inr(y)}/year · save ${Math.floor(100 - y / (m * 12) * 100)}%`;
         el.querySelector("[data-choose]").href = `/signup?plan=${el.dataset.plan}&billing=${yearly ? "year" : "month"}`;
       });
       const n = +seats.value, plan = plans.find(el => n <= +el.dataset.seats) || plans[plans.length - 1];

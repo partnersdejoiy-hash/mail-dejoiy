@@ -45,11 +45,11 @@ function step(n){ document.body.dataset.step = n;
 function busy(form, on){ form.querySelectorAll("button,input").forEach(x => x.disabled = on); }
 
 // The plan picked on the pricing page; billing is arranged after setup, so this is shown, not charged.
-const PLANS = {starter:["Starter",79,790,"51 mailboxes"], team:["Team",249,2490,"101 mailboxes"], business:["Business",599,5990,"unlimited mailboxes"]};
+const PLANS = {starter:["Starter",99,790,"51 mailboxes"], team:["Team",299,2490,"101 mailboxes"], business:["Business",699,5990,"unlimited mailboxes"]};
 function planLine(){
   const q = new URLSearchParams(location.search), p = PLANS[q.get("plan")]; if(!p) return "";
   const yearly = q.get("billing") === "year";
-  return `<p class="su-plan">Plan: <b>${p[0]}</b> · ₹${(yearly ? p[2] : p[1]).toLocaleString("en-IN")}/${yearly ? "year" : "month"} · ${p[3]} · <a href="/home#pricing">change</a></p>`;
+  return `<p class="su-plan">Plan: <b>${p[0]}</b> · ₹${(yearly ? p[2] : p[1]).toLocaleString("en-IN")}/${yearly ? "year" : "month"} · ${p[3]} · 11 days free · <a href="/home#pricing">change</a></p>`;
 }
 function company(prefill){
   step(1);
@@ -140,7 +140,7 @@ function done(c, csrf){
     <p>Mail starts flowing once these records are live at your DNS host:</p>
     <div id="su-final"><p class="su-status" role="status">Checking your DNS…</p></div>
     <button class="su-btn ghost" id="su-recheck" type="button">Check again</button>
-    <a class="su-btn" href="/admin">Open the admin panel</a> <a class="su-btn ghost" href="/">Open my inbox</a></div>`;
+    <a class="su-btn" href="${location.hostname.startsWith('mail.')?location.protocol+'//admin-'+location.host:''}/admin">Open the admin panel</a> <a class="su-btn ghost" href="/">Open my inbox</a></div>`;
   const box = document.getElementById("su-final"), again = document.getElementById("su-recheck");
   const load = async () => {
     again.disabled = true;

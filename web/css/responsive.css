@@ -242,9 +242,34 @@ html[data-scenic="true"] .mail-card{background:color-mix(in srgb,var(--card) 86%
   .compose-foot .btn:not(#c-send){flex:1;min-height:48px;border-radius:999px}
   .compose-foot #c-status{flex:1 1 100%;text-align:center;margin:0!important}
 }
-/* small phones: the title gets its own line under the buttons */
-@media (max-width:380px){
+/* phones: the title gets its own line under the buttons, so it never gets cut */
+@media (max-width:1023px), (max-width:1199px) and (pointer:coarse){
   .compose-head{flex-wrap:wrap}
-  .compose-head .c-title{order:9;flex:1 1 100%;padding:4px 6px 0;font-size:28px}
+  .compose-head .c-title{order:9;flex:1 1 100%;padding:4px 6px 0;font-size:clamp(26px,8vw,34px);white-space:normal}
   .compose-head #c-discard{margin-left:auto}
+}
+
+/* the message is written on paper, in the colours the recipient will see */
+.compose #compose-body{background:#fffdf9!important;color:#121212}
+.compose #compose-body:empty::before{color:#8a8590}
+/* label picker */
+.c-labels{flex-wrap:nowrap}
+.c-label-pills{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;flex:1;min-width:0;padding:2px}
+.c-label-pills::-webkit-scrollbar{display:none}
+.c-pill{--t:var(--pop,#ff4fa3);flex:none;border:1.5px solid color-mix(in srgb,var(--t) 55%,transparent);background:color-mix(in srgb,var(--t) 12%,transparent);
+  color:var(--ink);border-radius:999px;padding:7px 13px;font:inherit;font-size:13px;font-weight:700;cursor:pointer;transition:transform .15s,background .15s}
+.c-pill[data-tone="important"]{--t:var(--tone-important)}.c-pill[data-tone="danger"],.c-pill[data-tone="security"]{--t:var(--tone-danger)}
+.c-pill[data-tone="money"]{--t:var(--tone-money)}.c-pill[data-tone="work"]{--t:var(--tone-work)}.c-pill[data-tone="personal"]{--t:var(--tone-personal)}
+.c-pill[data-tone="fun"]{--t:var(--tone-fun)}.c-pill[data-tone="updates"]{--t:var(--tone-updates)}
+.c-pill[aria-checked="true"]{background:var(--t);color:#121212;border-color:#121212;box-shadow:0 2px 0 #121212}
+.c-pill:active{transform:scale(.96)}
+.c-pill:focus-visible{outline:3px solid var(--t);outline-offset:2px}
+/* the drawer sits above the search bar, bottom bar and compose button, not under them */
+@media (max-width:1023px), (max-width:1199px) and (pointer:coarse){
+  body.nav-open #shell{z-index:60}
+  body.nav-open .fab{visibility:hidden}
+  body.nav-open #sidebar{background:var(--surface)!important;backdrop-filter:none;-webkit-backdrop-filter:none;
+    padding:calc(18px + env(safe-area-inset-top)) 12px calc(18px + env(safe-area-inset-bottom))!important;overflow-y:auto;overscroll-behavior:contain;
+    border-radius:0 28px 28px 0;box-shadow:12px 0 40px rgba(0,0,0,.35)}
+  body.nav-open #sidebar .nav-item.active{background:color-mix(in srgb,var(--pop,#ff4fa3) 22%,transparent)!important;color:var(--ink)!important;font-weight:800}
 }

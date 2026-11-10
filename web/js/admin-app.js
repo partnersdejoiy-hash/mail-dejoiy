@@ -11,7 +11,7 @@ const mb = bytes => bytes == null ? "—" : bytes >= 1073741824 ? (bytes/1073741
 const when = stamp => { const m=/^(\d{4})(\d\d)(\d\d)(\d\d)(\d\d)(\d\d)/.exec(stamp||""); if(!m) return "Never"; const d=new Date(Date.UTC(+m[1],m[2]-1,+m[3],+m[4],+m[5],+m[6])); return d.toLocaleString([],{dateStyle:"medium",timeStyle:"short"}); };
 
 const SECTIONS = [
-  ["overview","home","Overview"],["users","contacts","Mailboxes"],["domains","shield","Domains"],
+  ["overview","home","Overview"],["users","contacts","Mailboxes"],["org","tag","Teams & roles"],["domains","shield","Domains"],
   ["lists","mail","Mailing lists"],["plans","tag","Plans"],["settings","settings","Settings"]
 ];
 
@@ -72,7 +72,7 @@ async function load(){
   renderNav(); renderSection();
 }
 function renderSection(){
-  const main=$("adm-main"), fn=({overview,users,domains,lists,plans,settings})[state.section]||overview;
+  const main=$("adm-main"), fn=({overview,users,org,domains,lists,plans,settings})[state.section]||overview;
   fn(main, state.data); main.focus({preventScroll:true});
 }
 const reload = async msg => { if(msg) toast(msg); await load(); };
@@ -85,7 +85,8 @@ function authCard(inner){
   return $("adm-main").querySelector("form");
 }
 // The console is only served to signed-in administrators; signing in happens in the mail app.
-function showSignIn(){ location.replace("/?next=admin"); }
+function showSignIn(){ location.replace(location.hostname.startsWith("admin-")?"/signin?next=admin":"/?next=admin"); }
+if(location.hostname.startsWith("admin-")) $("adm-open-mail").href=location.protocol+"//"+location.host.replace(/^admin-/,"")+"/";
 function showVerify(message){
   const form=authCard(`<h1>Confirm it's you</h1><p class="adm-muted">Signed in as <b>${esc(state.user?.email||"")}</b>. Admin access locks after 15 minutes.</p>
     <label>Administrator password<input name="password" type="password" autocomplete="current-password" required></label>
@@ -127,9 +128,9 @@ function overview(main, d){
 function users(main, d){
   const plans=d.plans||[], planName=id=>{const n=(id&&plans.find(p=>p.id===id)?.name)||"default";return n.charAt(0).toUpperCase()+n.slice(1);};
   main.innerHTML=head("Mailboxes",`${d.users.length} mailboxes`,`<input type="search" id="u-search" placeholder="Search name or email" aria-label="Search mailboxes"><button class="adm-btn primary" id="u-add">+ New mailbox</button>`)+`
-    <div class="adm-card adm-flush"><table class="adm-table" id="u-table"><thead><tr><th>Mailbox</th><th>Status</th><th>Role</th><th>Plan</th><th>Storage</th><th>Last sign-in</th><th></th></tr></thead><tbody>
-    ${d.users.map((u,i)=>`<tr data-q="${esc((u.name+" "+u.email).toLowerCase())}"><td><b>${esc(u.name)}</b><small>${esc(u.email)}</small></td>
-      <td><span class="adm-pill ${u.status==="active"?"good":"warn"}">${esc(u.status)}</span></td><td>${esc(u.role)}</td><td>${esc(planName(u.cosId))}</td>
+    <div class="adm-card adm-flush"><table class="adm-table" id="u-table"><thead><tr><th>Mailbox</th><th>Status</th><th>Department</th><th>Role</th><th>Plan</th><th>Storage</th><th>Last sign-in</th><th></th></tr></thead><tbody>
+    ${d.users.map((u,i)=>`<tr data-q="${esc((u.name+" "+u.email+" "+(u.department||"")+" "+(u.title||"")).toLowerCase())}"><td><b>${esc(u.name)}</b><small>${esc(u.email)}</small></td>
+      <td><span class="adm-pill ${u.status==="active"?"good":"warn"}">${esc(u.status)}</span></td><td>${esc(u.department||"—")}</td><td>${esc(u.title||u.role)}${u.title?`<small>${esc(u.role)}</small>`:""}</td><td>${esc(planName(u.cosId))}</td>
       <td>${mb(u.used)}${u.limit?` <small>of ${mb(u.limit)}</small>`:""}</td><td><small>${esc(when(u.lastLogin))}</small></td>
       <td><button class="adm-btn ghost sm" data-edit="${i}">Manage</button></td></tr>`).join("")}
     </tbody></table></div>`;
@@ -150,6 +151,9 @@ function manageUser(u, d){
   const root=dialog({title:u.email, wide:true, body:`
     <div class="adm-tabs" role="tablist">${["Profile","Access","Storage","Forwarding","Aliases","Password","Delete"].map((t,i)=>`<button role="tab" data-tab="${i}" class="${i?"":"on"}" aria-selected="${!i}">${t}</button>`).join("")}</div>
     <section data-panel="0"><label>Display name<input id="mu-name" value="${esc(u.name)}" maxlength="200"></label><button class="adm-btn primary" id="mu-name-save">Save name</button>
+      ${d.departments?`<label>Department<select id="mu-dept"><option value="">No department</option>${d.departments.map(x=>`<option value="${esc(x.id)}" ${x.name===u.department?"selected":""}>${esc(x.name)} · ${esc(x.email)}</option>`).join("")}</select></label>`:""}
+      <label>Role<select id="mu-title"><option value="">No role</option>${companyRoles(d,u).map(r=>`<option value="${esc(r.name)}" ${r.name===u.title?"selected":""}>${esc(r.name)}${r.access==="Domain admin"?" · company admin":""}</option>`).join("")}</select></label>
+      <button class="adm-btn" id="mu-org-save">Save department &amp; role</button>
       <dl class="adm-facts"><dt>Created</dt><dd>${esc(when(u.created))}</dd><dt>Last sign-in</dt><dd>${esc(when(u.lastLogin))}</dd></dl></section>
     <section data-panel="1" hidden><label>Status<select id="mu-status" ${self?"disabled":""}>${["active","locked","maintenance"].map(s=>`<option ${s===u.status?"selected":""}>${s}</option>`).join("")}</select></label>
       ${!self&&(state.user?.canManageRoles||u.role!=="Admin")?`<label>Role<select id="mu-role">${roles().map(r=>`<option ${r===u.role?"selected":""}>${r}</option>`).join("")}</select></label>`:`<p class="adm-muted">Role: ${esc(u.role)}</p>`}
@@ -169,6 +173,19 @@ function manageUser(u, d){
   root.querySelectorAll("[data-tab]").forEach(t=>t.addEventListener("click",()=>{root.querySelectorAll("[data-tab]").forEach(x=>{x.classList.toggle("on",x===t);x.setAttribute("aria-selected",String(x===t));});root.querySelectorAll("[data-panel]").forEach(p=>p.hidden=p.dataset.panel!==t.dataset.tab);err.textContent="";}));
   const run=(id,payload,done)=>{const b=root.querySelector("#"+id);if(b)b.addEventListener("click",async()=>{b.disabled=true;err.textContent="";try{await act(payload());$("adm-dialog-root").innerHTML="";await reload(done);}catch(e){err.textContent=e.message;b.disabled=false;}});};
   run("mu-name-save",()=>({op:"set_name",id:u.id,name:$("mu-name").value}),"Name saved.");
+  root.querySelector("#mu-org-save").addEventListener("click",async e=>{
+    const b=e.currentTarget;b.disabled=true;err.textContent="";
+    try{
+      const dept=root.querySelector("#mu-dept"); if(dept && dept.value!==(d.departments.find(x=>x.name===u.department)?.id||"")) await act({op:"set_department",id:u.id,department:dept.value});
+      const title=$("mu-title").value; if(title!==(u.title||"")){
+        await act({op:"set_title",id:u.id,title});
+        // A role carries its access level: company-admin roles make the person a company admin.
+        const access=companyRoles(d,u).find(r=>r.name===title)?.access||"User";
+        if(!self && u.role!=="Admin" && access!==u.role) await act({op:"role",id:u.id,role:access});
+      }
+      $("adm-dialog-root").innerHTML=""; await reload("Department and role saved.");
+    }catch(x){err.textContent=x.message;b.disabled=false;}
+  });
   root.querySelector("#mu-access-save").addEventListener("click",async e=>{
     const b=e.currentTarget;b.disabled=true;err.textContent="";
     try{ const status=$("mu-status").value; if(status!==u.status) await act({op:"status",id:u.id,status});
@@ -182,6 +199,53 @@ function manageUser(u, d){
   root.querySelectorAll("[data-rm-alias]").forEach(b=>b.addEventListener("click",async()=>{b.disabled=true;try{await act({op:"remove_alias",id:u.id,alias:u.aliases[+b.dataset.rmAlias]});$("adm-dialog-root").innerHTML="";await reload("Alias removed.");}catch(e){err.textContent=e.message;b.disabled=false;}}));
   run("mu-pass-save",()=>({op:"password",id:u.id,password:$("mu-pass").value}),"Password updated.");
   run("mu-delete",()=>({op:"delete_user",id:u.id,confirm:$("mu-confirm").value}),"Mailbox deleted.");
+}
+
+const companyRoles = (d, u) => (d.domains.find(x=>u&&u.email.endsWith("@"+x.domain)) || d.domains.find(x=>x.domain===d.scope) || d.domains[0] || {}).roles || [];
+
+function org(main, d){
+  const domain = d.scope || d.domains[0]?.domain || "", roles = (d.domains.find(x=>x.domain===domain)||{}).roles || [];
+  const count = name => d.users.filter(u=>u.department===name).length, holders = name => d.users.filter(u=>u.title===name).length;
+  main.innerHTML=head("Teams & roles","Group people into departments and give them roles. Both are saved on the mail server.")+`
+    <div class="adm-card"><div class="adm-card-head"><h2>Departments</h2>${d.departments?`<button class="adm-btn primary" id="o-dept-add">+ New department</button>`:""}</div>
+      ${!d.departments?`<p class="adm-muted">Departments are not available for your administrator role.</p>`:`
+      <p class="adm-muted">Each department has its own address. Mail sent to it reaches everyone in the department.</p>
+      <table class="adm-table"><thead><tr><th>Department</th><th>People</th><th></th></tr></thead><tbody>
+      ${d.departments.map((x,i)=>`<tr><td><b>${esc(x.name||x.email)}</b><small>${esc(x.email)}</small></td><td>${count(x.name)}</td>
+        <td class="adm-right"><button class="adm-btn ghost sm" data-dmem="${i}">People</button> <button class="adm-btn ghost sm" data-ddel="${i}">Delete</button></td></tr>`).join("")||`<tr><td class="adm-muted" colspan="3">No departments yet. Start with one like Sales, Support or Accounts.</td></tr>`}
+      </tbody></table>`}</div>
+    <div class="adm-card"><div class="adm-card-head"><h2>Roles${domain?` · ${esc(domain)}`:""}</h2><button class="adm-btn ghost" id="o-role-add">+ Add role</button></div>
+      <p class="adm-muted">A role is a person's job here. Roles with company admin access can open this console and manage ${esc(domain||"your domain")}.</p>
+      <table class="adm-table" id="o-roles"><thead><tr><th>Role</th><th>Access</th><th>People</th><th></th></tr></thead><tbody>
+      ${roles.map((r,i)=>`<tr><td><input data-rname="${i}" value="${esc(r.name)}" maxlength="40" aria-label="Role name"></td>
+        <td><select data-raccess="${i}" aria-label="Access for ${esc(r.name)}"><option value="User" ${r.access==="User"?"selected":""}>Mail only</option><option value="Domain admin" ${r.access==="Domain admin"?"selected":""}>Company admin</option></select></td>
+        <td>${holders(r.name)}</td><td class="adm-right"><button class="adm-btn ghost sm" data-rdel="${i}">Remove</button></td></tr>`).join("")}
+      </tbody></table><p role="alert" class="adm-error" id="o-err"></p><button class="adm-btn primary" id="o-roles-save">Save roles</button></div>`;
+  let list = roles.map(r=>({...r}));
+  const sync = ()=>{ main.querySelectorAll("[data-rname]").forEach(i=>list[+i.dataset.rname].name=i.value); main.querySelectorAll("[data-raccess]").forEach(i=>list[+i.dataset.raccess].access=i.value); };
+  // Unsaved role edits redraw from the list being edited, not from the server copy.
+  const redraw = change=>{ sync(); change(); org(main,{...d,domains:d.domains.map(x=>x.domain===domain?{...x,roles:list}:x)}); };
+  $("o-role-add").addEventListener("click",()=>{ redraw(()=>list.push({name:"New role",access:"User"})); main.querySelector(`[data-rname="${list.length-1}"]`)?.select(); });
+  main.querySelectorAll("[data-rdel]").forEach(b=>b.addEventListener("click",()=>redraw(()=>list.splice(+b.dataset.rdel,1))));
+  $("o-roles-save").addEventListener("click",async e=>{ const b=e.currentTarget; sync(); b.disabled=true;
+    try{ await act({op:"save_roles",domain,roles:list}); await reload("Roles saved."); }catch(x){ $("o-err").textContent=x.message; b.disabled=false; } });
+  if(!d.departments) return;
+  $("o-dept-add").addEventListener("click",()=>dialog({title:"New department",body:`
+    <label>Department name<input id="nd-dname" maxlength="64" placeholder="Sales"></label>
+    <label>Department email<input id="nd-demail" type="email" placeholder="sales@${esc(domain||"example.com")}"></label>
+    <p class="adm-muted">Add people from each mailbox's Profile tab, or with People here.</p><p role="alert" class="adm-error"></p>`,
+    actions:[{label:"Cancel"},{label:"Create department",primary:true,fn:async()=>{await act({op:"create_department",name:$("nd-dname").value,email:$("nd-demail").value});await reload("Department created.");}}]}));
+  main.querySelectorAll("[data-ddel]").forEach(b=>b.addEventListener("click",()=>{const x=d.departments[+b.dataset.ddel];confirmDialog("Delete department",`Delete ${x.name}? Its address ${x.email} stops working. People keep their mailboxes.`,"Delete",async()=>{await act({op:"delete_list",id:x.id});await reload("Department deleted.");});}));
+  main.querySelectorAll("[data-dmem]").forEach(b=>b.addEventListener("click",()=>deptPeople(d.departments[+b.dataset.dmem], d)));
+}
+function deptPeople(x, d){
+  const inIt=d.users.filter(u=>u.department===x.name), others=d.users.filter(u=>u.department!==x.name && u.email.endsWith("@"+x.email.split("@")[1]));
+  const root=dialog({title:x.name,body:`<ul class="adm-list">${inIt.map(u=>`<li><span>${esc(u.name)} <small>${esc(u.email)}</small></span><button class="adm-btn ghost sm" data-out="${esc(u.id)}">Remove</button></li>`).join("")||'<li class="adm-muted">Nobody in this department yet.</li>'}</ul>
+    ${others.length?`<label>Add a person<select id="dp-add">${others.map(u=>`<option value="${esc(u.id)}">${esc(u.name)} · ${esc(u.email)}${u.department?" (now in "+esc(u.department)+")":""}</option>`).join("")}</select></label><button class="adm-btn primary" id="dp-add-btn">Add to ${esc(x.name)}</button>`:""}<p role="alert" class="adm-error"></p>`});
+  const err=root.querySelector("[role=alert]");
+  const move=async(id,department,b)=>{b.disabled=true;try{await act({op:"set_department",id,department});$("adm-dialog-root").innerHTML="";await reload("Department updated.");}catch(e){err.textContent=e.message;b.disabled=false;}};
+  root.querySelectorAll("[data-out]").forEach(b=>b.addEventListener("click",()=>move(b.dataset.out,"",b)));
+  root.querySelector("#dp-add-btn")?.addEventListener("click",e=>move($("dp-add").value,x.id,e.currentTarget));
 }
 
 function domains(main, d){

@@ -1,4 +1,6 @@
 /* Independent Dejoiy Mail client for the server-side mail adapter. */
+/* The admin console lives on its own site (admin-mail.…); local and test hosts keep /admin. */
+const ADMIN_URL=(String(location.hostname||'').startsWith('mail.')?location.protocol+'//admin-'+location.host:'')+'/admin';
 (function(){
 'use strict';
 const LOGIN_SLIDES=[
@@ -67,7 +69,8 @@ const Live={enabled:!!window.DEJOIY_LIVE,csrf:'',more:false,avatars:{},
     let session;
     try{session=await this.request('session');}catch(_){session=await this.login();}
     this.csrf=session.csrf; Store.state.user=session.user;
-    if(new URLSearchParams(location.search).get('next')==='admin'){ if(session.user.isAdmin===true){location.replace('/admin');return;} history.replaceState(null,'','/'); }
+    const onAdminSite=String(location.hostname||'').startsWith('admin-');
+    if(new URLSearchParams(location.search).get('next')==='admin'||onAdminSite){ if(session.user.isAdmin===true){location.replace(ADMIN_URL);return new Promise(()=>{});} if(onAdminSite){location.replace(location.protocol+'//'+location.host.replace(/^admin-/,'')+'/');return new Promise(()=>{});} history.replaceState(null,'','/'); }
     await this.loadAppearance();
     try{const prefs=await this.request('preferences');Store.state.user.name=prefs.name||Store.state.user.name;Store.state.user.signature=prefs.signature;Store.state.user.signatureHtml=prefs.signatureHtml||'';Store.state.vacation=prefs.vacation;}catch(e){alert(e.message+' Account preferences could not be loaded.');}
     try{this.avatars=(await this.request('avatars')).avatars||{};}catch(_){this.avatars={};}
@@ -143,7 +146,7 @@ const Live={enabled:!!window.DEJOIY_LIVE,csrf:'',more:false,avatars:{},
     Mail.storage=()=>{const a=Settings.account;if(!a||!a.quota)return {used:a?(a.used/1048576).toFixed(1):'—',total:0,pct:0};const mb=a.used/1048576;return {used:mb.toFixed(1),total:a.quota/1048576,pct:Math.min(100,Math.round(a.used/a.quota*1000)/10)};};
     const original=App.render.bind(App);
     App.render=function(){
-      if(this.route==='admin'&&Store.state.user?.isAdmin===true){location.assign('/admin');return;}
+      if(this.route==='admin'&&Store.state.user?.isAdmin===true){location.assign(ADMIN_URL);return;}
       if(this.route==='admin'&&Store.state.user?.isAdmin!==true){document.getElementById('view').innerHTML='<div class="empty-note"><h1>Administrator access required</h1><p>This mailbox does not have administration permissions.</p><a href="#/mail:inbox">Return to your inbox</a></div>';this.refreshNav();return;}
       if(['calendar','notes','chat','today'].includes(this.route)){
         document.getElementById('view').innerHTML='<div class="empty-note">This feature is not connected to your business mailbox yet. <a href="#/mail:inbox">Open Mail</a></div>';this.refreshNav();return;
