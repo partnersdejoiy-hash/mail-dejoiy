@@ -19,11 +19,13 @@
   var manual = !!(document.currentScript && document.currentScript.getAttribute("data-logos") === "manual");
   // Kept in a cookie for all *.dejoiy.com sites (home, sign-up, admin-mail) and in localStorage as a fallback.
   var shared = /(^|\.)dejoiy\.com$/.test(location.hostname) ? "; domain=.dejoiy.com" : "";
-  function saved(){
+  // The colour this browser explicitly chose, or "" when it never chose one.
+  function chosen(){
     var m = document.cookie.match(/(?:^|; )dm-accent=([a-z]+)/), c = m && m[1];
     if(!COLOURS[c]) try{ c = localStorage.getItem(KEY); }catch(e){}
-    return COLOURS[c] ? c : "pink";
+    return COLOURS[c] ? c : "";
   }
+  function saved(){ return chosen() || "pink"; }
 
   // The lockups are SVG files shown with <img>; to recolour them they are swapped for inline copies.
   function recolourLogos(name, scope){
@@ -64,7 +66,13 @@
     COLOURS: COLOURS,
     saved: saved,
     apply: apply,
-    recolour: function(scope){ var n = saved(); if(n !== "pink") recolourLogos(n, scope); },
+    chosen: chosen,
+    // Recolour the logos inside scope; pink files only need swapping once another colour was shown.
+    recolour: function(scope, name){ var n = COLOURS[name] ? name : saved(); if(n !== "pink" || (scope || document).querySelector("svg[data-dj-logo]")) recolourLogos(n, scope); },
+    clear: function(){
+      try{ localStorage.removeItem(KEY); }catch(e){}
+      document.cookie = KEY + "=; path=/; max-age=0" + shared;
+    },
     save: function(name){
       try{ localStorage.setItem(KEY, name); }catch(e){}
       document.cookie = KEY + "=" + name + "; path=/; max-age=31536000; samesite=lax" + shared + (location.protocol === "https:" ? "; secure" : "");

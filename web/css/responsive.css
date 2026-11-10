@@ -152,7 +152,33 @@ html[data-brightness="dark"] .mail-card .thread-message .lbl{background:rgba(255
 
 @media (max-width:1023px), (max-width:1199px) and (pointer:coarse){
   .mail-card{margin:8px 10px 16px;border-radius:24px}
-  .mail-card .thread-actions{position:sticky;bottom:0;padding-bottom:calc(10px + env(safe-area-inset-bottom))!important}
+  .mail-card .thread-actions{position:static!important;padding-bottom:calc(10px + env(safe-area-inset-bottom))!important}
   .mail-card .thread-actions .btn{flex:1}
 }
 @media (prefers-reduced-motion:reduce){.mail-card{animation:none}}
+
+/* ---------- iPhone / iOS Safari ---------- */
+@media (max-width:1023px), (max-width:1199px) and (pointer:coarse){
+  /* Safari zooms the whole page when a field under 16px gets focus, which knocks the layout sideways */
+  input:not([type=checkbox]):not([type=radio]):not([type=range]),select,textarea,[contenteditable="true"]{font-size:max(16px,1em)!important}
+  /* a filter on the app frame turns it into the frame for every fixed bar, which jumps around in Safari */
+  #app{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+  /* Reply / Forward stay on a solid strip of the card's colour, never over the letter */
+  .mail-card .thread-actions{position:static!important;margin:6px 0 0!important;padding:10px 0 4px!important;background:transparent!important}
+  .mail-card{overflow:clip}
+  /* the sender line gets the width: reply lives at the bottom, more in the toolbar */
+  .mail-card .tm-act{display:none}
+  .mail-card .tm-head{gap:10px}
+  .mail-card .tm-line{white-space:normal;overflow-wrap:anywhere}
+  .mail-card .tm-email{display:block;font-size:13px}
+  .mail-card .tm-to{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mail-card .r-body{overflow-x:auto;word-break:break-word}
+  .mail-card .r-body img,.mail-card .r-body table{max-width:100%!important;height:auto}
+  .reader{-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+}
+@media (max-width:680px){
+  /* notch and home bar */
+  #topbar{padding-left:max(8px,env(safe-area-inset-left));padding-right:max(8px,env(safe-area-inset-right))}
+  body.reader-open .r-toolbar{padding-left:max(8px,env(safe-area-inset-left));padding-right:max(8px,env(safe-area-inset-right))}
+  .dialog,.dlg,[role="dialog"]{max-height:calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
+}

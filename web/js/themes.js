@@ -23,7 +23,6 @@ const THEMES = [
   {id:"djlilac",  name:"Dejoiy Lilac",  kind:"dejoiy"},
   {id:"djmint",   name:"Dejoiy Mint",   kind:"dejoiy"},
   {id:"djred",    name:"Dejoiy Red",    kind:"dejoiy"},
-  {id:"djnone",   name:"Scene colours", kind:"dejoiy"},
   // 13 colour / gradient header themes
   {id:"aol",        name:"Cobalt",         kind:"color"},
   {id:"yellow",     name:"Yellow",         kind:"color"},
@@ -57,7 +56,7 @@ const THEMES = [
   {id:"sunset",     name:"Sunset",         kind:"scenic"}
 ];
 const THEME_CSS = {
-  pearl:"#ff4fa3", djgreen:"#3ddc84", djyellow:"#ffd23f", djblue:"#4da3ff", djorange:"#ff8a3d", djlilac:"#b892ff", djmint:"#2dd4bf", djred:"#ff5a5f", djnone:"linear-gradient(135deg,#4c1d95 0%,#c2410c 100%)",
+  pearl:"#ff4fa3", djgreen:"#3ddc84", djyellow:"#ffd23f", djblue:"#4da3ff", djorange:"#ff8a3d", djlilac:"#b892ff", djmint:"#2dd4bf", djred:"#ff5a5f",
   aol:"#2f7cf6", yellow:"#f7b733", highcontrast:"#111111", simple:"#c9d2e2", aim:"#e33d2e",
   aoldotcom:"#00a9e0", purple:"#9b5cf6", sunrise:"#ff9a56", aquagreen:"#34d399", aquablue:"#38bdf8",
   deeppurple:"#6d28d9", bluenight:"#1e3a8a", darkgrey:"#6b7280",
@@ -109,6 +108,8 @@ const Themes = {
     if(/^dj[a-z]+$/.test(p.theme)&&p.theme!=="djnone"){ p.accent=p.theme.slice(2); p.theme="pearl"; }  // older saved looks
     const accent = this.accent();
     if(accent) document.documentElement.dataset.dj = accent; else delete document.documentElement.dataset.dj;
+    // The header logo follows the colour too (unless the mailbox uploaded its own logo).
+    if(window.DejoiyAccent) for(const el of document.querySelectorAll(".brand-name,.brand-mark:not([data-logo-applied]),.workspace-emblem")) DejoiyAccent.recolour(el, accent||"pink");
     document.documentElement.dataset.theme = p.theme;
     document.documentElement.dataset.brightness = p.brightness;
     document.documentElement.dataset.scenic = String(!!p.customBg || THEMES.some(t=>t.id===p.theme && ["scenic","photo","live"].includes(t.kind)));
@@ -127,10 +128,11 @@ const Themes = {
   },
 
   /* The Dejoiy colour in use: chosen on its own, or pink for the plain default look. */
-  accent(){ const p=Store.state.prefs; return p.accent || (p.theme==="pearl" ? "pink" : ""); },
+  /* The colour picked on the home page (or here) wins everywhere in this browser until it is changed. */
+  accent(){ const p=Store.state.prefs, chosen=window.DejoiyAccent?.chosen?.()||""; return chosen || p.accent || (p.theme==="pearl" ? "pink" : ""); },
   isPicked(id){
     const p=Store.state.prefs, t=THEMES.find(t=>t.id===id); if(!t) return false;
-    if(t.kind==="dejoiy") return id==="djnone" ? !this.accent() : this.accent()===(id==="pearl"?"pink":id.slice(2));
+    if(t.kind==="dejoiy") return this.accent()===(id==="pearl"?"pink":id.slice(2));
     return p.theme===id && !p.customBg;
   },
   set(id){
@@ -138,14 +140,15 @@ const Themes = {
     const p=Store.state.prefs;
     if(t.kind==="dejoiy"){
       // A Dejoiy colour keeps the background scene; on a plain look it brings the Dejoiy base.
-      p.accent = id==="djnone" ? "" : id==="pearl" ? "pink" : id.slice(2);
+      p.accent = id==="pearl" ? "pink" : id.slice(2);
+      if(window.DejoiyAccent) DejoiyAccent.save(p.accent);  // same preference as the home page picker
       const scene = !!p.customBg || THEMES.some(x=>x.id===p.theme && ["scenic","photo","live"].includes(x.kind));
-      if(!scene && id!=="djnone") p.theme="pearl";
+      if(!scene) p.theme="pearl";
       Store.save(); this.apply(); this.persist(); App.toast("Colour: " + t.name.replace("Dejoiy ",""));
       if(App.route==="settings") Views.settings(document.getElementById("view"), "themes");
       return;
     }
-    if(t.kind==="color") p.accent="";  // a plain colour theme brings its own colour
+    if(t.kind==="color"){ p.accent=""; if(window.DejoiyAccent) DejoiyAccent.clear(); }  // a plain colour theme brings its own colour
     Store.state.prefs.theme = id;
     Store.state.prefs.customBg = "";
     Store.save(); this.apply(); this.persist();
