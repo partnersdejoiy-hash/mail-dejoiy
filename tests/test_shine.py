@@ -10,10 +10,10 @@ def parts(token):
 
 class ShineTokenTests(unittest.TestCase):
     def test_signed_with_shared_secret_and_expires(self):
-        body, sig, claims = parts(z.shine_token('s3cret', 'Deepak@Corp.Dejoiy.com', 'Deepak', 'platform', now=1000, ttl=120))
+        body, sig, claims = parts(z.shine_token('s3cret', 'Deepak@Corp.Dejoiy.com', 'Deepak', 'platform', 'https://mail.dejoiy.com/api/avatar?email=x&v=1', now=1000, ttl=120))
         good = base64.urlsafe_b64encode(hmac.new(b's3cret', body.encode(), hashlib.sha256).digest()).rstrip(b'=').decode()
         self.assertEqual(sig, good)
-        self.assertEqual(claims['e'], 'deepak@corp.dejoiy.com'); self.assertEqual(claims['a'], 'platform'); self.assertEqual(claims['x'], 1120000)
+        self.assertEqual(claims['e'], 'deepak@corp.dejoiy.com'); self.assertEqual(claims['a'], 'platform'); self.assertTrue(claims['p'].endswith('v=1')); self.assertEqual(claims['x'], 1120000)
         self.assertNotIn('=', body + sig)
 
     def test_each_token_is_different(self):
