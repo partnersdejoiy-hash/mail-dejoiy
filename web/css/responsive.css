@@ -121,7 +121,6 @@ html[data-dj] .avatar{background:var(--pop);color:#121212;font-weight:800}
 .mail-card[data-tone="work"]{--card:var(--tone-work)}
 .mail-card[data-tone="personal"]{--card:var(--tone-personal)}
 .mail-card[data-tone="fun"]{--card:var(--tone-fun)}
-html[data-scenic="true"] .mail-card[data-tone=""]{--card:color-mix(in srgb,var(--surface) 92%,transparent)}
 .mail-card .r-subject{font-size:clamp(24px,2.6vw,34px);line-height:1.08;letter-spacing:-.035em;font-weight:800;color:var(--card-ink);padding:0;margin:6px 0 16px;text-wrap:balance}
 .mail-card .thread-count{font-size:14px;font-weight:700;padding:3px 10px;border-radius:999px;background:#121212;color:#fff;vertical-align:middle;letter-spacing:0}
 .mc-tag{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border-radius:999px;background:#121212;color:#fff;font-size:14px;font-weight:800;transform:rotate(-2deg)}
@@ -273,3 +272,6 @@ html[data-scenic="true"] .mail-card{background:color-mix(in srgb,var(--card) 86%
     border-radius:0 28px 28px 0;box-shadow:12px 0 40px rgba(0,0,0,.35)}
   body.nav-open #sidebar .nav-item.active{background:color-mix(in srgb,var(--pop,#ff4fa3) 22%,transparent)!important;color:var(--ink)!important;font-weight:800}
 }
+/* The background photo is sized to the tallest screen, so the keyboard and Safari's bars
+   opening or closing never rescale it (that was the shake on every tap). */
+#bg{bottom:auto;height:100vh;height:100lvh;transition:none}

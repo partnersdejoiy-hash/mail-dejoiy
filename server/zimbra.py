@@ -181,11 +181,13 @@ def dns_lookup(name, kind='TXT'):
 
 def txt_records(domain): return dns_lookup(domain,'TXT')
 
+# Outgoing mail to Gmail and other outside domains is relayed through Amazon SES, so SES may send for every domain.
+SPF_INCLUDES=[x for x in os.environ.get('SPF_INCLUDES','amazonses.com').replace(',',' ').split() if re.fullmatch(r'[a-z0-9.-]+',x)]
 def merged_spf(existing, mail_host):
     """One SPF record per domain is allowed, so ours is merged into the one already published."""
     terms=[t for t in (existing or 'v=spf1').split()[1:] if not re.fullmatch(r'[~?+-]?all',t,re.I)]
     ending=next((t for t in (existing or '').split() if re.fullmatch(r'[~?+-]?all',t,re.I)),'~all')
-    for want in ('mx','a:'+mail_host):
+    for want in ('mx','a:'+mail_host,*('include:'+x for x in SPF_INCLUDES)):
         if want not in terms: terms.append(want)
     return ' '.join(['v=spf1',*terms,ending])
 
@@ -204,7 +206,7 @@ def domain_records(domain, mail_host, dkim_dir):
         f"Delete the other MX records ({', '.join(others)}), or some mail will keep going to the old provider." if mail_host in mx and others
         else f"Replace the current MX records ({', '.join(others)}) with this one." if others else '',priority=10,purpose='Receives mail for your domain')]
     spf=[t for t in txt if t.lower().startswith('v=spf1')]
-    spf_ok=len(spf)==1 and (mail_host in spf[0] or ' mx' in spf[0])
+    spf_ok=len(spf)==1 and (mail_host in spf[0] or ' mx' in spf[0]) and all('include:'+x in spf[0] for x in SPF_INCLUDES)
     records.append(record('SPF','TXT','@',merged_spf(spf[0] if len(spf)==1 else '',mail_host),spf_ok,spf,
         'A domain may have only one SPF record. Delete the extra ones and keep only the value shown.' if len(spf)>1
         else 'Your domain already has an SPF record. Edit it to the value shown instead of adding a second one.' if spf and not spf_ok else '',
@@ -345,6 +347,32 @@ class SafeHTML(HTMLParser):
             if re.fullmatch(r'\d{1,4}',value): safe+=f' {name}="{value}"'
         self.parts.append('<img'+safe+' alt="'+html.escape(attrs.get('alt') or '',quote=True)+'">')
 
+LABEL_COLOURS=(('important','#FF4FA3'),(r'urgent|asap|alert|security|warning|overdue|critical','#FF5A5F'),
+    (r'financ|bill|invoice|payment|bank|tax|receipt|salary|money','#FF8A3D'),(r'work|project|team|client|office|meeting','#FFD23F'),
+    (r'personal|family|friend|home','#3DDC84'),(r'design|creative|idea|social|promo|fun','#B892FF'),(r'update|newsletter|digest','#4DA3FF'))
+def label_colour(label):
+    """The same colours the inbox uses, so a Work mail looks like Work wherever it lands."""
+    for pattern,colour in LABEL_COLOURS:
+        if re.search(pattern,label or '',re.I): return colour
+    return '#FF4FA3'
+def email_template(inner, label, app_url):
+    """Outgoing mail: the message on a card with a band in its label colour and a Dejoiy Mail footer.
+    Inline styles and tables only, because that is all most mail apps keep."""
+    colour=label_colour(label); app=html.escape(app_url,quote=True)
+    tag=(f'<tr><td style="padding:22px 28px 0"><span style="display:inline-block;padding:5px 12px;border-radius:999px;background:{colour};color:#121212;'
+         f'font:700 12px/1.2 Arial,Helvetica,sans-serif">{html.escape(label)}</span></td></tr>') if label else ''
+    return (f'<div data-dejoiy-mail style="margin:0;padding:24px 12px;background:#F6F3F7">'
+        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:640px;margin:0 auto;border-collapse:separate">'
+        f'<tr><td style="background:#FFFFFF;border-radius:22px;overflow:hidden;border:1px solid #ECE6EE">'
+        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">'
+        f'<tr><td style="height:10px;line-height:10px;font-size:0;background:{colour}">&nbsp;</td></tr>{tag}'
+        f'<tr><td style="padding:20px 28px 28px;color:#1D1B20;font:15px/1.6 Arial,Helvetica,sans-serif">{inner}</td></tr>'
+        f'</table></td></tr>'
+        f'<tr><td align="center" style="padding:18px 8px 4px;font:12px/1.5 Arial,Helvetica,sans-serif;color:#6B6670">'
+        f'<a href="{app}" style="text-decoration:none"><img src="{app}/assets/brand/dejoiy-mail-email.png" alt="Dejoiy Mail" height="22" style="height:22px;width:auto;border:0;display:block;margin:0 auto 8px"></a>'
+        f'This mail is being sent using <a href="{app}" style="color:#D6338A;font-weight:700;text-decoration:none">Dejoiy Mail</a>'
+        f'</td></tr></table></div>')
+
 def safe_html(value, images=None):
     parser=SafeHTML(images); parser.feed(value); parser.close()
     return ''.join(parser.parts)+''.join('</'+t+'>' for t in reversed(parser.stack))
@@ -432,6 +460,7 @@ class Zimbra:
             if f.get('name')=='Archive' and f.get('l')=='1': mapping['archive']=f.get('id')
         return mapping
     media_prefix=''  # public address of signature images, set when the server starts
+    app_url='https://mail.dejoiy.com'  # linked from the footer of every message sent
     def own_image(self, src):
         # Only our own hosted signature images are shown; other remote images could track the reader.
         return bool(self.media_prefix) and src.startswith(self.media_prefix) and bool(MEDIA_NAME.fullmatch(src[len(self.media_prefix):]))
@@ -496,8 +525,13 @@ class Zimbra:
         m.append(node(MAIL,'su',text=str(data.get('subject',''))))
         body=str(data.get('body',''))
         alternative=node(MAIL,'mp',{'ct':'multipart/alternative'})
-        part=node(MAIL,'mp',{'ct':'text/plain'}); part.append(node(MAIL,'content',text=plain(body))); alternative.append(part)
-        part=node(MAIL,'mp',{'ct':'text/html'}); part.append(node(MAIL,'content',text=safe_html(body,web_image))); alternative.append(part)
+        text,markup=plain(body),safe_html(body,web_image)
+        if not draft:
+            # Drafts stay plain so the template is added once, when the message actually goes out.
+            text+='\n\n--\nThis mail is being sent using Dejoiy Mail: '+self.app_url
+            markup=email_template(markup,label,self.app_url)
+        part=node(MAIL,'mp',{'ct':'text/plain'}); part.append(node(MAIL,'content',text=text)); alternative.append(part)
+        part=node(MAIL,'mp',{'ct':'text/html'}); part.append(node(MAIL,'content',text=markup)); alternative.append(part)
         m.append(alternative)
         attachments=data.get('attachments',[])
         if not isinstance(attachments,list) or len(attachments)>20: raise APIError('Select up to 20 attachments.')
@@ -1534,7 +1568,7 @@ def serve():
     state_dir=Path(os.environ['SESSION_DB']).parent if os.environ.get('SESSION_DB') else None
     server.avatars=AvatarStore(str(state_dir/'avatars.sqlite') if state_dir else None)
     server.media=MediaStore(str(state_dir/'media') if state_dir else None)
-    if server.zimbra: server.zimbra.media_prefix=server.app_origin+'/media/'
+    if server.zimbra: server.zimbra.media_prefix=server.app_origin+'/media/'; server.zimbra.app_url=server.app_origin
     admin_url=os.environ.get('ZIMBRA_ADMIN_URL'); server.admin=Admin(admin_url) if admin_url else None
     state=Path(os.environ['SESSION_DB']).parent if os.environ.get('SESSION_DB') else None
     if server.admin:

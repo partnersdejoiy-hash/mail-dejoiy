@@ -20,8 +20,8 @@ class DnsRecordTests(unittest.TestCase):
     def lookup(self, answers):
         return lambda name, kind='TXT': answers.get((name,kind),[])
     def test_spf_is_merged_not_duplicated(self):
-        self.assertEqual(z.merged_spf('v=spf1 include:_spf.google.com -all','mail.dejoiy.com'),'v=spf1 include:_spf.google.com mx a:mail.dejoiy.com -all')
-        self.assertEqual(z.merged_spf('','mail.dejoiy.com'),'v=spf1 mx a:mail.dejoiy.com ~all')
+        self.assertEqual(z.merged_spf('v=spf1 include:_spf.google.com -all','mail.dejoiy.com'),'v=spf1 include:_spf.google.com mx a:mail.dejoiy.com include:amazonses.com -all')
+        self.assertEqual(z.merged_spf('','mail.dejoiy.com'),'v=spf1 mx a:mail.dejoiy.com include:amazonses.com ~all')
     def test_all_records_with_conflicts(self):
         old=z.dns_lookup
         z.dns_lookup=self.lookup({('acme.com','MX'):['mail.dejoiy.com','mx.zoho.in'],('acme.com','TXT'):['v=spf1 include:zoho.in ~all','v=spf1 mx ~all']})
@@ -37,7 +37,7 @@ class DnsRecordTests(unittest.TestCase):
         try: records=z.signup_records({'domain':'acme.com','code':'dejoiy-verification=x'},'mail.dejoiy.com',None)
         finally: z.dns_lookup=old
         self.assertEqual([r['kind'] for r in records],['Verification'])
-        z.dns_lookup=self.lookup({('acme.com','MX'):['mail.dejoiy.com'],('acme.com','TXT'):['v=spf1 mx a:mail.dejoiy.com ~all'],('_dmarc.acme.com','TXT'):['v=DMARC1; p=none']})
+        z.dns_lookup=self.lookup({('acme.com','MX'):['mail.dejoiy.com'],('acme.com','TXT'):['v=spf1 mx a:mail.dejoiy.com include:amazonses.com ~all'],('_dmarc.acme.com','TXT'):['v=DMARC1; p=none']})
         try: records=z.signup_records({'domain':'acme.com','code':'dejoiy-verification=x'},'mail.dejoiy.com',None)
         finally: z.dns_lookup=old
         self.assertEqual([r['kind'] for r in records],['Verification','MX','SPF','DKIM','DMARC'])
@@ -69,8 +69,16 @@ class AdapterTests(unittest.TestCase):
         client=z.Zimbra('https://mail.example.com');client.call=Mock(return_value=z.ET.fromstring('<SendMsgResponse xmlns="urn:zimbraMail"><m id="42"/></SendMsgResponse>'))
         out=client.write_message('token',{'to':'a@b.com','subject':'A & B','body':'<b>Hello</b><script>bad()</script>'})
         request=client.call.call_args.args[0]
-        self.assertEqual(out['id'],'42');self.assertEqual(request.find('.//{urn:zimbraMail}content').text,'Hello')
+        parts=request.findall('.//{urn:zimbraMail}content')
+        self.assertEqual(out['id'],'42');self.assertTrue(parts[0].text.startswith('Hello\n\n--\nThis mail is being sent using Dejoiy Mail'))
+        self.assertNotIn('<script',parts[1].text);self.assertIn('data-dejoiy-mail',parts[1].text);self.assertIn('href="https://mail.dejoiy.com"',parts[1].text)
         self.assertEqual(len(request.findall('.//{urn:zimbraMail}e')),1)
+    def test_sent_mail_takes_label_colour(self):
+        client=z.Zimbra('https://mail.example.com');client.call=Mock(return_value=z.ET.fromstring('<SendMsgResponse xmlns="urn:zimbraMail"><m id="42"/></SendMsgResponse>'))
+        client.write_message('token',{'to':'a@b.com','subject':'Invoice','body':'Hi','label':'Money','important':True})
+        request=client.call.call_args_list[0].args[0]
+        self.assertIn('#FF8A3D',request.findall('.//{urn:zimbraMail}content')[1].text)
+        self.assertEqual(request.find('.//{urn:zimbraMail}m').get('f'),'!')
     def test_attachment_rejected_instead_of_silent_loss(self):
         client=z.Zimbra('https://mail.example.com')
         with self.assertRaises(z.APIError):client.write_message('t',{'to':'a@b.com','attachments':[{'name':'file.pdf'}]})
