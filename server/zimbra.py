@@ -1177,7 +1177,11 @@ class Handler(SimpleHTTPRequestHandler):
     def log_message(self, *args): pass  # Never log passwords, session IDs or message data.
     def end_headers(self):
         self.send_header('X-Content-Type-Options','nosniff'); self.send_header('Referrer-Policy','same-origin')
-        if urllib.parse.urlsplit(self.path).path in ADMIN_ASSETS: self.send_header('Cache-Control','no-store')
+        path=urllib.parse.urlsplit(self.path).path
+        if path in ADMIN_ASSETS: self.send_header('Cache-Control','no-store')
+        elif not path.startswith('/api/') and (path=='/' or path.endswith(('.html','/sw.js','.webmanifest'))):
+            # Pages are re-checked on every visit, so a deploy shows up at once; their CSS/JS carry ?v= and may cache.
+            self.send_header('Cache-Control','no-cache')
         super().end_headers()
     def reply(self, status, data, cookie=None):
         raw=json.dumps(data).encode(); self.send_response(status)
