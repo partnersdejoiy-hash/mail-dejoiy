@@ -58,4 +58,9 @@ class UpdateTests(unittest.TestCase):
         h.post_update(boss, {'box': 'company', 'op': 'pin', 'id': ids[1]})
         self.assertEqual([p['pinned'] for p in h.updates_view(boss)['company']['posts']], [False, True])
 
+    def test_photos_only_from_the_default_list(self):
+        self.assertIn('joi', z.UPDATE_PHOTOS)
+        with self.assertRaises(z.APIError): handler(self.store).update_photo('https://evil.example/x')
+        with self.assertRaises(z.APIError): handler(self.store).update_photo('nope')
+
 if __name__ == '__main__': unittest.main()

@@ -9,7 +9,13 @@
   "pinned": true,
   "link": null,
   "files": [],
-  "body": "Joi is coming soon to Dejoiy Mail.\n\nYour own email assistant, right inside your inbox: help writing replies, quick summaries of long threads, and the mail that needs you first.\n\nWatch this page. We'll tell you here the day Joi arrives."
+  "body": "Joi is coming soon to Dejoiy Mail.\n\nYour own email assistant, right inside your inbox: help writing replies, quick summaries of long threads, and the mail that needs you first.\n\nWatch this page. We'll tell you here the day Joi arrives.",
+  "photo": {
+   "id": "joi",
+   "src": "photo-1656236607879-cd489955e17b",
+   "credit": "Sushmita Nag",
+   "page": "https://unsplash.com/photos/3NtMpcAkwQc"
+  }
  },
  {
   "id": "welcome",
@@ -21,7 +27,13 @@
   "date": 1794304800000,
   "pinned": false,
   "link": null,
-  "files": []
+  "files": [],
+  "photo": {
+   "id": "welcome",
+   "src": "photo-1577962917302-cd874c4e31d2",
+   "credit": "Smartworks Coworking",
+   "page": "https://unsplash.com/photos/cW4lLTavU80"
+  }
  },
  {
   "id": "trial",
@@ -117,7 +129,13 @@
   "date": 1794300600000,
   "pinned": false,
   "link": null,
-  "files": []
+  "files": [],
+  "photo": {
+   "id": "contacts",
+   "src": "photo-1553009338-80e505b3f61b",
+   "credit": "",
+   "page": "https://unsplash.com/photos/bik_lIl9Nco"
+  }
  },
  {
   "id": "look",
@@ -141,6 +159,12 @@
   "date": 1794299400000,
   "pinned": false,
   "link": null,
-  "files": []
+  "files": [],
+  "photo": {
+   "id": "safety",
+   "src": "photo-1683107695974-98a9fddb249a",
+   "credit": "Sweet Life",
+   "page": "https://unsplash.com/photos/TJTw4djEhGg"
+  }
  }
 ]

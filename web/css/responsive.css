@@ -422,3 +422,16 @@ body.list-fade .msg-row:nth-child(4){animation-delay:90ms}body.list-fade .msg-ro
   .ct-tbl tr:not(.ct-div) td:nth-child(2){font-size:13px;color:var(--ink-2);word-break:break-all}
 }
 html[data-scenic="true"] .upd-hero{background:var(--k)}
+/* people photos on posts: the photo fills the cover, the kind sticker sits on it */
+.upd-cover.is-photo{margin:0;position:relative}
+figure.upd-cover.is-photo{height:210px}
+figure.upd-cover.is-photo img{height:100%}
+figure.upd-cover .upd-sticker{left:auto;right:16px;top:auto;bottom:16px;width:56px;height:56px;font-size:28px}
+.upd-cover figcaption{position:absolute;left:10px;bottom:10px;font-size:11px;font-weight:700}
+.upd-cover figcaption a{color:#fff;text-decoration:none;background:rgba(18,18,18,.6);padding:4px 9px;border-radius:999px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+figure.upd-cover.is-gone{height:118px;background:var(--k)}
+figure.upd-cover.is-gone img,figure.upd-cover.is-gone figcaption{display:none}
+.upd-hero figure.upd-cover.is-photo{height:auto;min-height:260px}
+.upd-hero figure.upd-cover .upd-sticker{left:auto;top:auto;right:20px;bottom:20px;width:84px;height:84px;font-size:44px;transform:rotate(-6deg)}
+.upd-hero:hover figure.upd-cover .upd-sticker{transform:rotate(4deg) scale(1.06)}
+.upd-hero figure.upd-cover img{position:absolute;inset:0;max-height:none}

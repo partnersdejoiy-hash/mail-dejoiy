@@ -317,3 +317,8 @@ body.lp-admin .t3 .lp-tile-pic img.fill{object-position:right top}
 .lp-post-foot{margin-top:auto;padding-top:10px;display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;color:var(--muted)}
 @media (prefers-reduced-motion:reduce){.lp-post,.lp-post-art span{transition:none}.lp-post:hover{transform:none}}
 .lp-post-foot time{white-space:nowrap}
+.lp-post-art.has-photo{position:relative;height:190px;place-items:end end;padding:12px}
+.lp-post-art.has-photo img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.lp-post-art.has-photo span{position:relative;width:54px;height:54px;font-size:28px}
+.lp-post.is-first .lp-post-art.has-photo{height:210px}
+.lp-post-credit{position:absolute;left:10px;bottom:10px;font-size:11px;font-weight:700;color:#fff;text-decoration:none;background:rgba(18,18,18,.6);padding:4px 9px;border-radius:999px}

@@ -160,7 +160,9 @@
         news.innerHTML = posts.map((p, i) => {
           const [emoji, label] = KINDS[p.kind] || KINDS.news, cover = (p.files || []).find(f => f.image);
           return `<article class="lp-post${i === 0 ? " is-first" : ""}" data-kind="${esc(KINDS[p.kind] ? p.kind : "news")}">
-            <div class="lp-post-art">${cover ? `<img src="/api/public/update-file?id=${encodeURIComponent(cover.id)}" alt="" loading="lazy">` : `<span>${emoji}</span>`}</div>
+            <div class="lp-post-art${cover || p.photo ? " has-photo" : ""}">${cover ? `<img src="/api/public/update-file?id=${encodeURIComponent(cover.id)}" alt="" loading="lazy">`
+              : p.photo ? `<img src="/api/public/photo/${encodeURIComponent(p.photo.id)}" alt="" loading="lazy" onerror="this.parentNode.classList.remove('has-photo');this.remove()"><span>${emoji}</span><a class="lp-post-credit" href="${esc(p.photo.page)}" target="_blank" rel="noopener">Photo${p.photo.credit ? " by " + esc(p.photo.credit) : ""} · Unsplash</a>`
+              : `<span>${emoji}</span>`}</div>
             <div class="lp-post-body"><p class="lp-post-kind">${emoji} ${esc(label)}${p.pinned ? " · 📌 Pinned" : ""}</p>
               <h3>${esc(p.title)}</h3><p class="lp-post-text">${esc(p.body).replace(/\n+/g, " ")}</p>
               <div class="lp-post-foot"><time datetime="${new Date(p.date).toISOString()}">${when(p.date)}</time>

@@ -79,6 +79,8 @@ UPDATE_KINDS=('news','feature','policy','notice','tip','event')
 MAX_UPDATE_FILES=10*1024*1024
 # Shown in Dejoiy Updates until the Dejoiy team posts or deletes anything there.
 DEFAULT_UPDATES=json.loads((Path(__file__).with_name('default-updates.json')).read_text(encoding='utf-8'))
+# People photos on the default posts (Unsplash License). Only these can be fetched: the server is not an open proxy.
+UPDATE_PHOTOS={p['photo']['id']:p['photo']['src'] for p in DEFAULT_UPDATES if p.get('photo')}
 class AppearanceStore:
     """Per-mailbox appearance, keyed by the upstream account id so it follows the user across devices."""
     def __init__(self, path=None, table='appearance'):
@@ -1395,7 +1397,8 @@ class Handler(SimpleHTTPRequestHandler):
                 # Dejoiy Updates are public news, shown on the home and admin landing pages too. Company boxes never are.
                 if self.path=='/api/public/updates':
                     saved=self.server.updates.get('dejoiy'); posts=saved['posts'] if 'posts' in saved else DEFAULT_UPDATES
-                    return self.reply(200,{'posts':[{k:p.get(k) for k in ('id','kind','title','body','date','pinned','link','files')} for p in posts[:12]]})
+                    return self.reply(200,{'posts':[{k:p.get(k) for k in ('id','kind','title','body','date','pinned','link','files','photo')} for p in posts[:12]]})
+                if self.path.startswith('/api/public/photo/'): return self.update_photo(self.path.rsplit('/',1)[1])
                 if self.path.startswith('/api/public/update-file?'):
                     return self.update_file(None,urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get('id',[''])[0])
                 _,s=self.session()
@@ -1621,6 +1624,21 @@ class Handler(SimpleHTTPRequestHandler):
             self.server.update_files.put('file:'+ident,{'box':box,'post':post,'name':name,'image':image,'data':base64.b64encode(raw).decode()})
             saved.append({'id':ident,'name':name,'size':len(raw),'image':bool(image)})
         return saved
+    def update_photo(self, name):
+        """A default post's photo, fetched from Unsplash once and then served from here, so visitors'
+        browsers never call a third party."""
+        source=UPDATE_PHOTOS.get(name)
+        if not source: raise APIError('Photo not found.',404)
+        cached=self.server.update_files.get('photo:'+name)
+        if cached: raw=base64.b64decode(cached['data'])
+        else:
+            url=f'https://images.unsplash.com/{source}?w=960&h=600&fit=crop&crop=faces&q=72&fm=jpg'
+            try:
+                with urllib.request.urlopen(urllib.request.Request(url,headers={'User-Agent':'DejoiyMail/1.0'}),timeout=15) as r: raw=r.read(4*1024*1024+1)
+            except (OSError,ValueError): raise APIError('Photo unavailable.',502)
+            if len(raw)>4*1024*1024 or not IMAGE_MAGIC['jpeg'](raw): raise APIError('Photo unavailable.',502)
+            self.server.update_files.put('photo:'+name,{'data':base64.b64encode(raw).decode()})
+        return self.image(raw,'image/jpeg','public, max-age=604800')
     def update_file(self, session, ident):
         found=self.server.update_files.get('file:'+ident) if re.fullmatch(r'[0-9a-f]{24}',ident or '') else {}
         allowed=('dejoiy',) if session is None else ('dejoiy','company:'+self.domain(session))

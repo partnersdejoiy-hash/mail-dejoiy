@@ -59,7 +59,9 @@ Views.updates = function(el, box){
     const long = !hero && String(post.body).length > 260;
     return `<article class="upd-card${hero?" upd-hero":""}" data-kind="${k}" style="--i:${Math.min(i,8)}">
       ${cover ? `<a class="upd-cover is-photo" href="${esc(fileUrl(cover))}" target="_blank" rel="noopener"><img src="${esc(fileUrl(cover))}" alt="${esc(cover.name)}" loading="lazy"></a>`
-              : `<div class="upd-cover" aria-hidden="true"><span class="upd-sticker">${K.emoji}</span><i></i><i></i><i></i></div>`}
+        : post.photo ? `<figure class="upd-cover is-photo"><img src="/api/public/photo/${encodeURIComponent(post.photo.id)}" alt="" loading="lazy" onerror="this.parentNode.classList.add('is-gone')">
+            <span class="upd-sticker">${K.emoji}</span><figcaption><a href="${esc(post.photo.page)}" target="_blank" rel="noopener">Photo${post.photo.credit?" by "+esc(post.photo.credit):""} · Unsplash</a></figcaption></figure>`
+        : `<div class="upd-cover" aria-hidden="true"><span class="upd-sticker">${K.emoji}</span><i></i><i></i><i></i></div>`}
       <div class="upd-body">
         <div class="upd-tags"><span class="upd-kind">${K.emoji} ${K.label}</span>${post.pinned?`<span class="upd-pin">📌 Pinned</span>`:""}</div>
         <h2>${esc(post.title)}</h2>
