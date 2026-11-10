@@ -86,12 +86,15 @@ DEFAULT_UPDATES=json.loads((Path(__file__).with_name('default-updates.json')).re
 # People photos on the default posts (Unsplash License). Only these can be fetched: the server is not an open proxy.
 def b64u(raw):
     return base64.urlsafe_b64encode(raw).rstrip(b'=').decode()
-def shine_token(secret, email, name, now=None, ttl=120):
+def shine_token(secret, email, name, admin='', now=None, ttl=120):
     """Short-lived sign-in token for Shine (Dejoiy's chat app). Shine checks the HMAC with the same
-    secret (src/convex/lib/dejoiyMailToken.ts there) and signs the same mailbox user in."""
-    claims={'e':email.lower(),'n':name or '','x':int(((now or time.time())+ttl)*1000),'d':secrets.token_urlsafe(9)}
+    secret (src/convex/lib/dejoiyMailToken.ts there) and signs the same mailbox user in.
+    admin: 'platform' (Zimbra global admin), 'company' (company admin) or '' - Shine takes its admin roles from this."""
+    claims={'e':email.lower(),'n':name or '','a':admin,'x':int(((now or time.time())+ttl)*1000),'d':secrets.token_urlsafe(9)}
     body=b64u(json.dumps(claims,separators=(',',':')).encode())
     return body+'.'+b64u(hmac.new(secret.encode(),body.encode(),hashlib.sha256).digest())
+def shine_admin(user):
+    return 'platform' if user.get('canManageRoles') is True else 'company' if user.get('isAdmin') is True else ''
 def safe_return(raw, fallback='/app/chats'):
     return raw if raw and raw.startswith('/') and not raw.startswith('//') and len(raw)<500 and not any(ord(c)<33 for c in raw) else fallback
 ANDROID_APPS=json.loads((Path(__file__).with_name('android-apps.json')).read_text(encoding='utf-8'))
@@ -1447,7 +1450,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if self.path=='/api/booking': return self.reply(200,self.booking_view(s))
                 if self.path=='/api/shine':
                     if not self.server.shine_secret: return self.reply(200,{'enabled':False,'error':"Shine chat isn't connected to this mailbox yet."})
-                    return self.reply(200,{'enabled':True,'origin':self.server.shine_origin,'token':shine_token(self.server.shine_secret,s['user']['email'],s['user'].get('name',''))})
+                    return self.reply(200,{'enabled':True,'origin':self.server.shine_origin,'token':shine_token(self.server.shine_secret,s['user']['email'],s['user'].get('name',''),shine_admin(s['user']))})
                 if self.path.startswith('/api/updates/file?'):
                     return self.update_file(s,urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get('id',[''])[0])
                 if self.path=='/api/preferences': return self.reply(200,self.server.zimbra.preferences(s['token']))
@@ -1541,7 +1544,7 @@ class Handler(SimpleHTTPRequestHandler):
         if not self.server.shine_secret: return self.send_error(503,'Shine is not connected')
         try: _,s=self.session()
         except APIError: return self.redirect('/?next=shine&return='+urllib.parse.quote(back,safe=''))
-        t=shine_token(self.server.shine_secret,s['user']['email'],s['user'].get('name',''))
+        t=shine_token(self.server.shine_secret,s['user']['email'],s['user'].get('name',''),shine_admin(s['user']))
         return self.redirect(self.server.shine_origin+'/auth/dejoiy#t='+urllib.parse.quote(t,safe='')+'&next='+urllib.parse.quote(back,safe=''))
     def redirect(self, location):
         self.send_response(302); self.send_header('Location',location); self.send_header('Cache-Control','no-store'); self.end_headers()
