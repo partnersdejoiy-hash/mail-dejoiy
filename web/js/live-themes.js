@@ -198,10 +198,15 @@ const LiveThemes={
     const cv=document.createElement("canvas");cv.className="live-canvas";cv.setAttribute("aria-hidden","true");host.appendChild(cv);
     const c=cv.getContext("2d");if(!c){cv.remove();return;}
     const state={id,host,cv,raf:0,last:0,t0:performance.now()};
-    const size=()=>{const dpr=Math.min(window.devicePixelRatio||1,1.5);state.w=window.innerWidth;state.h=window.innerHeight;cv.width=Math.round(state.w*dpr);cv.height=Math.round(state.h*dpr);c.setTransform(dpr,0,0,dpr,0,0);state.s=scene.init(state.w,state.h,rng(id.length*977+13));};
+    /* Sized to the background box (the tallest screen), not the visible window: on phones the window
+       shrinks and grows with every keyboard and toolbar change, and redrawing the scene then made it jump. */
+    const size=()=>{const dpr=Math.min(window.devicePixelRatio||1,1.5),w=host.clientWidth||window.innerWidth,h=host.clientHeight||window.innerHeight;
+      if(state.s&&w===state.w&&Math.abs(h-state.h)<160)return false;
+      const fresh=!state.s||w!==state.w;state.w=w;state.h=h;cv.width=Math.round(w*dpr);cv.height=Math.round(h*dpr);c.setTransform(dpr,0,0,dpr,0,0);
+      if(fresh)state.s=scene.init(w,h,rng(id.length*977+13));return true;};
     const frame=t=>{c.clearRect(0,0,state.w,state.h);scene.draw(c,state.w,state.h,t,state.s);};
     const loop=now=>{state.raf=requestAnimationFrame(loop);if(now-state.last<33)return;state.last=now;frame((now-state.t0)/1000);};
-    state.onResize=()=>{size();if(reduced())frame(8);};
+    state.onResize=()=>{if(size())frame((performance.now()-state.t0)/1000);};
     size();window.addEventListener("resize",state.onResize);
     if(reduced())frame(8);else state.raf=requestAnimationFrame(loop);
     run=state;
