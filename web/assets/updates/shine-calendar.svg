@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 600" role="img" aria-label="One calendar for mail and meetings">
+<rect width="960" height="600" fill="#FFD23F"/>
+<circle cx="120" cy="90" r="130" fill="#FF4FA3"/>
+<circle cx="880" cy="540" r="140" fill="#4DA3FF"/>
+<g transform="translate(250 90) rotate(-4 230 210)">
+<rect x="14" y="14" width="460" height="420" rx="48" fill="#121212"/>
+<rect width="460" height="420" rx="48" fill="#fff" stroke="#121212" stroke-width="10"/>
+<rect width="460" height="96" rx="48" fill="#FF4FA3" stroke="#121212" stroke-width="10"/>
+<rect y="50" width="460" height="46" fill="#FF4FA3"/><line x1="0" y1="96" x2="460" y2="96" stroke="#121212" stroke-width="10"/>
+<circle cx="120" cy="20" r="16" fill="#121212"/><circle cx="340" cy="20" r="16" fill="#121212"/>
+<g fill="#F1EAEE">
+<rect x="40" y="130" width="70" height="60" rx="16"/><rect x="135" y="130" width="70" height="60" rx="16"/><rect x="230" y="130" width="70" height="60" rx="16"/><rect x="325" y="130" width="70" height="60" rx="16"/>
+<rect x="40" y="215" width="70" height="60" rx="16"/><rect x="230" y="215" width="70" height="60" rx="16"/><rect x="325" y="215" width="70" height="60" rx="16"/>
+<rect x="40" y="300" width="70" height="60" rx="16"/><rect x="135" y="300" width="70" height="60" rx="16"/><rect x="325" y="300" width="70" height="60" rx="16"/>
+</g>
+<rect x="135" y="215" width="70" height="60" rx="16" fill="#D4F53C" stroke="#121212" stroke-width="6"/>
+<rect x="230" y="300" width="70" height="60" rx="16" fill="#4DA3FF" stroke="#121212" stroke-width="6"/>
+</g>
+<g transform="translate(560 330) rotate(6)">
+<rect x="10" y="10" width="300" height="150" rx="40" fill="#121212"/><rect width="300" height="150" rx="40" fill="#FF4FA3" stroke="#121212" stroke-width="8"/>
+<g transform="translate(36 30) scale(0.9)"><rect width="100" height="100" rx="25" fill="#fff"/><path fill="#FF4FA3" fill-rule="evenodd" d="M34.8 24.8H59.2A23.8 23.8 0 0 1 59.2 72.4H46.3L35.8 81.9V72.4H34.8Z M47.2 38.9H58.1A9.5 9.5 0 0 1 58.1 57.9H47.2Z"/><circle cx="22.8" cy="37.9" r="6.7" fill="#D4F53C"/><circle cx="22.8" cy="59" r="6.7" fill="#FF4FA3"/></g>
+<text x="200" y="98" font-family="Bricolage Grotesque, Arial Black, Arial, sans-serif" font-weight="800" font-size="52" text-anchor="middle" fill="#121212">Join</text>
+</g>
+</svg>

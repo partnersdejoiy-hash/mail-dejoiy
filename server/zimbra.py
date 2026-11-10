@@ -107,6 +107,15 @@ def assetlinks(app):
     if not prints: return []
     return [{'relation':['delegate_permission/common.handle_all_urls'],'target':{'namespace':'android_app','package_name':entry['package'],'sha256_cert_fingerprints':prints}}]
 UPDATE_PHOTOS={p['photo']['id']:p['photo']['src'] for p in DEFAULT_UPDATES if p.get('photo')}
+SEED_UPDATE_IDS=[p['id'] for p in DEFAULT_UPDATES if p.get('seed')]
+def dejoiy_posts(saved):
+    """Saved Dejoiy Updates, plus any new launch post from default-updates.json ("seed": true) that the
+    team hasn't seen yet. Once the team posts, pins or deletes, those posts count as seen, so a deleted one stays gone."""
+    if 'posts' not in saved: return [dict(p) for p in DEFAULT_UPDATES]
+    seen=set(saved.get('seen',[])); ids={p.get('id') for p in saved['posts']}
+    fresh=[dict(p) for p in DEFAULT_UPDATES if p.get('seed') and p['id'] not in seen and p['id'] not in ids]
+    rest=[{**p,'pinned':False} for p in saved['posts']] if any(p.get('pinned') for p in fresh) else saved['posts']
+    return fresh+rest
 class AppearanceStore:
     """Per-mailbox appearance, keyed by the upstream account id so it follows the user across devices."""
     def __init__(self, path=None, table='appearance'):
@@ -1426,9 +1435,8 @@ class Handler(SimpleHTTPRequestHandler):
                 if self.path=='/api/config': return self.reply(200,{'mode':'live','configured':bool(self.server.zimbra)})
                 # Dejoiy Updates are public news, shown on the home and admin landing pages too. Company boxes never are.
                 if self.path=='/api/public/updates':
-                    saved=self.server.updates.get('dejoiy'); posts=saved['posts'] if 'posts' in saved else DEFAULT_UPDATES
-                    posts=[p for p in posts if p.get('audience','both')!='internal']
-                    return self.reply(200,{'posts':[{k:p.get(k) for k in ('id','kind','title','body','date','pinned','link','files','photo')} for p in posts[:12]]})
+                    posts=[p for p in dejoiy_posts(self.server.updates.get('dejoiy')) if p.get('audience','both')!='internal']
+                    return self.reply(200,{'posts':[{k:p.get(k) for k in ('id','kind','title','body','date','pinned','link','files','photo','art')} for p in posts[:12]]})
                 if self.path.startswith('/api/public/photo/'): return self.update_photo(self.path.rsplit('/',1)[1])
                 if self.path.startswith('/api/public/booking/'): return self.reply(200,self.public_booking(self.path.rsplit('/',1)[1]))
                 if self.path=='/api/shine/directory': return self.reply(200,self.shine_directory())
@@ -1675,7 +1683,7 @@ class Handler(SimpleHTTPRequestHandler):
     def updates_view(self, session):
         org=self.org(session); domain=self.domain(session); store=self.server.updates
         saved=store.get('dejoiy'); team=session['user'].get('canManageRoles') is True
-        dejoiy=saved['posts'] if 'posts' in saved else [dict(p) for p in DEFAULT_UPDATES]
+        dejoiy=dejoiy_posts(saved)
         # Home-page-only posts stay out of mailboxes; the Dejoiy team still sees them, to manage them.
         if not team: dejoiy=[p for p in dejoiy if p.get('audience','both')!='external']
         return {'dejoiy':dejoiy,'company':{'name':org['box'] or 'Company updates','domain':domain,
@@ -1688,7 +1696,7 @@ class Handler(SimpleHTTPRequestHandler):
         if not allowed: raise APIError('Your role cannot post here. Ask your admin for "Post in the company box".' if box=='company' else 'Only the Dejoiy team posts Dejoiy Updates.',403)
         with UPDATES_LOCK:
             saved=self.server.updates.get(key)
-            posts=saved['posts'] if 'posts' in saved else ([dict(p) for p in DEFAULT_UPDATES] if key=='dejoiy' else [])
+            posts=dejoiy_posts(saved) if key=='dejoiy' else saved.get('posts',[])
             if data.get('op')=='delete':
                 for p in posts:
                     if p.get('id')==data.get('id'):
@@ -1714,7 +1722,7 @@ class Handler(SimpleHTTPRequestHandler):
                 post['files']=self.store_update_files(data.get('files'),key,post['id'])
                 posts=[post,*posts][:100]
             else: raise APIError('Unsupported update operation.')
-            self.server.updates.put(key,{'posts':posts})
+            self.server.updates.put(key,{'posts':posts,'seen':SEED_UPDATE_IDS} if key=='dejoiy' else {'posts':posts})
         return self.updates_view(session)
     # ---------- calendar and booking links ----------
     def cal(self, fn, *args):

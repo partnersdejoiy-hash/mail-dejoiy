@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 600" role="img" aria-label="Every chat has its own colour">
+<rect width="960" height="600" fill="#B892FF"/>
+<circle cx="860" cy="90" r="120" fill="#3DDC84"/>
+<circle cx="70" cy="520" r="130" fill="#FF8A3D"/>
+<g font-family="Bricolage Grotesque, Arial Black, Arial, sans-serif" font-weight="800">
+<g transform="translate(180 70) rotate(-3)"><rect x="10" y="10" width="600" height="120" rx="36" fill="#121212"/><rect width="600" height="120" rx="36" fill="#FFE3F1" stroke="#121212" stroke-width="7"/><circle cx="70" cy="60" r="38" fill="#FF4FA3" stroke="#121212" stroke-width="6"/><rect x="132" y="36" width="260" height="22" rx="11" fill="#121212"/><rect x="132" y="72" width="360" height="16" rx="8" fill="#9C8F99"/><circle cx="550" cy="60" r="22" fill="#121212"/><text x="550" y="70" font-size="28" text-anchor="middle" fill="#fff">3</text></g>
+<g transform="translate(210 230) rotate(2)"><rect x="10" y="10" width="600" height="120" rx="36" fill="#121212"/><rect width="600" height="120" rx="36" fill="#FFF6CC" stroke="#121212" stroke-width="7"/><circle cx="70" cy="60" r="38" fill="#FFD23F" stroke="#121212" stroke-width="6"/><rect x="132" y="36" width="220" height="22" rx="11" fill="#121212"/><rect x="132" y="72" width="320" height="16" rx="8" fill="#9C8F99"/></g>
+<g transform="translate(170 390) rotate(-1)"><rect x="10" y="10" width="600" height="120" rx="36" fill="#121212"/><rect width="600" height="120" rx="36" fill="#DDF0FF" stroke="#121212" stroke-width="7"/><circle cx="70" cy="60" r="38" fill="#4DA3FF" stroke="#121212" stroke-width="6"/><text x="70" y="76" font-size="44" text-anchor="middle" fill="#121212">#</text><rect x="132" y="36" width="280" height="22" rx="11" fill="#121212"/><rect x="132" y="72" width="300" height="16" rx="8" fill="#9C8F99"/></g>
+</g>
+</svg>

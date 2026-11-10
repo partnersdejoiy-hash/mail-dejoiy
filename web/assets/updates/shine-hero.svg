@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 600" role="img" aria-label="Shine, Dejoiy's chat app">
+<rect width="960" height="600" fill="#FF4FA3"/>
+<circle cx="860" cy="70" r="150" fill="#D4F53C"/>
+<circle cx="90" cy="560" r="120" fill="#FFD23F"/>
+<g transform="translate(90 120) rotate(-6 150 150)">
+<rect x="10" y="10" width="300" height="300" rx="76" fill="#121212"/>
+<rect width="300" height="300" rx="76" fill="#FF4FA3" stroke="#121212" stroke-width="10"/>
+<g transform="scale(3)"><path fill="#fff" fill-rule="evenodd" d="M34.8 24.8H59.2A23.8 23.8 0 0 1 59.2 72.4H46.3L35.8 81.9V72.4H34.8Z M47.2 38.9H58.1A9.5 9.5 0 0 1 58.1 57.9H47.2Z"/><circle cx="22.8" cy="37.9" r="6.7" fill="#D4F53C"/><circle cx="22.8" cy="59" r="6.7" fill="#fff"/></g>
+</g>
+<g font-family="Bricolage Grotesque, Arial Black, Arial, sans-serif" font-weight="800">
+<g transform="translate(470 150) rotate(3)"><rect x="8" y="8" width="380" height="96" rx="48" fill="#121212"/><rect width="380" height="96" rx="48" fill="#fff" stroke="#121212" stroke-width="6"/><text x="190" y="64" font-size="44" text-anchor="middle" fill="#121212">hey team! 👋</text></g>
+<g transform="translate(520 290) rotate(-2)"><rect x="8" y="8" width="340" height="96" rx="48" fill="#121212"/><rect width="340" height="96" rx="48" fill="#D4F53C" stroke="#121212" stroke-width="6"/><text x="170" y="64" font-size="44" text-anchor="middle" fill="#121212">call at 4? 📹</text></g>
+<g transform="translate(470 430) rotate(2)"><rect x="8" y="8" width="300" height="96" rx="48" fill="#121212"/><rect width="300" height="96" rx="48" fill="#4DA3FF" stroke="#121212" stroke-width="6"/><text x="150" y="64" font-size="44" text-anchor="middle" fill="#121212">on it ✨</text></g>
+</g>
+</svg>

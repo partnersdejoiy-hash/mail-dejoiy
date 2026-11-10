@@ -77,4 +77,13 @@ class CalendarBridgeTests(unittest.TestCase):
         for bad in ({'op': 'save', 'owner': 'nope'}, {'op': 'drop', 'owner': 'a@x.in'}, {'op': 'list', 'owner': 'a@x.in', 'start': 'x'}):
             with self.assertRaises(z.APIError): h.shine_calendar(bad)
 
+class ShineUpdatesTests(unittest.TestCase):
+    def test_new_launch_posts_show_once_then_follow_the_team(self):
+        out = z.dejoiy_posts({'posts': [{'id': 'joi', 'pinned': True}]})
+        self.assertEqual([p['id'] for p in out[:3]], ['shine-launch', 'shine-calendar', 'shine-colours'])
+        self.assertEqual([p['id'] for p in out if p.get('pinned')], ['shine-launch'])
+        self.assertTrue(all(p['audience'] == 'both' for p in out[:3]))
+        # after the team has posted/deleted, a removed launch post stays gone
+        self.assertEqual([p['id'] for p in z.dejoiy_posts({'posts': [{'id': 'joi'}], 'seen': z.SEED_UPDATE_IDS})], ['joi'])
+
 if __name__ == '__main__': unittest.main()
