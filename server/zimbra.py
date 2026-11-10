@@ -347,30 +347,34 @@ class SafeHTML(HTMLParser):
             if re.fullmatch(r'\d{1,4}',value): safe+=f' {name}="{value}"'
         self.parts.append('<img'+safe+' alt="'+html.escape(attrs.get('alt') or '',quote=True)+'">')
 
-LABEL_COLOURS=(('important','#FF4FA3'),(r'urgent|asap|alert|security|warning|overdue|critical','#FF5A5F'),
-    (r'financ|bill|invoice|payment|bank|tax|receipt|salary|money','#FF8A3D'),(r'work|project|team|client|office|meeting','#FFD23F'),
-    (r'personal|family|friend|home','#3DDC84'),(r'design|creative|idea|social|promo|fun','#B892FF'),(r'update|newsletter|digest','#4DA3FF'))
-def label_colour(label):
-    """The same colours the inbox uses, so a Work mail looks like Work wherever it lands."""
-    for pattern,colour in LABEL_COLOURS:
-        if re.search(pattern,label or '',re.I): return colour
-    return '#FF4FA3'
+LABEL_TONES=(('important','important','#FF4FA3','Important'),(r'urgent|asap|alert|security|warning|overdue|critical','urgent','#FF5A5F','Urgent'),
+    (r'financ|bill|invoice|payment|bank|tax|receipt|salary|money','money','#FF8A3D','Money'),(r'work|project|team|client|office|meeting','work','#FFD23F','Work'),
+    (r'personal|family|friend|home','personal','#3DDC84','Personal'),(r'design|creative|idea|social|promo|fun','ideas','#B892FF','Ideas'),
+    (r'update|newsletter|digest','updates','#4DA3FF','Updates'))
+def label_tone(label):
+    """The same colours the inbox uses, so a Work mail looks like Work wherever it lands: (key, colour, name)."""
+    for pattern,key,colour,name in LABEL_TONES:
+        if label and re.search(pattern,label,re.I): return key,colour,name
+    return 'mail','#FF4FA3',''
 def email_template(inner, label, app_url):
-    """Outgoing mail: the message on a card with a band in its label colour and a Dejoiy Mail footer.
-    Inline styles and tables only, because that is all most mail apps keep."""
-    colour=label_colour(label); app=html.escape(app_url,quote=True)
-    tag=(f'<tr><td style="padding:22px 28px 0"><span style="display:inline-block;padding:5px 12px;border-radius:999px;background:{colour};color:#121212;'
-         f'font:700 12px/1.2 Arial,Helvetica,sans-serif">{html.escape(label)}</span></td></tr>') if label else ''
-    return (f'<div data-dejoiy-mail style="margin:0;padding:24px 12px;background:#F6F3F7">'
-        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:640px;margin:0 auto;border-collapse:separate">'
-        f'<tr><td style="background:#FFFFFF;border-radius:22px;overflow:hidden;border:1px solid #ECE6EE">'
-        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">'
-        f'<tr><td style="height:10px;line-height:10px;font-size:0;background:{colour}">&nbsp;</td></tr>{tag}'
-        f'<tr><td style="padding:20px 28px 28px;color:#1D1B20;font:15px/1.6 Arial,Helvetica,sans-serif">{inner}</td></tr>'
-        f'</table></td></tr>'
-        f'<tr><td align="center" style="padding:18px 8px 4px;font:12px/1.5 Arial,Helvetica,sans-serif;color:#6B6670">'
-        f'<a href="{app}" style="text-decoration:none"><img src="{app}/assets/brand/dejoiy-mail-email.png" alt="Dejoiy Mail" height="22" style="height:22px;width:auto;border:0;display:block;margin:0 auto 8px"></a>'
-        f'This mail is being sent using <a href="{app}" style="color:#D6338A;font-weight:700;text-decoration:none">Dejoiy Mail</a>'
+    """Outgoing mail: an animated :D banner in the label colour, the message, and a Dejoiy Mail footer.
+    The banner and logo are images, so dark-mode mail apps cannot recolour them; tables and inline
+    styles only, because that is all most mail apps keep."""
+    key,colour,name=label_tone(label); app=html.escape(app_url,quote=True)
+    own='' if not label or label.lower()==name.lower() else (f'<p style="margin:0 0 14px;font:700 12px/1.4 Arial,Helvetica,sans-serif;'
+        f'letter-spacing:.04em;text-transform:uppercase;color:#6B6670">Label · {html.escape(label)}</p>')
+    return (f'<div data-dejoiy-mail style="margin:0;padding:20px 10px;background:#F6F3F7">'
+        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;margin:0 auto;border-collapse:separate">'
+        f'<tr><td style="background:{colour};border:3px solid #121212;border-bottom:0;border-radius:24px 24px 0 0;line-height:0;font-size:0;overflow:hidden">'
+        f'<a href="{app}"><img src="{app}/assets/mail/banner-{key}.gif" width="594" alt="{html.escape(name or "Dejoiy Mail")}" '
+        f'style="display:block;width:100%;max-width:594px;height:auto;border:0;border-radius:21px 21px 0 0"></a></td></tr>'
+        f'<tr><td style="background:#FFFFFF;border:3px solid #121212;border-top:0;border-radius:0 0 24px 24px;padding:26px 28px 30px;'
+        f'color:#1D1B20;font:16px/1.6 Arial,Helvetica,sans-serif">{own}{inner}</td></tr>'
+        f'<tr><td align="center" style="padding:26px 8px 6px">'
+        f'<a href="{app}" style="text-decoration:none"><img src="{app}/assets/mail/footer-logo.png" alt="Dejoiy Mail" width="160" '
+        f'style="display:block;width:160px;height:auto;border:0;margin:0 auto 10px"></a>'
+        f'<p style="margin:0;font:13px/1.5 Arial,Helvetica,sans-serif;color:#6B6670">This mail is being sent using '
+        f'<a href="{app}" style="color:#D6338A;font-weight:700;text-decoration:none">Dejoiy Mail</a></p>'
         f'</td></tr></table></div>')
 
 def safe_html(value, images=None):

@@ -77,7 +77,7 @@ class AdapterTests(unittest.TestCase):
         client=z.Zimbra('https://mail.example.com');client.call=Mock(return_value=z.ET.fromstring('<SendMsgResponse xmlns="urn:zimbraMail"><m id="42"/></SendMsgResponse>'))
         client.write_message('token',{'to':'a@b.com','subject':'Invoice','body':'Hi','label':'Money','important':True})
         request=client.call.call_args_list[0].args[0]
-        self.assertIn('#FF8A3D',request.findall('.//{urn:zimbraMail}content')[1].text)
+        self.assertIn('banner-money.gif',request.findall('.//{urn:zimbraMail}content')[1].text)
         self.assertEqual(request.find('.//{urn:zimbraMail}m').get('f'),'!')
     def test_attachment_rejected_instead_of_silent_loss(self):
         client=z.Zimbra('https://mail.example.com')

@@ -6,3 +6,4 @@ node_modules/
 *.sqlite-journal
 zimbra-foss-build/
 .taste-skill/
+.email-frames/
