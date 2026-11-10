@@ -25,7 +25,7 @@ Views.compose = function(el, arg){
   let pendingFiles=0;
   el.innerHTML = `
   <div class="compose">
-    <div class="compose-head"><button class="icon-btn sm c-back" id="c-back" type="button" title="Back" aria-label="Back">${Icons.get("back")}</button><span class="c-ico">${Icons.get("compose")}</span> ${mode==="new"?"New message":mode==="replyall"?"Reply all":mode[0].toUpperCase()+mode.slice(1)} <span class="sp"></span>
+    <div class="compose-head"><button class="icon-btn sm c-back" id="c-back" type="button" title="Back" aria-label="Back">${Icons.get("back")}</button><span class="c-ico">${Icons.get("compose")}</span> <span class="c-title">${mode==="new"?"New message":mode==="replyall"?"Reply all":mode[0].toUpperCase()+mode.slice(1)}</span> <span class="sp"></span>
       <button class="btn sm ghost" id="c-discard">Discard</button><button class="btn sm primary c-send-top" id="c-send-top" aria-label="Send">${Icons.get("sent")}</button></div>
     <div class="c-row"><span class="c-lab">To</span><div class="chip-field" data-field="to"><input id="c-to" type="email" multiple placeholder="Type an address, press Enter" autocomplete="off" enterkeyhint="next" aria-label="To"></div>
       <button class="btn sm ghost" id="c-ccbtn">Cc/Bcc</button></div>

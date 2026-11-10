@@ -111,7 +111,7 @@ html[data-dj] .avatar{background:var(--pop);color:#121212;font-weight:800}
 @media (max-width:1023px), (max-width:1199px) and (pointer:coarse){.mail-filterbar button.active::after{display:none}}
 
 /* ---------- mail cards: an open conversation is a card coloured by how much it matters ---------- */
-:root{--tone-important:#ff4fa3;--tone-danger:#ff5a5f;--tone-money:#ff8a3d;--tone-work:#ffd23f;--tone-personal:#3ddc84;--tone-fun:#b892ff}
+:root{--tone-security:#ff5a5f;--tone-updates:#4da3ff;--tone-important:#ff4fa3;--tone-danger:#ff5a5f;--tone-money:#ff8a3d;--tone-work:#ffd23f;--tone-personal:#3ddc84;--tone-fun:#b892ff}
 .mail-card{--card:var(--surface-2);--card-ink:var(--ink);position:relative;margin:12px clamp(8px,1.6vw,20px) 20px;padding:clamp(18px,2.4vw,28px) clamp(14px,2vw,24px) 14px;
   border-radius:28px;background:var(--card);color:var(--card-ink);animation:mcOpen .45s cubic-bezier(.16,1,.3,1) both}
 .mail-card[data-tone]:not([data-tone=""]){--card-ink:#121212}
@@ -146,9 +146,7 @@ html[data-brightness="dark"] .mail-card .thread-message,html[data-brightness="me
 .lbl[data-tone="personal"]{--t:#1fb866}.lbl[data-tone="fun"]{--t:var(--tone-fun)}
 .mail-card .lbl{background:rgba(255,255,255,.7);color:#121212}
 html[data-brightness="dark"] .mail-card .thread-message .lbl{background:rgba(255,255,255,.1);color:#eef2fa}
-/* important mail stands out in the list too */
-.msg-row[data-tone="important"]:not(.selected){background:color-mix(in srgb,var(--tone-important) 10%,transparent)}
-.msg-row[data-tone="danger"]:not(.selected){background:color-mix(in srgb,var(--tone-danger) 8%,transparent)}
+
 
 @media (max-width:1023px), (max-width:1199px) and (pointer:coarse){
   .mail-card{margin:8px 10px 16px;border-radius:24px}
@@ -182,4 +180,71 @@ html[data-brightness="dark"] .mail-card .thread-message .lbl{background:rgba(255
   #topbar{padding-left:max(8px,env(safe-area-inset-left));padding-right:max(8px,env(safe-area-inset-right))}
   body.reader-open .r-toolbar{padding-left:max(8px,env(safe-area-inset-left));padding-right:max(8px,env(safe-area-inset-right))}
   .dialog,.dlg,[role="dialog"]{max-height:calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
+}
+
+
+/* ============ the app on phones and tablets: colour cards, glass, a compose sheet ============ */
+/* every mail has a colour: its label, what it is about, or your Dejoiy colour */
+.msg-row{--t:var(--pop,#ff4fa3)}
+.msg-row[data-tone="important"],.mail-card[data-tone="important"]{--t:var(--tone-important)}
+.msg-row[data-tone="danger"],.msg-row[data-tone="security"]{--t:var(--tone-danger)}
+.msg-row[data-tone="money"]{--t:var(--tone-money)}
+.msg-row[data-tone="work"]{--t:var(--tone-work)}
+.msg-row[data-tone="personal"]{--t:var(--tone-personal)}
+.msg-row[data-tone="fun"]{--t:var(--tone-fun)}
+.msg-row[data-tone="updates"]{--t:var(--tone-updates)}
+.mail-card[data-tone="security"]{--card:var(--tone-security)}
+.mail-card[data-tone="updates"]{--card:var(--tone-updates)}
+.mail-card[data-tone=""]{--card:var(--pop,#ff4fa3);--card-ink:#121212}
+.mail-card[data-tone=""] .thread-actions .btn{background:#121212;color:#fff}
+/* the open card is glassy over a background scene, solid on plain looks */
+html[data-scenic="true"] .mail-card{background:color-mix(in srgb,var(--card) 86%,transparent);backdrop-filter:blur(18px) saturate(1.3);-webkit-backdrop-filter:blur(18px) saturate(1.3)}
+
+@media (max-width:1023px), (max-width:1199px) and (pointer:coarse){
+  .msg-list{padding:4px 0 96px}
+  html .msg-row{margin:7px 10px;border-radius:22px;min-height:84px;padding:13px 14px!important;border:1px solid color-mix(in srgb,var(--t) 38%,transparent)!important;
+    background:color-mix(in srgb,var(--t) 15%,var(--row-base,#fff))!important;transition:transform .2s cubic-bezier(.16,1,.3,1),background .2s}
+  html[data-brightness="light"] .msg-row{--row-base:#fff}
+  html:is([data-brightness="dark"],[data-brightness="medium"]) .msg-row{--row-base:#18161b}
+  html[data-scenic="true"] .msg-row{--row-base:transparent;background:color-mix(in srgb,var(--t) 26%,transparent)!important;
+    backdrop-filter:blur(14px) saturate(1.35);-webkit-backdrop-filter:blur(14px) saturate(1.35)}
+  html .msg-row.unread{border-color:color-mix(in srgb,var(--t) 70%,transparent)!important;box-shadow:inset 4px 0 0 0 transparent}
+  html .msg-row.selected{background:color-mix(in srgb,var(--t) 34%,var(--row-base,transparent))!important}
+  html .msg-row:active{transform:scale(.985)}
+  .msg-row .m-avatar{box-shadow:0 0 0 2px color-mix(in srgb,var(--t) 70%,transparent)}
+  .msg-row.unread .m-avatar::after{background:var(--t)}
+  .message-group{background:transparent!important;padding:14px 18px 2px!important;font-weight:800;letter-spacing:-.01em}
+  .msg-row .m-labels .lbl{background:color-mix(in srgb,var(--t) 22%,transparent)}
+
+  /* compose: a sheet in your colour, fields as pills, a big send button */
+  .compose{background:transparent!important;padding:0 0 calc(16px + env(safe-area-inset-bottom))!important;gap:0}
+  .compose-head{display:flex;align-items:center;gap:8px;margin:0;padding:calc(10px + env(safe-area-inset-top)) 12px 18px!important;
+    background:var(--pop,#ff4fa3)!important;color:#121212!important;border:0!important;border-radius:0 0 28px 28px}
+  .compose-head .c-title{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:clamp(20px,6.4vw,26px);font-weight:800;letter-spacing:-.035em}
+  .compose-head .icon-btn{color:#121212}
+  .compose-head #c-discard{border:2px solid #121212!important;border-radius:999px;background:transparent;color:#121212;font-weight:700}
+  .compose-head .c-send-top{width:46px;height:46px;border-radius:50%!important;background:#121212!important;color:#fff!important;border:0;display:inline-grid;place-items:center;padding:0}
+  .compose .c-row{margin:10px 12px 0;padding:6px 8px 6px 6px!important;border:0!important;border-radius:999px;background:var(--compose-field)!important;min-height:52px;align-items:center;box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--pop,#ff4fa3) 26%,transparent)}
+  html[data-brightness="light"] .compose{--compose-field:#fff}
+  html:is([data-brightness="dark"],[data-brightness="medium"]) .compose{--compose-field:#211e25}
+  html[data-scenic="true"] .compose{--compose-field:color-mix(in srgb,var(--surface) 92%,transparent)}
+  .compose .c-lab{flex:none;min-width:auto!important;padding:6px 12px;border-radius:999px;background:color-mix(in srgb,var(--pop,#ff4fa3) 22%,transparent);color:var(--ink);font-weight:800;font-size:13px}
+  .compose .c-row input{background:transparent!important;border:0!important;box-shadow:none!important}
+  .compose #c-ccbtn{border-radius:999px}
+  .compose .fmt-bar{margin:12px 12px 0;padding:6px!important;border:0!important;border-radius:18px;background:var(--compose-field)!important;overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none}
+  .compose .fmt-bar::-webkit-scrollbar{display:none}
+  .compose .fmt-bar .icon-btn{flex:none;min-width:40px;height:40px;border-radius:12px}
+  .compose #compose-body{margin:10px 12px 0;min-height:42vh;padding:18px!important;border:0!important;border-radius:24px;background:var(--compose-field)!important;line-height:1.6;box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--pop,#ff4fa3) 26%,transparent)}
+  .compose #compose-body:focus{outline:3px solid color-mix(in srgb,var(--pop,#ff4fa3) 55%,transparent);outline-offset:0}
+  .compose-foot{display:flex;gap:10px;flex-wrap:wrap;margin:14px 12px 0;padding:0!important;border:0!important;background:transparent!important}
+  .compose-foot #c-send{flex:1 1 100%;min-height:56px;border-radius:999px;background:#121212!important;color:#fff!important;border:0;font-size:17px;font-weight:800;gap:10px;justify-content:center}
+  .compose-foot #c-send:active{transform:scale(.98)}
+  .compose-foot .btn:not(#c-send){flex:1;min-height:48px;border-radius:999px}
+  .compose-foot #c-status{flex:1 1 100%;text-align:center;margin:0!important}
+}
+/* small phones: the title gets its own line under the buttons */
+@media (max-width:380px){
+  .compose-head{flex-wrap:wrap}
+  .compose-head .c-title{order:9;flex:1 1 100%;padding:4px 6px 0;font-size:28px}
+  .compose-head #c-discard{margin-left:auto}
 }

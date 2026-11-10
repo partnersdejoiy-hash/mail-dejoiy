@@ -274,9 +274,19 @@ Views.mail = function(el, folder){
   function labelTone(l){ l=String(l).toLowerCase();
     return /urgent|asap|alert|security|warning|overdue|critical/.test(l)?"danger":/financ|bill|invoice|payment|bank|tax|receipt|salary/.test(l)?"money"
       :/work|project|team|client|office|meeting/.test(l)?"work":/personal|family|friend|home/.test(l)?"personal":/design|creative|idea|social|promo|fun/.test(l)?"fun":""; }
+  /* Untagged mail still gets a colour, read from what it is: codes and sign-ins, money, work, updates. */
+  function autoTone(e){
+    const m=e.latest||e, text=`${e.subject||""} ${strip(m.body||"").slice(0,300)}`.toLowerCase(), from=String(m.from?.email||"").toLowerCase();
+    if(/\botp\b|verification|verify|one[- ]time|password|sign[- ]?in|log[- ]?in|security|2fa|passcode|login code/.test(text)) return "security";
+    if(/invoice|receipt|payment|paid|upi|₹|refund|bank|billing|order (confirmed|placed)|subscription/.test(text)) return "money";
+    if(/shared a file|meeting|project|proposal|document|workdrive|google drive|deadline|report|interview|offer letter/.test(text)) return "work";
+    if(/no-?reply|newsletter|notifications?@|updates?@|digest|unsubscribe/.test(from+" "+text)) return "updates";
+    return "";
+  }
   function toneOf(e){ if(e.important||(e.messages||[]).some(m=>m.important)) return "important"; if(ui.folder==="spam") return "danger";
-    const found=(e.labels||[]).map(labelTone).filter(Boolean); return ["danger","money","work","personal","fun"].find(t=>found.includes(t))||""; }
-  function toneName(t){ return {important:"Important", danger:"Urgent", money:"Money", work:"Work", personal:"Personal", fun:"Ideas"}[t]||""; }
+    const found=(e.labels||[]).map(labelTone).filter(Boolean);
+    return ["danger","money","work","personal","fun"].find(t=>found.includes(t)) || autoTone(e); }
+  function toneName(t){ return {important:"Important", danger:"Urgent", security:"Security", money:"Money", work:"Work", personal:"Personal", fun:"Ideas", updates:"Updates"}[t]||""; }
   function chip(l){ return `<span class="lbl" data-tone="${labelTone(l)}">${esc(l)}</span>`; }
   const me = ()=> (Store.state.user.email||"").toLowerCase();
   const recipients = m=> [...(m.to||[]),...(m.cc||[])].map(a=>a.toLowerCase()===me()?"me":a).join(", ") || "undisclosed recipients";
