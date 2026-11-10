@@ -70,6 +70,7 @@ const Live={enabled:!!window.DEJOIY_LIVE,csrf:'',more:false,avatars:{},
     try{session=await this.request('session');}catch(_){session=await this.login();}
     this.csrf=session.csrf; Store.state.user=session.user;
     const onAdminSite=String(location.hostname||'').startsWith('admin-');
+    if(new URLSearchParams(location.search).get('next')==='shine'){location.replace('/shine/sso?return='+encodeURIComponent(new URLSearchParams(location.search).get('return')||'/app/chats'));return new Promise(()=>{});}
     if(new URLSearchParams(location.search).get('next')==='admin'||onAdminSite){ if(session.user.isAdmin===true){location.replace(ADMIN_URL);return new Promise(()=>{});} if(onAdminSite){location.replace(location.protocol+'//'+location.host.replace(/^admin-/,'')+'/');return new Promise(()=>{});} history.replaceState(null,'','/'); }
     await this.loadAppearance();
     try{const prefs=await this.request('preferences');Store.state.user.name=prefs.name||Store.state.user.name;Store.state.user.signature=prefs.signature;Store.state.user.signatureHtml=prefs.signatureHtml||'';Store.state.vacation=prefs.vacation;}catch(e){alert(e.message+' Account preferences could not be loaded.');}
@@ -77,6 +78,7 @@ const Live={enabled:!!window.DEJOIY_LIVE,csrf:'',more:false,avatars:{},
     await Settings.load();
     try{await this.sync();}catch(e){alert(e.message+' Use Refresh to retry.');}
     this.install();
+    if(window.ShineDock) ShineDock.init();
     // The company box is named by its admins; show that name in the menu.
     this.request('updates').then(v=>{App.companyName=v.company?.name;App.refreshNav();}).catch(()=>{});
   },

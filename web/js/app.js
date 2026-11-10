@@ -122,11 +122,14 @@ const App = {
       this.ui.activeTab=null; this.ui.quickFilter="all"; this.ui.sel.clear(); this.go(b.dataset.nav); document.body.classList.remove("nav-open");
     }));
     const bn = document.getElementById("bottomnav");
-    const items = Live.enabled ? [["mail:inbox","inbox","Inbox"],["calendar","calendar","Calendar"],["contacts","contacts","Contacts"],["settings","settings","Settings"]] : [["today","home","Today"],["mail:inbox","inbox","Mail"],["calendar","calendar","Calendar"],["chat","chat","Chat"]];
+    const items = Live.enabled ? [["mail:inbox","inbox","Inbox"],["shine","chat","Chat"],["calendar","calendar","Calendar"],["contacts","contacts","Contacts"],["settings","settings","Settings"]] : [["today","home","Today"],["mail:inbox","inbox","Mail"],["calendar","calendar","Calendar"],["chat","chat","Chat"]];
     bn.innerHTML = items.map(([r,ico,label])=>{
       const active = this.route===(r.includes(":")?r.split(":")[0]:r) && (!r.includes(":") || this.ui.folder===r.split(":")[1]);
+      if(r==="shine") return `<button data-shine class="b-shine"><span class="b-ico">${Icons.get(ico)}</span>${label}<i data-shine-badge hidden></i></button>`;
       return `<button data-nav="${r}" class="${active?"active":""}" ${active?'aria-current="page"':""}><span class="b-ico">${Icons.get(ico)}</span>${label}</button>`;
     }).join("");
+    bn.querySelector("[data-shine]")?.addEventListener("click", ()=> window.ShineDock && ShineDock.open());
+    if(window.ShineDock) ShineDock.badge();
     bn.querySelectorAll("[data-nav]").forEach(b=> b.addEventListener("click", async ()=>{
       if(b.dataset.nav.startsWith("mail:")){ this.ui.activeTab=null; this.ui.tabs=[]; this.ui.sel.clear(); this.ui.folder=b.dataset.nav.split(":")[1]; }
       if(location.hash==="#/"+b.dataset.nav) this.render(); else this.go(b.dataset.nav); }));

@@ -9,6 +9,8 @@ import threading
 import sqlite3
 import ipaddress
 import base64
+import hashlib
+import hmac
 import binascii
 from collections.abc import MutableMapping
 import urllib.request
@@ -82,6 +84,16 @@ MAX_UPDATE_FILES=10*1024*1024
 # Shown in Dejoiy Updates until the Dejoiy team posts or deletes anything there.
 DEFAULT_UPDATES=json.loads((Path(__file__).with_name('default-updates.json')).read_text(encoding='utf-8'))
 # People photos on the default posts (Unsplash License). Only these can be fetched: the server is not an open proxy.
+def b64u(raw):
+    return base64.urlsafe_b64encode(raw).rstrip(b'=').decode()
+def shine_token(secret, email, name, now=None, ttl=120):
+    """Short-lived sign-in token for Shine (Dejoiy's chat app). Shine checks the HMAC with the same
+    secret (src/convex/lib/dejoiyMailToken.ts there) and signs the same mailbox user in."""
+    claims={'e':email.lower(),'n':name or '','x':int(((now or time.time())+ttl)*1000),'d':secrets.token_urlsafe(9)}
+    body=b64u(json.dumps(claims,separators=(',',':')).encode())
+    return body+'.'+b64u(hmac.new(secret.encode(),body.encode(),hashlib.sha256).digest())
+def safe_return(raw, fallback='/app/chats'):
+    return raw if raw and raw.startswith('/') and not raw.startswith('//') and len(raw)<500 and not any(ord(c)<33 for c in raw) else fallback
 ANDROID_APPS=json.loads((Path(__file__).with_name('android-apps.json')).read_text(encoding='utf-8'))
 def assetlinks(app):
     """Digital Asset Links: proves the Play Store app and this site belong together, so the app opens
@@ -1433,6 +1445,9 @@ class Handler(SimpleHTTPRequestHandler):
                     ident=urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get('id',[''])[0]
                     return self.reply(200,self.cal(dcalendar.event_detail,self.server.zimbra,s['token'],ident))
                 if self.path=='/api/booking': return self.reply(200,self.booking_view(s))
+                if self.path=='/api/shine':
+                    if not self.server.shine_secret: return self.reply(200,{'enabled':False,'error':"Shine chat isn't connected to this mailbox yet."})
+                    return self.reply(200,{'enabled':True,'origin':self.server.shine_origin,'token':shine_token(self.server.shine_secret,s['user']['email'],s['user'].get('name',''))})
                 if self.path.startswith('/api/updates/file?'):
                     return self.update_file(s,urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get('id',[''])[0])
                 if self.path=='/api/preferences': return self.reply(200,self.server.zimbra.preferences(s['token']))
@@ -1501,6 +1516,7 @@ class Handler(SimpleHTTPRequestHandler):
         if path in ('/terms','/privacy'):
             self.path=path+'.html'
         if re.fullmatch(r'/book/[a-z0-9-]{3,40}',path): self.path='/booking.html'
+        if path=='/shine/sso': return self.shine_sso()
         if path=='/admin/':
             return self.redirect('/admin')
         if path=='/signup':
@@ -1519,6 +1535,14 @@ class Handler(SimpleHTTPRequestHandler):
     def domain(self, session):
         email=session['user']['email'].lower()
         return email.rsplit('@',1)[1] if '@' in email else ''
+    def shine_sso(self):
+        # Shine's "Continue with Dejoiy Mail": signed in here -> back to Shine with a token; otherwise sign in first.
+        back=safe_return(urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get('return',[''])[0])
+        if not self.server.shine_secret: return self.send_error(503,'Shine is not connected')
+        try: _,s=self.session()
+        except APIError: return self.redirect('/?next=shine&return='+urllib.parse.quote(back,safe=''))
+        t=shine_token(self.server.shine_secret,s['user']['email'],s['user'].get('name',''))
+        return self.redirect(self.server.shine_origin+'/auth/dejoiy#t='+urllib.parse.quote(t,safe='')+'&next='+urllib.parse.quote(back,safe=''))
     def redirect(self, location):
         self.send_response(302); self.send_header('Location',location); self.send_header('Cache-Control','no-store'); self.end_headers()
     def account(self, session):
@@ -1865,6 +1889,8 @@ def serve():
     server.updates=AppearanceStore((str(Path(os.environ['SESSION_DB']).with_name('updates.sqlite')) if os.environ.get('SESSION_DB') else None),'updates')
     server.ui_settings=AppearanceStore((str(Path(os.environ['SESSION_DB']).with_name('settings.sqlite')) if os.environ.get('SESSION_DB') else None),'ui_settings')
     server.mail_host=os.environ.get('MAIL_HOST') or parsed.hostname
+    server.shine_origin=(os.environ.get('SHINE_ORIGIN') or 'https://app.shine.dejoiy.com').rstrip('/')
+    server.shine_secret=os.environ.get('SHINE_SSO_SECRET','')
     state_dir=Path(os.environ['SESSION_DB']).parent if os.environ.get('SESSION_DB') else None
     server.avatars=AvatarStore(str(state_dir/'avatars.sqlite') if state_dir else None)
     server.media=MediaStore(str(state_dir/'media') if state_dir else None)
