@@ -122,6 +122,7 @@ function create(c){
     <label>Password<input name="password" type="password" minlength="8" required autocomplete="new-password"></label>
     <label>Confirm password<input name="confirm" type="password" minlength="8" required autocomplete="new-password"></label>
     <p class="su-error" role="alert"></p>
+    <p class="su-legal">By creating your company mail you agree to the <a href="/terms" target="_blank" rel="noopener">Terms of Service</a> and <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>, and confirm you may accept them for your company.</p>
     <button class="su-btn">Create my company mail</button></form>`;
   const form = body.querySelector("form");
   form.addEventListener("submit", async e => {

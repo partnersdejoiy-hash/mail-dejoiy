@@ -75,6 +75,21 @@ def clean_appearance(data):
     return out
 
 UPDATES_LOCK=threading.Lock()
+# Shown in Dejoiy Updates until the Dejoiy team posts or deletes anything there (dates: 10 Nov 2026, IST).
+DEFAULT_UPDATES=[
+    {'id':'welcome','title':'Welcome to Dejoiy Mail :D','author':'Dejoiy team','email':'','date':1794297600000,
+     'body':'Business email on your own domain, made to feel like an app.\n\nThis page is where the Dejoiy team shares new features, tips and service notices. Your company has its own box too, right below this one in the menu, for updates from your team.'},
+    {'id':'colours','title':'Every mail now has a colour','author':'Dejoiy team','email':'','date':1794296700000,
+     'body':'Important mail is pink, Work is yellow, Money is orange, Personal is green, Ideas are lilac and Updates are blue. Mail without a label gets a colour from what it says, or your own Dejoiy colour.\n\nOpen a mail and it opens in the same colour.'},
+    {'id':'labels','title':'Pick a label while you write','author':'Dejoiy team','email':'','date':1794295800000,
+     'body':'Compose has a Label row. Choose Important, Work, Money and more, or leave it on Auto and Dejoiy Mail picks one from your message.\n\nMail you send to Gmail and other inboxes arrives in a card in the label colour, with the Dejoiy Mail banner.'},
+    {'id':'contacts','title':'Contacts that fill themselves','author':'Dejoiy team','email':'','date':1794294900000,
+     'body':'Everyone you write to is saved to Contacts automatically. People at your company show under Work family, everyone else under Others.'},
+    {'id':'look','title':'Make it yours','author':'Dejoiy team','email':'','date':1794294000000,
+     'body':'Choose a Dejoiy colour on the home page and the logo, sign-in and app follow it on this browser. Add a background theme in Settings, and tap your photo to change your profile picture.'},
+    {'id':'safety','title':'Keep your mailbox safe','author':'Dejoiy team','email':'','date':1794293100000,
+     'body':'Use a strong password you don\'t use anywhere else. Dejoiy will never ask for your password by email. If something looks off, tell your company admin straight away.'},
+]
 class AppearanceStore:
     """Per-mailbox appearance, keyed by the upstream account id so it follows the user across devices."""
     def __init__(self, path=None, table='appearance'):
@@ -1442,6 +1457,7 @@ class Handler(SimpleHTTPRequestHandler):
             # The admin site: its landing page, a sign-in page and the console itself.
             if path in ('/','/index.html'): self.path='/admin-home.html'
             elif path=='/signin': self.path='/index.html'
+            elif path in ('/terms','/privacy'): self.path=path+'.html'
             elif path=='/admin/': return self.redirect('/admin')
             elif path=='/admin' or path in ADMIN_ASSETS:
                 try: _,s=self.session()
@@ -1456,6 +1472,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self.redirect(self.server.admin_origin+'/admin')
         if path=='/home':
             self.path='/home.html'
+        if path in ('/terms','/privacy'):
+            self.path=path+'.html'
         if path=='/admin/':
             return self.redirect('/admin')
         if path=='/signup':
@@ -1547,7 +1565,8 @@ class Handler(SimpleHTTPRequestHandler):
         session['org']=info; return info
     def updates_view(self, session):
         org=self.org(session); domain=self.domain(session); store=self.server.updates
-        return {'dejoiy':store.get('dejoiy').get('posts',[]),'company':{'name':org['box'] or 'Company updates','domain':domain,
+        saved=store.get('dejoiy')
+        return {'dejoiy':saved['posts'] if 'posts' in saved else [dict(p) for p in DEFAULT_UPDATES],'company':{'name':org['box'] or 'Company updates','domain':domain,
             'posts':store.get('company:'+domain).get('posts',[])},'can':{'dejoiy':session['user'].get('canManageRoles') is True,'company':org['post']}}
     def post_update(self, session, data):
         box=data.get('box'); domain=self.domain(session)
@@ -1556,7 +1575,8 @@ class Handler(SimpleHTTPRequestHandler):
         else: raise APIError('Choose where to post.')
         if not allowed: raise APIError('Your role cannot post here. Ask your admin for "Post in the company box".' if box=='company' else 'Only the Dejoiy team posts Dejoiy Updates.',403)
         with UPDATES_LOCK:
-            posts=self.server.updates.get(key).get('posts',[])
+            saved=self.server.updates.get(key)
+            posts=saved['posts'] if 'posts' in saved else ([dict(p) for p in DEFAULT_UPDATES] if key=='dejoiy' else [])
             if data.get('op')=='delete':
                 posts=[p for p in posts if p.get('id')!=data.get('id')]
             elif data.get('op')=='post':

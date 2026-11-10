@@ -42,7 +42,7 @@ function loginMarkup(admin,configured){
     <aside class="lg-story" aria-label="About Dejoiy Mail"><div class="lg-slides">${slides}</div>
       <div class="lg-dots">${LOGIN_SLIDES.map(([t],k)=>`<button type="button" aria-label="${t}"></button>`).join('')}</div></aside>
   </main>
-  <p class="lg-foot">© ${new Date().getFullYear()} Dejoiy India Private Limited</p>`;
+  <p class="lg-foot">© ${new Date().getFullYear()} Dejoiy India Private Limited · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a></p>`;
 }
 const Live={enabled:!!window.DEJOIY_LIVE,csrf:'',more:false,avatars:{},
   async request(path,data){

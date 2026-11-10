@@ -129,3 +129,5 @@ input:focus{outline:none;box-shadow:4px 4px 0 var(--pink)}
 }
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}html{scroll-behavior:auto}}
 .su-plan{display:inline-block;margin:0 0 18px!important;padding:8px 14px;border-radius:999px;background:var(--pink-soft);color:var(--ink)!important;font-size:14px;font-weight:600}
+.su-legal{font-size:13px;line-height:1.5;opacity:.8;margin:6px 0 12px}
+.su-legal a{font-weight:700}
