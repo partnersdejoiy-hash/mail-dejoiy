@@ -167,10 +167,11 @@ html[data-brightness="dark"] .mail-card .thread-message .lbl{background:rgba(255
   .mail-card .thread-actions{position:static!important;margin:6px 0 0!important;padding:10px 0 4px!important;background:transparent!important}
   .mail-card{overflow:clip}
   /* the sender line gets the width: reply lives at the bottom, more in the toolbar */
-  .mail-card .tm-act{display:none}
+  .mail-card .thread-message .tm-act{display:none!important}
   .mail-card .tm-head{gap:10px}
-  .mail-card .tm-line{white-space:normal;overflow-wrap:anywhere}
-  .mail-card .tm-email{display:block;font-size:13px}
+  .mail-card .tm-who{flex:1 1 0;min-width:0}
+  .mail-card .tm-line{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mail-card .tm-email{display:none}
   .mail-card .tm-to{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .mail-card .r-body{overflow-x:auto;word-break:break-word}
   .mail-card .r-body img,.mail-card .r-body table{max-width:100%!important;height:auto}
