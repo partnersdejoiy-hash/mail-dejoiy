@@ -164,12 +164,12 @@ const Live={enabled:!!window.DEJOIY_LIVE,csrf:'',more:false,avatars:{},
   async loadAppearance(){
     let saved={};
     try{saved=await this.request('appearance');}catch(_){return;}
-    if(saved&&saved.theme){const p=Store.state.prefs;Object.assign(p,{theme:saved.theme,brightness:saved.brightness,glass:saved.glass||{},customBg:saved.customBg||''});Store.save();Themes.apply();}
+    if(saved&&saved.theme){const p=Store.state.prefs;Object.assign(p,{theme:saved.theme,brightness:saved.brightness,glass:saved.glass||{},customBg:saved.customBg||'',accent:saved.accent||''});Store.save();Themes.apply();}
     else this.saveAppearance(true);
   },
   saveAppearance(now){
     clearTimeout(this.appearanceTimer);
-    const send=()=>{const p=Store.state.prefs;this.request('appearance',{theme:p.theme,brightness:p.brightness,glass:p.glass||{},customBg:p.customBg||''}).catch(e=>App.toast(e.message+' Your theme is kept on this device only.'));};
+    const send=()=>{const p=Store.state.prefs;this.request('appearance',{theme:p.theme,brightness:p.brightness,glass:p.glass||{},customBg:p.customBg||'',accent:p.accent||''}).catch(e=>App.toast(e.message+' Your theme is kept on this device only.'));};
     if(now)send();else this.appearanceTimer=setTimeout(send,500);
   },
   async logout(){await this.request('logout',{});location.reload();}

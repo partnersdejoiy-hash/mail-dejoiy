@@ -69,6 +69,9 @@ def clean_appearance(data):
     custom=data.get('customBg','')
     if not isinstance(custom,str) or len(custom)>MAX_CUSTOM_BACKGROUND or (custom and not DATA_IMAGE.fullmatch(custom)): raise APIError('Background photo must be a PNG, JPEG, WebP or GIF under 3 MB.')
     out['customBg']=custom
+    accent=data.get('accent','')
+    if accent not in ('','pink','yellow','green','blue','orange','lilac','mint','red'): raise APIError('Invalid colour.')
+    out['accent']=accent
     return out
 
 class AppearanceStore:

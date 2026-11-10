@@ -326,7 +326,12 @@ const App = {
       const u = Store.state.user;
       this.menu(ev.currentTarget, [
         {label:`👤 ${u.name} — ${u.email}`, fn:()=>this.go("settings:general")},
-        {label:"📷 Change profile photo", fn:()=>this.go("settings:general")},
+        {label:"📷 Change profile photo", fn:()=>{
+          // Opens the file picker straight away; the photo is cropped and saved for every device.
+          const pick=document.createElement("input"); pick.type="file"; pick.accept="image/png,image/jpeg,image/webp";
+          pick.addEventListener("change",async()=>{ const file=pick.files[0]; if(!file) return;
+            try{ await Profile.setPhoto(file); this.toast("Profile photo updated."); if(this.route==="settings") this.render(); }catch(error){ this.toast(error.message); } });
+          pick.click(); }},
         {label:"🎨 Themes", fn:()=>Themes.openPicker()},
         {label:"⚙️ Settings", fn:()=>this.go("settings")},
         {sep:true},

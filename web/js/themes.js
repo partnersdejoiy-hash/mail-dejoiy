@@ -23,6 +23,7 @@ const THEMES = [
   {id:"djlilac",  name:"Dejoiy Lilac",  kind:"dejoiy"},
   {id:"djmint",   name:"Dejoiy Mint",   kind:"dejoiy"},
   {id:"djred",    name:"Dejoiy Red",    kind:"dejoiy"},
+  {id:"djnone",   name:"Scene colours", kind:"dejoiy"},
   // 13 colour / gradient header themes
   {id:"aol",        name:"Cobalt",         kind:"color"},
   {id:"yellow",     name:"Yellow",         kind:"color"},
@@ -56,7 +57,7 @@ const THEMES = [
   {id:"sunset",     name:"Sunset",         kind:"scenic"}
 ];
 const THEME_CSS = {
-  pearl:"#ff4fa3", djgreen:"#3ddc84", djyellow:"#ffd23f", djblue:"#4da3ff", djorange:"#ff8a3d", djlilac:"#b892ff", djmint:"#2dd4bf", djred:"#ff5a5f",
+  pearl:"#ff4fa3", djgreen:"#3ddc84", djyellow:"#ffd23f", djblue:"#4da3ff", djorange:"#ff8a3d", djlilac:"#b892ff", djmint:"#2dd4bf", djred:"#ff5a5f", djnone:"linear-gradient(135deg,#4c1d95 0%,#c2410c 100%)",
   aol:"#2f7cf6", yellow:"#f7b733", highcontrast:"#111111", simple:"#c9d2e2", aim:"#e33d2e",
   aoldotcom:"#00a9e0", purple:"#9b5cf6", sunrise:"#ff9a56", aquagreen:"#34d399", aquablue:"#38bdf8",
   deeppurple:"#6d28d9", bluenight:"#1e3a8a", darkgrey:"#6b7280",
@@ -105,6 +106,9 @@ const Themes = {
 
   apply(){
     const p = Store.state.prefs;
+    if(/^dj[a-z]+$/.test(p.theme)&&p.theme!=="djnone"){ p.accent=p.theme.slice(2); p.theme="pearl"; }  // older saved looks
+    const accent = this.accent();
+    if(accent) document.documentElement.dataset.dj = accent; else delete document.documentElement.dataset.dj;
     document.documentElement.dataset.theme = p.theme;
     document.documentElement.dataset.brightness = p.brightness;
     document.documentElement.dataset.scenic = String(!!p.customBg || THEMES.some(t=>t.id===p.theme && ["scenic","photo","live"].includes(t.kind)));
@@ -112,7 +116,7 @@ const Themes = {
     document.documentElement.dataset.photoTheme=String(!!photo||!!live||!!p.customBg);
     for(const key of ['--accent','--accent-ink'])document.documentElement.style?.removeProperty(key);
     const tinted=photo||live;
-    if(tinted){document.documentElement.style?.setProperty('--accent',tinted.accent);document.documentElement.style?.setProperty('--accent-ink','#fff');}
+    if(tinted&&!accent){document.documentElement.style?.setProperty('--accent',tinted.accent);document.documentElement.style?.setProperty('--accent-ink','#fff');}
     const bg = document.getElementById("bg");
     bg.style.backgroundImage=photo&&!p.customBg?`url("${photo.image}")`:'';
     if(p.customBg){ bg.classList.add("custom"); bg.style.setProperty("--custom-bg", "url('"+p.customBg+"')"); }
@@ -122,8 +126,26 @@ const Themes = {
     document.documentElement.style?.setProperty('--glass-num', String(this.glass()));
   },
 
+  /* The Dejoiy colour in use: chosen on its own, or pink for the plain default look. */
+  accent(){ const p=Store.state.prefs; return p.accent || (p.theme==="pearl" ? "pink" : ""); },
+  isPicked(id){
+    const p=Store.state.prefs, t=THEMES.find(t=>t.id===id); if(!t) return false;
+    if(t.kind==="dejoiy") return id==="djnone" ? !this.accent() : this.accent()===(id==="pearl"?"pink":id.slice(2));
+    return p.theme===id && !p.customBg;
+  },
   set(id){
-    if(!THEMES.find(t=>t.id===id)) return;
+    const t=THEMES.find(t=>t.id===id); if(!t) return;
+    const p=Store.state.prefs;
+    if(t.kind==="dejoiy"){
+      // A Dejoiy colour keeps the background scene; on a plain look it brings the Dejoiy base.
+      p.accent = id==="djnone" ? "" : id==="pearl" ? "pink" : id.slice(2);
+      const scene = !!p.customBg || THEMES.some(x=>x.id===p.theme && ["scenic","photo","live"].includes(x.kind));
+      if(!scene && id!=="djnone") p.theme="pearl";
+      Store.save(); this.apply(); this.persist(); App.toast("Colour: " + t.name.replace("Dejoiy ",""));
+      if(App.route==="settings") Views.settings(document.getElementById("view"), "themes");
+      return;
+    }
+    if(t.kind==="color") p.accent="";  // a plain colour theme brings its own colour
     Store.state.prefs.theme = id;
     Store.state.prefs.customBg = "";
     Store.save(); this.apply(); this.persist();
@@ -150,9 +172,9 @@ const Themes = {
   openPicker(){
     const p = Store.state.prefs;
     const cell = t => `
-      <div class="theme-cell ${p.theme===t.id && !p.customBg ? "sel":""}" data-theme-pick="${t.id}" role="button" tabindex="0" aria-label="${esc(t.name)} theme">
+      <div class="theme-cell ${this.isPicked(t.id) ? "sel":""}" data-theme-pick="${t.id}" role="button" tabindex="0" aria-label="${esc(t.name)} theme">
         <div class="theme-sw" style="background:${this.preview(t.id)}"></div>
-        <div class="theme-nm">${esc(t.name)} ${p.theme===t.id && !p.customBg ? "✓":""}</div>
+        <div class="theme-nm">${esc(t.name)} ${this.isPicked(t.id) ? "✓":""}</div>
       </div>`;
     const brand = THEMES.filter(t=>t.kind==="dejoiy").map(cell).join("");
     const lives = THEMES.filter(t=>t.kind==="live").map(cell).join("");
@@ -165,7 +187,7 @@ const Themes = {
           ${["light","medium","dark"].map(b=>`<button data-b="${b}" class="${p.brightness===b?"on":""}">${b[0].toUpperCase()+b.slice(1)}</button>`).join("")}
         </div></div>
       ${this.glassControl()}
-      <div class="theme-sec">Dejoiy colours</div><div class="theme-grid">${brand}</div>
+      <div class="theme-sec">Dejoiy colours · works with any background below</div><div class="theme-grid">${brand}</div>
       <div class="theme-sec">Live animated</div><div class="theme-grid photo-grid">${lives}</div>
       <div class="theme-sec">Photo backgrounds</div><div class="theme-grid photo-grid">${photos}</div>
       <div class="theme-sec">Colour themes</div><div class="theme-grid">${colors}</div>

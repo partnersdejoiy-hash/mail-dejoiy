@@ -99,7 +99,7 @@ Views.mail = function(el, folder){
       const grouped=!['sender','subject'].includes(Store.state.prefs.mailSort)&&group!==previousGroup;
       previousGroup=group;
       return `${grouped?`<div class="message-group">${esc(group)}</div>`:''}
-      <div class="msg-row ${e.read?"":"unread"} ${ui.activeTab===e.latest.id||ui.sel.has(e.id)?"selected":""}" data-id="${e.id}" data-latest-id="${e.latest.id}" role="button" tabindex="0">
+      <div class="msg-row ${e.read?"":"unread"} ${ui.activeTab===e.latest.id||ui.sel.has(e.id)?"selected":""}" data-tone="${toneOf(e)}" data-id="${e.id}" data-latest-id="${e.latest.id}" role="button" tabindex="0">
         ${Profile.avatar(e.latest.from?.email, e.latest.from?.name, "m-avatar")}
         <input type="checkbox" class="m-check" data-check="${e.id}" ${ui.sel.has(e.id)?"checked":""} aria-label="Select message">
         <button class="star ${e.starred?"on":""}" data-star="${e.id}" aria-label="${e.starred?'Unstar message':'Star message'}" aria-pressed="${!!e.starred}">${Icons.get("star")}</button>
@@ -109,7 +109,7 @@ Views.mail = function(el, folder){
             <span class="m-date">${fmtDate(e.date)}</span>${hover?`<span class="m-hover"><button data-hact="archive" title="Archive" aria-label="Archive">${Icons.get("archive")}</button><button data-hact="trash" title="Delete" aria-label="Delete">${Icons.get("trash")}</button><button data-hact="read" title="${e.read?'Mark as unread':'Mark as read'}" aria-label="${e.read?'Mark as unread':'Mark as read'}">${Icons.get("unread")}</button></span>`:""}</div>
           <div class="m-subj">${esc(e.subject)}</div>
           <div class="m-snip">${esc(strip(e.latest.body)).slice(0,90)}</div>
-          ${(e.labels||[]).length?`<span class="m-labels">${e.labels.map(l=>`<span class="lbl">${esc(l)}</span>`).join(" ")}</span>`:""}
+          ${(e.labels||[]).length?`<span class="m-labels">${e.labels.map(chip).join(" ")}</span>`:""}
         </div>
       </div>`;}).join("") + (pages>1||(window.Live&&Live.enabled&&Live.more&&ui.page===pages-1)?`<div class="list-pager"><button class="btn sm" id="pg-prev" ${ui.page?"":"disabled"}>${Icons.get("back")} Newer</button><span>${ui.page*Settings.pageSize()+1}–${ui.page*Settings.pageSize()+items.length} of ${all.length}${window.Live&&Live.enabled&&Live.more?"+":""}</span><button class="btn sm" id="pg-next" ${ui.page<pages-1||(window.Live&&Live.enabled&&Live.more)?"":"disabled"}>Older ${Icons.get("forward")}</button></div>`:"")
       : `<div class="empty-note mailbox-empty"><span class="empty-icon">${Icons.get(ui.search?'search':'inbox')}</span><h2>${ui.search?'No matching messages':'A little breathing room.'}</h2><p>${ui.search?'Try a different name or keyword.':ui.quickFilter&&ui.quickFilter!=='all'?'No messages match this view.':ui.folder==='inbox'?"You're all caught up. New messages will appear here.":'No messages in this folder.'}</p><button class="btn" id="empty-action">${ui.search?'Clear search':'Write a message'}</button></div>`;
@@ -269,6 +269,15 @@ Views.mail = function(el, folder){
     }));
     tabsEl.querySelectorAll("[data-xtab]").forEach(x=> x.addEventListener("click", async ev=>{ ev.stopPropagation(); closeTab(x.dataset.xtab); }));
   }
+  /* Mail is coloured by how much it matters: marked important first, then the label it carries.
+     Function declarations, so the list can use them before this point in the file runs. */
+  function labelTone(l){ l=String(l).toLowerCase();
+    return /urgent|asap|alert|security|warning|overdue|critical/.test(l)?"danger":/financ|bill|invoice|payment|bank|tax|receipt|salary/.test(l)?"money"
+      :/work|project|team|client|office|meeting/.test(l)?"work":/personal|family|friend|home/.test(l)?"personal":/design|creative|idea|social|promo|fun/.test(l)?"fun":""; }
+  function toneOf(e){ if(e.important||(e.messages||[]).some(m=>m.important)) return "important"; if(ui.folder==="spam") return "danger";
+    const found=(e.labels||[]).map(labelTone).filter(Boolean); return ["danger","money","work","personal","fun"].find(t=>found.includes(t))||""; }
+  function toneName(t){ return {important:"Important", danger:"Urgent", money:"Money", work:"Work", personal:"Personal", fun:"Ideas"}[t]||""; }
+  function chip(l){ return `<span class="lbl" data-tone="${labelTone(l)}">${esc(l)}</span>`; }
   const me = ()=> (Store.state.user.email||"").toLowerCase();
   const recipients = m=> [...(m.to||[]),...(m.cc||[])].map(a=>a.toLowerCase()===me()?"me":a).join(", ") || "undisclosed recipients";
   const messageHtml = (m, open)=>`<article class="thread-message ${open?"open":""}" data-mid="${esc(m.id)}">
@@ -282,7 +291,7 @@ Views.mail = function(el, folder){
           <button class="icon-btn sm tm-act" data-mmore="${esc(m.id)}" title="More" aria-label="More options">${Icons.get("more")}</button></div>
       </div>
       <div class="tm-content">
-        ${(m.labels||[]).length?`<div class="thread-labels">${m.labels.map(l=>`<span class="lbl">${esc(l)}</span>`).join(" ")}</div>`:""}
+        ${(m.labels||[]).length?`<div class="thread-labels">${m.labels.map(chip).join(" ")}</div>`:""}
         ${(m.attachments||[]).length ? `<div class="thread-attachments">${m.attachments.map(a=>window.Live?.enabled && a.mid && a.part?`<a class="attach-chip" href="/api/attachment?mid=${encodeURIComponent(a.mid)}&amp;part=${encodeURIComponent(a.part)}&amp;name=${encodeURIComponent(a.name)}" download>📎 ${esc(a.name)} <span style="color:var(--ink-3)">${esc(a.size)} bytes</span></a>`:`<span class="attach-chip">📎 ${esc(a.name)} <span style="color:var(--ink-3)">${esc(a.size)}</span></span>`).join("")}</div>`:""}
         <div class="r-body">${m.body}</div>
       </div>
@@ -312,7 +321,9 @@ Views.mail = function(el, folder){
     const isOpen = (m,i)=> i===last || fresh.has(m.id);
     const middle = messages.slice(1, Math.max(1,last-1));
     const fold = !ui.unfolded && messages.length>4 && !middle.some(m=>fresh.has(m.id)) ? middle : [];
-    readerEl.innerHTML = `
+    const t = toneOf(thread||e);
+    readerEl.innerHTML = `<div class="mail-card" data-tone="${t}">
+      ${t?`<span class="mc-tag">${toneName(t)}</span>`:""}
       <div class="r-subject">${esc(e.subject)}${thread?.count>1?` <span class="thread-count">${thread.count} messages</span>`:""}</div>
       <div class="thread-messages">${messages.map((m,i)=>{
         if(fold.length && i===1) return `<button class="thread-fold" id="thread-fold"><span>${fold.length}</span> older messages</button>`;
@@ -323,7 +334,7 @@ Views.mail = function(el, folder){
         ${(()=>{ const many=[...(e.to||[]),...(e.cc||[])].length>1, all=`<button class="btn" data-treply="replyall">${Icons.get("replyall")} Reply all</button>`, one=`<button class="btn" data-treply="reply">${Icons.get("reply")} Reply</button>`;
           return !many ? one : Settings.ui.defaultReply==="replyall" ? all+one : one+all; })()}
         <button class="btn" data-treply="forward">${Icons.get("forward")} Forward</button>
-      </div>`;
+      </div></div>`;
     readerEl.querySelectorAll(".r-body").forEach(foldQuote);
     readerEl.scrollTop = 0;
     const foldBtn=readerEl.querySelector("#thread-fold");

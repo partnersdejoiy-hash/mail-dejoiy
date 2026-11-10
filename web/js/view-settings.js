@@ -100,14 +100,14 @@ function renderGeneral(body){
 /* ---------- themes ---------- */
 function renderThemes(body){
   const p = Store.state.prefs;
-  const cell = t => `<div class="theme-cell ${p.theme===t.id&&!p.customBg?"sel":""}" data-pick="${t.id}" role="button" tabindex="0">
+  const cell = t => `<div class="theme-cell ${Themes.isPicked(t.id)?"sel":""}" data-pick="${t.id}" role="button" tabindex="0">
     <div class="theme-sw" style="background:${Themes.preview(t.id)}"></div>
-    <div class="theme-nm">${esc(t.name)} ${p.theme===t.id&&!p.customBg?"✓":""}</div></div>`;
+    <div class="theme-nm">${esc(t.name)} ${Themes.isPicked(t.id)?"✓":""}</div></div>`;
   body.innerHTML = `<div class="card"><h3>🎨 Themes</h3>
     <div class="field"><label>Brightness — independent of theme</label>
       <div class="seg">${["light","medium","dark"].map(b=>`<button data-b="${b}" class="${p.brightness===b?"on":""}">${b[0].toUpperCase()+b.slice(1)}</button>`).join("")}</div></div>
     ${Themes.glassControl()}
-    <div class="theme-sec">Dejoiy colours</div><div class="theme-grid">${Themes.ALL.filter(t=>t.kind==="dejoiy").map(cell).join("")}</div>
+    <div class="theme-sec">Dejoiy colours · works with any background below</div><div class="theme-grid">${Themes.ALL.filter(t=>t.kind==="dejoiy").map(cell).join("")}</div>
     <div class="theme-sec">Live animated</div><div class="theme-grid photo-grid">${Themes.ALL.filter(t=>t.kind==="live").map(cell).join("")}</div>
     <div class="theme-sec">Photo backgrounds</div><div class="theme-grid photo-grid">${Themes.ALL.filter(t=>t.kind==="photo").map(cell).join("")}</div>
     <div class="theme-sec">Colour themes</div><div class="theme-grid">${Themes.ALL.filter(t=>t.kind==="color").map(cell).join("")}</div>
@@ -138,7 +138,7 @@ function renderThemes(body){
   if(clrL) clrL.addEventListener("click", ()=>{ p.customLogo=""; Store.save(); App.applyLogo(); renderThemes(body); });
 }
 function themeSwatch(id){
-  const m = {pearl:"#ff4fa3",djgreen:"#3ddc84",djyellow:"#ffd23f",djblue:"#4da3ff",djorange:"#ff8a3d",djlilac:"#b892ff",djmint:"#2dd4bf",djred:"#ff5a5f",aol:"#2f7cf6",yellow:"#f7b733",highcontrast:"#111",simple:"#c9d2e2",aim:"#e33d2e",aoldotcom:"#00a9e0",
+  const m = {pearl:"#ff4fa3",djgreen:"#3ddc84",djyellow:"#ffd23f",djblue:"#4da3ff",djorange:"#ff8a3d",djlilac:"#b892ff",djmint:"#2dd4bf",djred:"#ff5a5f",djnone:"linear-gradient(135deg,#4c1d95 0%,#c2410c 100%)",aol:"#2f7cf6",yellow:"#f7b733",highcontrast:"#111",simple:"#c9d2e2",aim:"#e33d2e",aoldotcom:"#00a9e0",
     purple:"#9b5cf6",sunrise:"#ff9a56",aquagreen:"#34d399",aquablue:"#38bdf8",deeppurple:"#6d28d9",
     bluenight:"#1e3a8a",darkgrey:"#6b7280",nightlandscape:"linear-gradient(135deg,#3b4a6b,#05080f)",
     roadtrip:"linear-gradient(135deg,#7c3f16,#120903)",sunsetaussie:"linear-gradient(135deg,#93386b,#f7b733)",
