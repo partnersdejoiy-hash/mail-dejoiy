@@ -77,6 +77,8 @@ const Live={enabled:!!window.DEJOIY_LIVE,csrf:'',more:false,avatars:{},
     await Settings.load();
     try{await this.sync();}catch(e){alert(e.message+' Use Refresh to retry.');}
     this.install();
+    // The company box is named by its admins; show that name in the menu.
+    this.request('updates').then(v=>{App.companyName=v.company?.name;App.refreshNav();}).catch(()=>{});
   },
   async login(){
     // First visit on this device: show the landing page; "Sign in" there comes back with ?signin.
@@ -128,7 +130,7 @@ const Live={enabled:!!window.DEJOIY_LIVE,csrf:'',more:false,avatars:{},
     });
   },
   install(){
-    App.NAV=App.NAV.filter(([route])=>['mail:inbox','contacts','admin','settings'].includes(route) && (route!=='admin'||Store.state.user?.isAdmin===true));
+    App.NAV=App.NAV.filter(([route])=>['mail:inbox','news','company','contacts','admin','settings'].includes(route) && (route!=='admin'||Store.state.user?.isAdmin===true));
     const local={}; for(const name of ['setRead','toggleStar','toggleImportant','moveTo','deleteForever','addLabel'])local[name]=Mail[name].bind(Mail);
     let queue=Promise.resolve();
     const mutate=(data,apply)=>{const job=queue.then(async()=>{await this.request('action',data);apply();App.refreshNav();if(App.route==='mail')App.render();});queue=job.catch(()=>{});return job;};

@@ -127,7 +127,7 @@ function overview(main, d){
 
 function users(main, d){
   const plans=d.plans||[], planName=id=>{const n=(id&&plans.find(p=>p.id===id)?.name)||"default";return n.charAt(0).toUpperCase()+n.slice(1);};
-  main.innerHTML=head("Mailboxes",`${d.users.length} mailboxes`,`<input type="search" id="u-search" placeholder="Search name or email" aria-label="Search mailboxes"><button class="adm-btn primary" id="u-add">+ New mailbox</button>`)+`
+  main.innerHTML=head("Mailboxes",`${d.users.length} mailboxes`,`<input type="search" id="u-search" placeholder="Search name or email" aria-label="Search mailboxes">${can("mailboxes.manage")?'<button class="adm-btn primary" id="u-add">+ New mailbox</button>':""}`)+`
     <div class="adm-card adm-flush"><table class="adm-table" id="u-table"><thead><tr><th>Mailbox</th><th>Status</th><th>Department</th><th>Role</th><th>Plan</th><th>Storage</th><th>Last sign-in</th><th></th></tr></thead><tbody>
     ${d.users.map((u,i)=>`<tr data-q="${esc((u.name+" "+u.email+" "+(u.department||"")+" "+(u.title||"")).toLowerCase())}"><td><b>${esc(u.name)}</b><small>${esc(u.email)}</small></td>
       <td><span class="adm-pill ${u.status==="active"?"good":"warn"}">${esc(u.status)}</span></td><td>${esc(u.department||"—")}</td><td>${esc(u.title||u.role)}${u.title?`<small>${esc(u.role)}</small>`:""}</td><td>${esc(planName(u.cosId))}</td>
@@ -135,7 +135,7 @@ function users(main, d){
       <td><button class="adm-btn ghost sm" data-edit="${i}">Manage</button></td></tr>`).join("")}
     </tbody></table></div>`;
   $("u-search").addEventListener("input",e=>{const q=e.target.value.trim().toLowerCase();main.querySelectorAll("#u-table tbody tr").forEach(r=>r.hidden=!r.dataset.q.includes(q));});
-  $("u-add").addEventListener("click",()=>dialog({title:"New mailbox",body:`
+  $("u-add")?.addEventListener("click",()=>dialog({title:"New mailbox",body:`
     <label>Display name<input id="nu-name" maxlength="200" required></label>
     <label>Email address<input id="nu-email" type="email" placeholder="name@${esc(d.domains[0]?.domain||"example.com")}" required></label>
     <label>Initial password<input id="nu-pass" type="password" autocomplete="new-password" required></label>
@@ -203,33 +203,55 @@ function manageUser(u, d){
 
 const companyRoles = (d, u) => (d.domains.find(x=>u&&u.email.endsWith("@"+x.domain)) || d.domains.find(x=>x.domain===d.scope) || d.domains[0] || {}).roles || [];
 
+// What the signed-in admin's role allows; platform admins (perms null) can do everything.
+const can = perm => !state.data?.perms || state.data.perms.includes(perm);
+const CONSOLE_ONLY = perm => perm !== "updates.post";
+
 function org(main, d){
-  const domain = d.scope || d.domains[0]?.domain || "", roles = (d.domains.find(x=>x.domain===domain)||{}).roles || [];
+  const domain = d.scope || d.domains[0]?.domain || "", here = d.domains.find(x=>x.domain===domain) || {}, roles = here.roles || [];
+  const perms = d.permissions || {}, editRoles = can("roles.manage"), editTeams = can("teams.manage");
   const count = name => d.users.filter(u=>u.department===name).length, holders = name => d.users.filter(u=>u.title===name).length;
-  main.innerHTML=head("Teams & roles","Group people into departments and give them roles. Both are saved on the mail server.")+`
-    <div class="adm-card"><div class="adm-card-head"><h2>Departments</h2>${d.departments?`<button class="adm-btn primary" id="o-dept-add">+ New department</button>`:""}</div>
+  main.innerHTML=head("Teams & roles","Run the company like business units: departments, roles and what each role may do. Saved on the mail server.")+`
+    <div class="adm-card"><div class="adm-card-head"><h2>Company box</h2></div>
+      <p class="adm-muted">Every mailbox in ${esc(domain||"your company")} gets a page for company updates. Name it after your company; roles with "${esc(perms["updates.post"]||"Post in the company box")}" can post there.</p>
+      <div class="adm-add"><input id="o-box" maxlength="40" value="${esc(here.boxName||"")}" placeholder="Company updates" aria-label="Company box name" ${editRoles?"":"disabled"}>
+      ${editRoles?`<button class="adm-btn primary" id="o-box-save">Save name</button>`:""}</div></div>
+    <div class="adm-card"><div class="adm-card-head"><h2>Departments</h2>${d.departments&&editTeams?`<button class="adm-btn primary" id="o-dept-add">+ New department</button>`:""}</div>
       ${!d.departments?`<p class="adm-muted">Departments are not available for your administrator role.</p>`:`
       <p class="adm-muted">Each department has its own address. Mail sent to it reaches everyone in the department.</p>
       <table class="adm-table"><thead><tr><th>Department</th><th>People</th><th></th></tr></thead><tbody>
       ${d.departments.map((x,i)=>`<tr><td><b>${esc(x.name||x.email)}</b><small>${esc(x.email)}</small></td><td>${count(x.name)}</td>
-        <td class="adm-right"><button class="adm-btn ghost sm" data-dmem="${i}">People</button> <button class="adm-btn ghost sm" data-ddel="${i}">Delete</button></td></tr>`).join("")||`<tr><td class="adm-muted" colspan="3">No departments yet. Start with one like Sales, Support or Accounts.</td></tr>`}
+        <td class="adm-right">${editTeams?`<button class="adm-btn ghost sm" data-dmem="${i}">People</button> <button class="adm-btn ghost sm" data-ddel="${i}">Delete</button>`:""}</td></tr>`).join("")||`<tr><td class="adm-muted" colspan="3">No departments yet. Start with one like Sales, Support or Accounts.</td></tr>`}
       </tbody></table>`}</div>
-    <div class="adm-card"><div class="adm-card-head"><h2>Roles${domain?` · ${esc(domain)}`:""}</h2><button class="adm-btn ghost" id="o-role-add">+ Add role</button></div>
-      <p class="adm-muted">A role is a person's job here. Roles with company admin access can open this console and manage ${esc(domain||"your domain")}.</p>
-      <table class="adm-table" id="o-roles"><thead><tr><th>Role</th><th>Access</th><th>People</th><th></th></tr></thead><tbody>
-      ${roles.map((r,i)=>`<tr><td><input data-rname="${i}" value="${esc(r.name)}" maxlength="40" aria-label="Role name"></td>
-        <td><select data-raccess="${i}" aria-label="Access for ${esc(r.name)}"><option value="User" ${r.access==="User"?"selected":""}>Mail only</option><option value="Domain admin" ${r.access==="Domain admin"?"selected":""}>Company admin</option></select></td>
-        <td>${holders(r.name)}</td><td class="adm-right"><button class="adm-btn ghost sm" data-rdel="${i}">Remove</button></td></tr>`).join("")}
-      </tbody></table><p role="alert" class="adm-error" id="o-err"></p><button class="adm-btn primary" id="o-roles-save">Save roles</button></div>`;
-  let list = roles.map(r=>({...r}));
-  const sync = ()=>{ main.querySelectorAll("[data-rname]").forEach(i=>list[+i.dataset.rname].name=i.value); main.querySelectorAll("[data-raccess]").forEach(i=>list[+i.dataset.raccess].access=i.value); };
+    <div class="adm-card"><div class="adm-card-head"><h2>Roles &amp; permissions${domain?` · ${esc(domain)}`:""}</h2>${editRoles?`<button class="adm-btn ghost" id="o-role-add">+ Add role</button>`:""}</div>
+      <p class="adm-muted">Pick what each role may do. Admin-console permissions need company admin access. A company admin without a role can do everything.</p>
+      <div class="adm-roles" id="o-roles">
+      ${roles.map((r,i)=>`<div class="adm-role"><div class="adm-role-head">
+          <input data-rname="${i}" value="${esc(r.name)}" maxlength="40" aria-label="Role name" ${editRoles?"":"disabled"}>
+          <select data-raccess="${i}" aria-label="Access for ${esc(r.name)}" ${editRoles?"":"disabled"}><option value="User" ${r.access==="User"?"selected":""}>Mail only</option><option value="Domain admin" ${r.access==="Domain admin"?"selected":""}>Company admin</option></select>
+          <span class="adm-muted">${holders(r.name)} ${holders(r.name)===1?"person":"people"}</span>
+          ${editRoles?`<button class="adm-btn ghost sm" data-rdel="${i}">Remove</button>`:""}</div>
+        <div class="adm-perms">${Object.entries(perms).map(([key,label])=>{const off=!editRoles||(r.access!=="Domain admin"&&CONSOLE_ONLY(key));
+          return `<label class="adm-check ${off&&r.access!=="Domain admin"&&CONSOLE_ONLY(key)?"is-off":""}"><input type="checkbox" data-rperm="${i}" value="${key}" ${(r.perms||[]).includes(key)&&!(r.access!=="Domain admin"&&CONSOLE_ONLY(key))?"checked":""} ${off?"disabled":""}> ${esc(label)}</label>`;}).join("")}</div></div>`).join("")}
+      </div><p role="alert" class="adm-error" id="o-err"></p>${editRoles?`<button class="adm-btn primary" id="o-roles-save">Save roles</button>`:""}</div>`;
+  let list = roles.map(r=>({...r, perms:[...(r.perms||[])]}));
+  const sync = ()=>{
+    main.querySelectorAll("[data-rname]").forEach(i=>list[+i.dataset.rname].name=i.value);
+    main.querySelectorAll("[data-raccess]").forEach(i=>list[+i.dataset.raccess].access=i.value);
+    list.forEach((r,i)=>{ r.perms=[...main.querySelectorAll(`[data-rperm="${i}"]:checked`)].map(x=>x.value).filter(p=>r.access==="Domain admin"||!CONSOLE_ONLY(p)); });
+  };
   // Unsaved role edits redraw from the list being edited, not from the server copy.
   const redraw = change=>{ sync(); change(); org(main,{...d,domains:d.domains.map(x=>x.domain===domain?{...x,roles:list}:x)}); };
-  $("o-role-add").addEventListener("click",()=>{ redraw(()=>list.push({name:"New role",access:"User"})); main.querySelector(`[data-rname="${list.length-1}"]`)?.select(); });
-  main.querySelectorAll("[data-rdel]").forEach(b=>b.addEventListener("click",()=>redraw(()=>list.splice(+b.dataset.rdel,1))));
-  $("o-roles-save").addEventListener("click",async e=>{ const b=e.currentTarget; sync(); b.disabled=true;
-    try{ await act({op:"save_roles",domain,roles:list}); await reload("Roles saved."); }catch(x){ $("o-err").textContent=x.message; b.disabled=false; } });
-  if(!d.departments) return;
+  main.querySelectorAll("[data-raccess]").forEach(sel=>sel.addEventListener("change",()=>redraw(()=>{})));
+  if(editRoles){
+    $("o-role-add").addEventListener("click",()=>{ redraw(()=>list.push({name:"New role",access:"User",perms:[]})); main.querySelector(`[data-rname="${list.length-1}"]`)?.select(); });
+    main.querySelectorAll("[data-rdel]").forEach(b=>b.addEventListener("click",()=>redraw(()=>list.splice(+b.dataset.rdel,1))));
+    $("o-roles-save").addEventListener("click",async e=>{ const b=e.currentTarget; sync(); b.disabled=true;
+      try{ await act({op:"save_roles",domain,roles:list}); await reload("Roles saved."); }catch(x){ $("o-err").textContent=x.message; b.disabled=false; } });
+    $("o-box-save").addEventListener("click",async e=>{ const b=e.currentTarget; b.disabled=true;
+      try{ await act({op:"company_settings",domain,boxName:$("o-box").value}); await reload("Company box renamed."); }catch(x){ toast(x.message); b.disabled=false; } });
+  }
+  if(!d.departments || !editTeams) return;
   $("o-dept-add").addEventListener("click",()=>dialog({title:"New department",body:`
     <label>Department name<input id="nd-dname" maxlength="64" placeholder="Sales"></label>
     <label>Department email<input id="nd-demail" type="email" placeholder="sales@${esc(domain||"example.com")}"></label>

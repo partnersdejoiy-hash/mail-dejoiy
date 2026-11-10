@@ -117,7 +117,12 @@ const Mail = {
       to: splitAddr(to), cc: splitAddr(cc), subject: subject||"(no subject)",
       body: body||"", folder:"sent", read:true, starred:false, date:Date.now(),
       labels:label&&label!=="Important"?[label]:[], important:!!important, hasAttachment:(attachments||[]).length>0, attachments:attachments||[] };
-    Store.state.emails.push(em); Store.save();
+    Store.state.emails.push(em);
+    // Everyone you write to is saved to Contacts once.
+    const known=new Set((Store.state.contacts||[]).map(c=>String(c.email).toLowerCase()));
+    for(const address of [...splitAddr(to),...splitAddr(cc)]) if(address && !known.has(address.toLowerCase())){ known.add(address.toLowerCase());
+      (Store.state.contacts=Store.state.contacts||[]).push({id:uid("c"),name:address.split("@")[0].replace(/[._-]+/g," ").replace(/\b\w/g,m=>m.toUpperCase()),email:address,phone:"",org:""}); }
+    Store.save();
     App.sound("sent");
     return em;
   },

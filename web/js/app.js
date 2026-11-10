@@ -35,6 +35,8 @@ const App = {
       else if(r==="notes") Views.notes(el);
       else if(r==="chat") Views.chat(el, a||undefined);
       else if(r==="admin") Views.admin(el);
+      else if(r==="news") Views.updates(el, "dejoiy");
+      else if(r==="company") Views.updates(el, "company");
       else if(r==="settings") Views.settings(el, a||undefined);
       else if(r==="search") this.renderSearch(el, a);
       else Views.today(el);
@@ -86,13 +88,14 @@ const App = {
   /* ---------------- navigation chrome ---------------- */
   NAV: [
     ["today","🏠","Today"],["mail:inbox","📥","Inbox"],["calendar","📅","Calendar"],
+    ["news","📣","Dejoiy Updates"],["company","🏢","Company"],
     ["contacts","👥","Contacts"],["notes","📝","Notes"],["chat","💬","Chat"],
     ["admin","🛡️","Admin"],["settings","⚙️","Settings"]
   ],
   refreshNav(){
     const c = Mail.counts(), nav = document.getElementById("main-nav");
-    const icons={inbox:'inbox',starred:'star',drafts:'draft',sent:'sent',archive:'archive',spam:'spam',trash:'trash',unread:'unread',attach:'paperclip',important:'important',contacts:'contacts',admin:'shield',settings:'settings',today:'home',calendar:'calendar',notes:'note',chat:'chat'};
-    const entries=[...Mail.FOLDERS.map(f=>['mail:'+f.id,Icons.get(icons[f.id]),f.name]),...Mail.SMART.filter(f=>f.id!=='starredv').map(f=>['mail:'+f.id,Icons.get(icons[f.id]),f.name]),...this.NAV.filter(([r])=>!r.startsWith('mail:')).map(([r,ico,label])=>[r,Icons.get(icons[r]),label])];
+    const icons={inbox:'inbox',starred:'star',drafts:'draft',sent:'sent',archive:'archive',spam:'spam',trash:'trash',unread:'unread',attach:'paperclip',important:'important',contacts:'contacts',admin:'shield',news:'megaphone',company:'building',settings:'settings',today:'home',calendar:'calendar',notes:'note',chat:'chat'};
+    const entries=[...Mail.FOLDERS.map(f=>['mail:'+f.id,Icons.get(icons[f.id]),f.name]),...Mail.SMART.filter(f=>f.id!=='starredv').map(f=>['mail:'+f.id,Icons.get(icons[f.id]),f.name]),...this.NAV.filter(([r])=>!r.startsWith('mail:')).map(([r,ico,label])=>[r,Icons.get(icons[r]),r==='company'&&this.companyName?this.companyName:label])];
     /* Labels hidden in Settings → Labels stay reachable from Settings but leave the list. */
     const hidden=new Set((window.Settings&&Settings.ui.hiddenFolders)||[]);
     nav.innerHTML = entries.map(([r,ico,label],index)=>{
@@ -291,8 +294,11 @@ const App = {
       }
     });
     const gs = document.getElementById("global-search");
-    gs.addEventListener("input", async ()=>{ this.ui.search = gs.value;
-      if(this.route==="mail" && this.ui._mail) this.ui._mail.renderList(); });
+    /* Typing waits a beat before the list redraws, then the new results fade in, so search feels smooth. */
+    let searchTimer=0, fadeTimer=0;
+    gs.addEventListener("input", ()=>{ this.ui.search = gs.value; clearTimeout(searchTimer);
+      searchTimer=setTimeout(()=>requestAnimationFrame(()=>{ if(this.route!=="mail" || !this.ui._mail) return;
+        this.ui._mail.renderList(); document.body.classList.add("list-fade"); clearTimeout(fadeTimer); fadeTimer=setTimeout(()=>document.body.classList.remove("list-fade"),450); }),140); });
     gs.addEventListener("keydown", async e=>{
       if(e.key==="Enter"){ const q = gs.value.trim(); if(q) this.go("search:"+encodeURIComponent(q)); }
     });

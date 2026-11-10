@@ -37,7 +37,7 @@ class OrgTests(unittest.TestCase):
     def test_roles_saved_on_domain_with_elevated_token(self):
         a = Fake()
         out = a.action('t', {'op': 'save_roles', 'domain': 'kaali.in', 'roles': [{'name': 'HR', 'access': 'User'}]}, 'b@kaali.in', 'kaali.in', elevate=lambda: 'svc')
-        self.assertEqual(out['roles'], [{'name': 'HR', 'access': 'User'}])
+        self.assertEqual(out['roles'], [{'name': 'HR', 'access': 'User', 'perms': []}])
         self.assertEqual(a.calls[-1][0], 'ModifyDomainRequest'); self.assertEqual(a.calls[-1][2], 'svc')
 
     def test_company_admin_stays_in_own_domain(self):
@@ -48,6 +48,25 @@ class OrgTests(unittest.TestCase):
 
     def test_default_roles(self):
         self.assertEqual(z.read_roles('')[0]['name'], 'Member')
-        self.assertEqual(z.read_roles('{"dejoiyRoles":[{"name":"HR","access":"User"}]}'), [{'name': 'HR', 'access': 'User'}])
+        self.assertEqual(z.read_roles('{"dejoiyRoles":[{"name":"HR","access":"User"}]}'), [{'name': 'HR', 'access': 'User', 'perms': []}])
+
+    def test_role_permissions_limit_company_admins(self):
+        a = Fake()
+        with self.assertRaisesRegex(z.APIError, 'does not allow'):
+            a.action('t', {'op': 'delete_user', 'id': USER, 'confirm': 'ravi@kaali.in'}, 'b@kaali.in', 'kaali.in', perms={'mailboxes.manage'})
+        a.action('t', {'op': 'set_title', 'id': USER, 'title': 'HR'}, 'b@kaali.in', 'kaali.in', perms={'roles.manage'})
+        a.action('t', {'op': 'set_title', 'id': USER, 'title': 'HR'}, 'root@dejoiy.com', None, perms={'nothing'})  # platform admins are not limited
+
+    def test_console_permissions_need_admin_access(self):
+        with self.assertRaisesRegex(z.APIError, 'company admin access'):
+            Fake().action('t', {'op': 'save_roles', 'domain': 'kaali.in', 'roles': [{'name': 'HR', 'access': 'User', 'perms': ['mailboxes.delete']}]}, 'b@kaali.in', 'kaali.in', elevate=lambda: 'svc')
+
+    def test_role_perms_owner_and_members(self):
+        roles = z.read_roles('')
+        self.assertEqual(z.role_perms(roles, '', True), set(z.PERMISSIONS))          # company owner without a role
+        self.assertEqual(z.role_perms(roles, 'Member', False), set())
+        self.assertEqual(z.role_perms(roles, 'team lead', False), {'updates.post'})
+        notes = z.write_org('', boxName='Kaali Tea News')
+        self.assertEqual(z.read_org(notes)['boxName'], 'Kaali Tea News')
 
 if __name__ == '__main__': unittest.main()

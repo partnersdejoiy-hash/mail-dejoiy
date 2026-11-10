@@ -145,3 +145,16 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
   #o-roles input{width:100%}
   .adm-card .adm-table td small{word-break:break-all}
 }
+/* roles with their permissions */
+.adm-roles{display:grid;gap:12px;margin:12px 0}
+.adm-role{border:1px solid var(--line,#e5e7eb);border-radius:14px;padding:12px 14px}
+.adm-role-head{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.adm-role-head input{flex:1 1 180px;min-width:0}
+.adm-role-head .adm-btn{margin-left:auto}
+.adm-perms{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px 14px;margin-top:10px}
+.adm-perms .adm-check{margin:0;font-size:13px}
+.adm-perms .adm-check.is-off{opacity:.45}
+.adm-role-head input{width:auto;margin:0;font-weight:700}
+.adm-role-head select{width:auto;flex:none;margin:0}
+.adm-role-head .adm-muted{flex:none}
+@media (max-width:640px){.adm-role-head input{flex-basis:100%}}

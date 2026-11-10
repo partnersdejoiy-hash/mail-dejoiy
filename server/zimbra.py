@@ -74,6 +74,7 @@ def clean_appearance(data):
     out['accent']=accent
     return out
 
+UPDATES_LOCK=threading.Lock()
 class AppearanceStore:
     """Per-mailbox appearance, keyed by the upstream account id so it follows the user across devices."""
     def __init__(self, path=None, table='appearance'):
@@ -615,15 +616,35 @@ class Zimbra:
         else: raise APIError('Unsupported operation')
         r=node(MAIL,'MsgActionRequest'); r.append(node(MAIL,'action',attrs)); self.call(r,token)
         return {'ok':True}
-    def contacts(self, token):
+    def contacts(self, token, own_domain=''):
         out=self.call(node(MAIL,'GetContactsRequest',{'l':'7','sortBy':'nameAsc'}),token)
         result=[]
+        # Divisions come from the address itself: your own company's domain is Work family, the rest Others.
+        division=lambda email:'Work family' if own_domain and email.lower().endswith('@'+own_domain) else 'Others'
         for contact in out.findall('{'+MAIL+'}cn'):
             attrs={a.get('n'):a.text or '' for a in contact.findall('{'+MAIL+'}a')}
             if attrs.get('type')=='group': continue
             result.append({'id':contact.get('id'),'name':attrs.get('fullName') or ' '.join(filter(None,[attrs.get('firstName'),attrs.get('lastName')])) or contact.get('fileAsStr') or attrs.get('email',''),
-                'email':attrs.get('email',''),'phone':attrs.get('mobilePhone') or attrs.get('workPhone',''),'org':attrs.get('company',''),'presence':'off'})
+                'email':attrs.get('email',''),'phone':attrs.get('mobilePhone') or attrs.get('workPhone',''),'org':attrs.get('company',''),'presence':'off',
+                'division':division(attrs.get('email',''))})
         return {'contacts':result}
+    def remember_recipients(self, token, data, own_address=''):
+        """Everyone you write to lands in Contacts once; existing contacts are left as they are."""
+        wanted={}
+        for kind in ('to','cc','bcc'):
+            for address in re.split(r'[,;\n]+',str(data.get(kind,''))):
+                address=address.strip()
+                if EMAIL.fullmatch(address) and address.lower()!=own_address.lower(): wanted.setdefault(address.lower(),address)
+        if not wanted: return 0
+        known={c['email'].lower() for c in self.contacts(token)['contacts']}
+        added=0
+        for key,address in list(wanted.items())[:20]:
+            if key in known: continue
+            name=re.sub(r'[._-]+',' ',address.split('@')[0]).strip().title() or address
+            r=node(MAIL,'CreateContactRequest'); contact=node(MAIL,'cn',{'l':'7'})
+            for n,v in (('fullName',name),('fileAs','8:'+name),('email',address)): contact.append(node(MAIL,'a',{'n':n},v))
+            r.append(contact); self.call(r,token); added+=1
+        return added
     def contact_action(self, token, data):
         ident=data.get('id')
         if ident and not re.fullmatch(r'\d+',str(ident)): raise APIError('Invalid contact selection.')
@@ -970,12 +991,42 @@ def whole(data, key, low, high, message):
     return value
 
 DEPARTMENT_MARK='dejoiy:department'
-DEFAULT_ROLES=[{'name':'Member','access':'User'},{'name':'Team lead','access':'User'},{'name':'Department head','access':'User'},{'name':'IT admin','access':'Domain admin'}]
-def read_roles(notes):
-    """Company roles live on the domain itself (its notes), so they stay with the mail server."""
-    try: roles=json.loads(notes).get('dejoiyRoles')
-    except (ValueError,AttributeError): roles=None
-    return roles if isinstance(roles,list) and roles else [dict(r) for r in DEFAULT_ROLES]
+# What a role may do. Console permissions need company-admin access; posting needs none.
+PERMISSIONS={'updates.post':'Post in the company box','mailboxes.manage':'Add and edit mailboxes','mailboxes.delete':'Delete mailboxes',
+    'teams.manage':'Manage departments and team lists','domain.view':'See the DNS setup','roles.manage':'Manage roles, permissions and the company box'}
+CONSOLE_PERMISSIONS=set(PERMISSIONS)-{'updates.post'}
+DEFAULT_ROLES=[{'name':'Member','access':'User','perms':[]},{'name':'Team lead','access':'User','perms':['updates.post']},
+    {'name':'Department head','access':'User','perms':['updates.post']},{'name':'IT admin','access':'Domain admin','perms':sorted(PERMISSIONS)}]
+OP_PERMISSIONS={**{op:'mailboxes.manage' for op in ('create_user','set_name','status','password','quota','forward','add_alias','remove_alias','set_plan')},
+    'delete_user':'mailboxes.delete','dns_records':'domain.view',
+    **{op:'teams.manage' for op in ('create_department','set_department','create_list','delete_list','add_member','remove_member','list_members')},
+    **{op:'roles.manage' for op in ('role','set_title','save_roles','company_settings')}}
+def read_org(notes):
+    """Company roles and the company box name live on the domain itself (its notes), so they stay with the mail server."""
+    try: data=json.loads(notes or '')
+    except ValueError: data=None
+    data=data if isinstance(data,dict) else {}
+    roles=[]
+    for role in data.get('dejoiyRoles') or []:
+        if not isinstance(role,dict) or not isinstance(role.get('name'),str): continue
+        access='Domain admin' if role.get('access')=='Domain admin' else 'User'
+        # Roles saved before permissions existed: company admins could do everything, members nothing.
+        perms=role.get('perms') if isinstance(role.get('perms'),list) else (sorted(PERMISSIONS) if access=='Domain admin' else [])
+        roles.append({'name':role['name'],'access':access,'perms':sorted({p for p in perms if p in PERMISSIONS and (access=='Domain admin' or p not in CONSOLE_PERMISSIONS)})})
+    box=data.get('companyBox') if isinstance(data.get('companyBox'),str) else ''
+    return {'roles':roles or [dict(r,perms=list(r['perms'])) for r in DEFAULT_ROLES],'boxName':box}
+def read_roles(notes): return read_org(notes)['roles']
+def write_org(notes, **changes):
+    current=read_org(notes); current.update(changes)
+    return json.dumps({'dejoiyRoles':current['roles'],'companyBox':current['boxName']},separators=(',',':'))
+def role_perms(roles, title, is_admin):
+    """A person's permissions: their role's, or everything for a company admin without a role (the owner)."""
+    role=next((r for r in roles if title and r['name'].lower()==title.lower()),None)
+    if role is None: return set(PERMISSIONS) if is_admin else set()
+    return set(role['perms'])
+def attr(element, name):
+    return next((a.text or '' for a in element.findall('{'+ADMIN+'}a') if a.get('n')==name),'')
+
 class Admin(Zimbra):
     """Separate, upstream-authorized admin session; no shared service credentials."""
     mail_host='localhost'; dkim_dir=None
@@ -990,6 +1041,14 @@ class Admin(Zimbra):
         token=out.find('{'+ADMIN+'}authToken'); lifetime=out.find('{'+ADMIN+'}lifetime')
         if token is None or not token.text: raise APIError('Administrator sign-in failed.',403)
         return token.text,min(int(lifetime.text)/1000 if lifetime is not None else 900,900)
+    def actor_perms(self, token, actor, scope):
+        """None for platform admins (no limits); otherwise the company admin's role permissions."""
+        if not scope: return None
+        lookup=node(ADMIN,'GetAccountRequest'); lookup.append(node(ADMIN,'account',{'by':'name'},actor))
+        account=self.call(lookup,token).find('{'+ADMIN+'}account')
+        domain=node(ADMIN,'GetDomainRequest'); domain.append(node(ADMIN,'domain',{'by':'name'},scope))
+        found=self.call(domain,token).find('{'+ADMIN+'}domain')
+        return role_perms(read_roles(attr(found,'zimbraNotes') if found is not None else ''),attr(account,'title') if account is not None else '',True)
     def overview(self, token, scope=None):
         """Everything the admin may see; a company admin (scope=its domain) sees only that domain."""
         def in_domain(request):
@@ -1037,15 +1096,20 @@ class Admin(Zimbra):
                 'blockedExtensions':sorted({v.text for v in config.findall('{'+ADMIN+'}a') if v.get('n')=='zimbraMtaBlockedExtension' and v.text})}
         every=optional(lists)
         return {'users':accounts,'domains':[{'id':d.get('id'),'domain':d.get('name'),
-            'status':attributes(d).get('zimbraDomainStatus','active'),'roles':read_roles(attributes(d).get('zimbraNotes',''))}
+            'status':attributes(d).get('zimbraDomainStatus','active'),'roles':read_roles(attributes(d).get('zimbraNotes','')),
+            'boxName':read_org(attributes(d).get('zimbraNotes',''))['boxName'],'company':attributes(d).get('description','')}
             for d in domains.findall('{'+ADMIN+'}domain')],
             'departments':None if every is None else [x for x in every if x['department']],
             'plans':None if scope else optional(plans),'lists':None if every is None else [x for x in every if not x['department']],'services':None if scope else optional(services),
             'settings':None if scope else optional(settings),'scope':scope}
-    def action(self, token, data, actor, scope=None, elevate=None):
+    def action(self, token, data, actor, scope=None, elevate=None, perms=None):
         """elevate() returns a service-admin token for the few admin-flag changes a company admin may
-        request but cannot make with its own rights; it is used only after the target was checked in scope."""
+        request but cannot make with its own rights; it is used only after the target was checked in scope.
+        perms limits a company admin to what their role allows (None: no role limits)."""
         op=data.get('op')
+        need=OP_PERMISSIONS.get(op)
+        if scope and perms is not None and need and need not in perms:
+            raise APIError(f'Your role does not allow this. Ask an admin for "{PERMISSIONS[need]}".',403)
         if scope and op in ('create_domain','domain_status','plan_update','set_plan','settings_update'):
             raise APIError('This setting is managed by the Dejoiy platform team.',403)
         def own(address):
@@ -1193,6 +1257,7 @@ class Admin(Zimbra):
                 lookup=node(ADMIN,'GetDistributionListRequest',{'limit':'0'}); lookup.append(node(ADMIN,'dl',{'by':'id'},ident))
                 found=self.call(lookup,token).find('{'+ADMIN+'}dl')
                 if found is None: raise APIError('Mailing list not found.',404)
+                own(found.get('name',''))
                 return {'members':sorted(m.text for m in found.findall('{'+ADMIN+'}dlm') if m.text)}
             if scope:
                 lookup=node(ADMIN,'GetDistributionListRequest',{'limit':'1'}); lookup.append(node(ADMIN,'dl',{'by':'id'},ident))
@@ -1259,25 +1324,34 @@ class Admin(Zimbra):
                     except APIError: pass  # not a member, or already one
                 name=next((a.text or '' for a in chosen.findall('{'+ADMIN+'}a') if a.get('n')=='displayName'),'') if chosen is not None else ''
                 r.append(node(ADMIN,'a',{'n':'ou'},name or (chosen.get('name','') if chosen is not None else '')))
-        elif op=='save_roles':
+        elif op in ('save_roles','company_settings'):
             domain=str(data.get('domain','')).strip().lower()
-            if not DOMAIN_NAME.fullmatch(domain) or (scope and domain!=scope): raise APIError('You can only change roles for your own domain.',403)
-            roles=data.get('roles')
-            if not isinstance(roles,list) or not 1<=len(roles)<=30: raise APIError('Keep between 1 and 30 roles.')
-            clean=[]
-            for role in roles:
-                if not isinstance(role,dict): raise APIError('Invalid role.')
-                name=str(role.get('name','')).strip(); access=role.get('access','User')
-                if not 1<=len(name)<=40 or any(ord(c)<32 for c in name): raise APIError('Role names must be 1 to 40 characters.')
-                if access not in ('User','Domain admin'): raise APIError('A role can give mail access or company admin access.')
-                if any(x['name'].lower()==name.lower() for x in clean): raise APIError(f'"{name}" is listed twice.')
-                clean.append({'name':name,'access':access})
+            if not DOMAIN_NAME.fullmatch(domain) or (scope and domain!=scope): raise APIError('You can only change your own company.',403)
+            changes={}
+            if op=='save_roles':
+                roles=data.get('roles')
+                if not isinstance(roles,list) or not 1<=len(roles)<=30: raise APIError('Keep between 1 and 30 roles.')
+                clean=[]
+                for role in roles:
+                    if not isinstance(role,dict): raise APIError('Invalid role.')
+                    name=str(role.get('name','')).strip(); access=role.get('access','User'); chosen=role.get('perms',[])
+                    if not 1<=len(name)<=40 or any(ord(c)<32 for c in name): raise APIError('Role names must be 1 to 40 characters.')
+                    if access not in ('User','Domain admin'): raise APIError('A role can give mail access or company admin access.')
+                    if not isinstance(chosen,list) or any(p not in PERMISSIONS for p in chosen): raise APIError('Choose permissions from the list.')
+                    if access=='User' and set(chosen)&CONSOLE_PERMISSIONS: raise APIError(f'"{name}" needs company admin access for admin-console permissions.')
+                    if any(x['name'].lower()==name.lower() for x in clean): raise APIError(f'"{name}" is listed twice.')
+                    clean.append({'name':name,'access':access,'perms':sorted(set(chosen))})
+                changes['roles']=clean
+            else:
+                box=str(data.get('boxName','')).strip()
+                if len(box)>40 or any(ord(c)<32 for c in box): raise APIError('The company box name can be up to 40 characters.')
+                changes['boxName']=box
             lookup=node(ADMIN,'GetDomainRequest'); lookup.append(node(ADMIN,'domain',{'by':'name'},domain))
             found=self.call(lookup,token).find('{'+ADMIN+'}domain')
             if found is None: raise APIError('Domain not found.',404)
             r=node(ADMIN,'ModifyDomainRequest'); r.append(node(ADMIN,'id',text=found.get('id')))
-            r.append(node(ADMIN,'a',{'n':'zimbraNotes'},json.dumps({'dejoiyRoles':clean},separators=(',',':'))))
-            self.call(r,privileged()); return {'ok':True,'roles':clean}
+            r.append(node(ADMIN,'a',{'n':'zimbraNotes'},write_org(attr(found,'zimbraNotes'),**changes)))
+            self.call(r,privileged()); return {'ok':True,**changes}
         else: raise APIError('Unsupported administration operation.')
         self.call(r,token)
         return {'ok':True}
@@ -1319,7 +1393,8 @@ class Handler(SimpleHTTPRequestHandler):
                     capabilities=self.server.zimbra.capabilities(s['token'])
                     return self.reply(200,{'user':{**s['user'],**capabilities},'csrf':s['csrf']})
                 if self.path=='/api/mail': return self.reply(200,self.server.zimbra.messages(s['token']))
-                if self.path=='/api/contacts': return self.reply(200,self.server.zimbra.contacts(s['token']))
+                if self.path=='/api/contacts': return self.reply(200,self.server.zimbra.contacts(s['token'],self.domain(s)))
+                if self.path=='/api/updates': return self.reply(200,self.updates_view(s))
                 if self.path=='/api/preferences': return self.reply(200,self.server.zimbra.preferences(s['token']))
                 if self.path=='/api/appearance': return self.reply(200,self.server.appearance.get(self.account(s)))
                 if self.path=='/api/settings':
@@ -1351,7 +1426,8 @@ class Handler(SimpleHTTPRequestHandler):
                     self.end_headers(); self.wfile.write(raw); return
                 if self.path=='/api/admin':
                     client,token,scope=self.admin_session(s)
-                    return self.reply(200,client.overview(token,scope))
+                    perms=client.actor_perms(token,s['user']['email'],scope)
+                    return self.reply(200,{**client.overview(token,scope),'permissions':PERMISSIONS,'perms':None if perms is None else sorted(perms)})
                 raise APIError('Not found',404)
             except APIError as e: return self.reply(e.status,{'error':str(e)})
             except (ValueError,TypeError): return self.reply(400,{'error':'Invalid request'})
@@ -1451,6 +1527,47 @@ class Handler(SimpleHTTPRequestHandler):
         provisioner.provision(pending['domain'],pending['company'],pending['email'],pending['name'],password)
         self.server.signups.delete(token)
         return self.start_session(pending['email'],password)
+    # ---------- update boxes: Dejoiy Updates for every mailbox, and each company's own box ----------
+    def org(self, session):
+        """The company box name and whether this person may post there, read with the service admin
+        (people without admin rights cannot read their own role). Cached on the session for 5 minutes."""
+        cached=session.get('org')
+        if cached and cached.get('at',0)>time.time()-300: return cached
+        user=session['user']; domain=self.domain(session); info={'at':time.time(),'box':'','post':bool(user.get('isAdmin'))}
+        provisioner=getattr(self.server,'provisioner',None)
+        if provisioner and domain:
+            try:
+                token=provisioner.token(); admin=provisioner.admin
+                found=node(ADMIN,'GetDomainRequest'); found.append(node(ADMIN,'domain',{'by':'name'},domain))
+                notes=attr(admin.call(found,token).find('{'+ADMIN+'}domain'),'zimbraNotes')
+                me=node(ADMIN,'GetAccountRequest'); me.append(node(ADMIN,'account',{'by':'name'},user['email']))
+                title=attr(admin.call(me,token).find('{'+ADMIN+'}account'),'title')
+                info.update(box=read_org(notes)['boxName'],post='updates.post' in role_perms(read_roles(notes),title,bool(user.get('isAdmin'))))
+            except (APIError,AttributeError): pass
+        session['org']=info; return info
+    def updates_view(self, session):
+        org=self.org(session); domain=self.domain(session); store=self.server.updates
+        return {'dejoiy':store.get('dejoiy').get('posts',[]),'company':{'name':org['box'] or 'Company updates','domain':domain,
+            'posts':store.get('company:'+domain).get('posts',[])},'can':{'dejoiy':session['user'].get('canManageRoles') is True,'company':org['post']}}
+    def post_update(self, session, data):
+        box=data.get('box'); domain=self.domain(session)
+        if box=='dejoiy': allowed=session['user'].get('canManageRoles') is True; key='dejoiy'
+        elif box=='company': allowed=self.org(session)['post']; key='company:'+domain
+        else: raise APIError('Choose where to post.')
+        if not allowed: raise APIError('Your role cannot post here. Ask your admin for "Post in the company box".' if box=='company' else 'Only the Dejoiy team posts Dejoiy Updates.',403)
+        with UPDATES_LOCK:
+            posts=self.server.updates.get(key).get('posts',[])
+            if data.get('op')=='delete':
+                posts=[p for p in posts if p.get('id')!=data.get('id')]
+            elif data.get('op')=='post':
+                title=str(data.get('title','')).strip(); body=str(data.get('body','')).strip()
+                if not 1<=len(title)<=120 or any(ord(c)<32 for c in title): raise APIError('Give the update a title of up to 120 characters.')
+                if not 1<=len(body)<=4000: raise APIError('Write the update in up to 4000 characters.')
+                posts=[{'id':secrets.token_hex(8),'title':title,'body':body,'author':session['user'].get('name') or session['user']['email'],
+                    'email':session['user']['email'],'date':int(time.time()*1000)},*posts][:100]
+            else: raise APIError('Unsupported update operation.')
+            self.server.updates.put(key,{'posts':posts})
+        return self.updates_view(session)
     def admin_session(self, session):
         client=getattr(self.server,'admin',None)
         if not client: raise APIError('Mail administration is not configured on this server.',503)
@@ -1514,8 +1631,14 @@ class Handler(SimpleHTTPRequestHandler):
             if self.path=='/api/admin/action':
                 client,token,scope=self.admin_session(s)
                 provisioner=getattr(self.server,'provisioner',None)
-                return self.reply(200,client.action(token,data,s['user']['email'],scope,provisioner.token if provisioner else None))
-            if self.path=='/api/send': return self.reply(200,self.server.zimbra.write_message(s['token'],data))
+                perms=client.actor_perms(token,s['user']['email'],scope)
+                return self.reply(200,client.action(token,data,s['user']['email'],scope,provisioner.token if provisioner else None,perms))
+            if self.path=='/api/send':
+                result=self.server.zimbra.write_message(s['token'],data)
+                try: self.server.zimbra.remember_recipients(s['token'],data,s['user']['email'])
+                except APIError: pass  # the message went out; a missed contact is not worth an error
+                return self.reply(200,result)
+            if self.path=='/api/updates': return self.reply(200,self.post_update(s,data))
             if self.path=='/api/draft': return self.reply(200,self.server.zimbra.write_message(s['token'],data,True))
             if self.path=='/api/action': return self.reply(200,self.server.zimbra.action(s['token'],data))
             if self.path=='/api/contacts': return self.reply(200,self.server.zimbra.contact_action(s['token'],data))
@@ -1567,6 +1690,7 @@ def serve():
     server.admin_origin=(os.environ.get('ADMIN_ORIGIN') or (f'{parsed.scheme}://admin-{host}' if host.startswith('mail.') else '')).rstrip('/') or None
     server.appearance=AppearanceStore(os.environ.get('APPEARANCE_DB') or (str(Path(os.environ['SESSION_DB']).with_name('appearance.sqlite')) if os.environ.get('SESSION_DB') else None))
     url=os.environ.get('ZIMBRA_URL'); server.zimbra=Zimbra(url) if url else None
+    server.updates=AppearanceStore((str(Path(os.environ['SESSION_DB']).with_name('updates.sqlite')) if os.environ.get('SESSION_DB') else None),'updates')
     server.ui_settings=AppearanceStore((str(Path(os.environ['SESSION_DB']).with_name('settings.sqlite')) if os.environ.get('SESSION_DB') else None),'ui_settings')
     server.mail_host=os.environ.get('MAIL_HOST') or parsed.hostname
     state_dir=Path(os.environ['SESSION_DB']).parent if os.environ.get('SESSION_DB') else None

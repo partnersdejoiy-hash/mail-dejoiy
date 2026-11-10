@@ -10,28 +10,39 @@ Views.contacts = function(el){
   const s = Store.state;
   let q = "";
 
+  /* Divisions: people at your own company's domain are Work family, everyone else Others. */
+  const mine = String(s.user?.email||"").split("@")[1]||"";
+  const division = c => c.division || (mine && String(c.email).toLowerCase().endsWith("@"+mine.toLowerCase()) ? "Work family" : "Others");
+  let group = "all";
   function render(){
     const list = s.contacts.filter(c=>
-      (c.name+" "+c.email+" "+(c.org||"")).toLowerCase().includes(q.toLowerCase()))
+      (c.name+" "+c.email+" "+(c.org||"")).toLowerCase().includes(q.toLowerCase()) && (group==="all" || division(c)===group))
       .sort((a,b)=>a.name.localeCompare(b.name));
+    const row = c=>`<tr>
+          <td><b>${esc(c.name)}</b></td><td>${esc(c.email)}</td><td>${esc(c.phone||"—")}</td><td>${esc(c.org||"—")}</td>
+          <td style="white-space:nowrap;text-align:right">
+            <button class="btn sm ghost" data-mail="${c.id}" title="Email">✉️</button>
+            <button class="btn sm ghost" data-edit="${c.id}" title="Edit">✎</button>
+            <button class="btn sm ghost" data-del="${c.id}" title="Delete">×</button></td>
+        </tr>`;
+    const sections = ["Work family","Others"].map(name=>{ const people=list.filter(c=>division(c)===name);
+      return people.length ? `<tr class="ct-div" data-div="${name==="Work family"?"work":"others"}"><th colspan="5">${name==="Work family"?"🏢 Work family":"🌍 Others"} <span>${people.length}</span></th></tr>${people.map(row).join("")}` : ""; }).join("");
+    const counts = {"Work family":s.contacts.filter(c=>division(c)==="Work family").length, Others:s.contacts.filter(c=>division(c)==="Others").length};
     el.innerHTML = `
-      <div class="view-head"><h1>👥 Contacts</h1><span class="sub">${list.length} contacts</span><span style="flex:1"></span>
+      <div class="view-head"><h1>👥 Contacts</h1><span class="sub">${list.length} contacts · people you write to are saved here automatically</span><span style="flex:1"></span>
         <div class="btn-row">
           <input type="search" id="ct-q" placeholder="Search contacts…" value="${esc(q)}" style="width:200px">
           <button class="btn sm" id="ct-add">+ Add</button>
           <button class="btn sm" id="ct-export">Export CSV</button>
           <label class="btn sm" style="cursor:pointer">Import CSV<input type="file" id="ct-import" accept=".csv" class="sr"></label>
         </div></div>
-      <div class="card" style="padding:0;overflow:hidden"><table class="tbl">
+      <div class="ct-groups" role="radiogroup" aria-label="Division">${[["all","All",s.contacts.length],["Work family","🏢 Work family"+(mine?" · @"+mine:""),counts["Work family"]],["Others","🌍 Others",counts.Others]].map(([id,label,n])=>
+        `<button type="button" role="radio" class="chip-filter" data-group="${esc(id)}" aria-checked="${group===id}">${esc(label)} <b>${n}</b></button>`).join("")}</div>
+      <div class="card" style="padding:0;overflow:hidden"><table class="tbl ct-tbl">
         <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Organisation</th><th></th></tr></thead>
-        <tbody>${list.map(c=>`<tr>
-          <td><b>${esc(c.name)}</b></td><td>${esc(c.email)}</td><td>${esc(c.phone||"—")}</td><td>${esc(c.org||"—")}</td>
-          <td style="white-space:nowrap;text-align:right">
-            <button class="btn sm ghost" data-mail="${c.id}" title="Email">✉️</button>
-            <button class="btn sm ghost" data-edit="${c.id}" title="Edit">✎</button>
-            <button class="btn sm ghost" data-del="${c.id}" title="Delete">×</button></td>
-        </tr>`).join("") || `<tr><td colspan="5"><div class="empty-note">No contacts match.</div></td></tr>`}</tbody>
+        <tbody>${sections || `<tr><td colspan="5"><div class="empty-note">No contacts match.</div></td></tr>`}</tbody>
       </table></div>`;
+    el.querySelectorAll("[data-group]").forEach(b=>b.addEventListener("click",()=>{ group=b.dataset.group; render(); }));
     el.querySelector("#ct-q").addEventListener("input", ev=>{ q = ev.target.value;
       const pos = ev.target.selectionStart; render(); const nq = el.querySelector("#ct-q"); nq.focus(); nq.setSelectionRange(pos,pos); });
     el.querySelector("#ct-add").addEventListener("click", ()=> editDialog(null));
