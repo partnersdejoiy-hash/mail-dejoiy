@@ -30,4 +30,29 @@ class ShineTokenTests(unittest.TestCase):
             self.assertEqual(z.safe_return(bad), '/app/chats')
         self.assertEqual(z.safe_return('/app/chats/c1?embed=1'), '/app/chats/c1?embed=1')
 
+class DirectoryTests(unittest.TestCase):
+    def handler(self, auth, secret='k', accounts=''):
+        import xml.etree.ElementTree as ET
+        class Admin:
+            def call(self, request, token): return ET.fromstring('<GetAllAccountsResponse xmlns="urn:zimbraAdmin">' + accounts + '</GetAllAccountsResponse>')
+        class Prov: admin = Admin(); token = lambda self: 't'
+        class Avatars: versions = lambda self, domain: {'a@x.in': 5}
+        h = z.Handler.__new__(z.Handler)
+        h.headers = {'Authorization': auth}
+        h.server = type('S', (), {'shine_secret': secret, 'provisioner': Prov(), 'avatars': Avatars(), 'app_origin': 'https://mail.dejoiy.com'})()
+        return h
+
+    def test_needs_the_shared_secret(self):
+        for auth in ('', 'Bearer nope', 'k'):
+            with self.assertRaises(z.APIError): self.handler(auth).shine_directory()
+
+    def test_lists_people_with_admin_level_and_photo(self):
+        accounts = ('<account name="a@x.in"><a n="displayName">Asha</a><a n="zimbraIsDelegatedAdminAccount">TRUE</a></account>'
+                    '<account name="b@x.in"><a n="zimbraAccountStatus">locked</a></account>'
+                    '<account name="galsync@x.in"></account><account name="r@x.in"><a n="zimbraIsSystemResource">TRUE</a></account>')
+        people = self.handler('Bearer k', accounts=accounts).shine_directory()['people']
+        self.assertEqual([p['email'] for p in people], ['a@x.in', 'b@x.in'])
+        self.assertEqual(people[0]['admin'], 'company'); self.assertTrue(people[0]['photo'].endswith('v=5'))
+        self.assertFalse(people[1]['active']); self.assertEqual(people[1]['photo'], '')
+
 if __name__ == '__main__': unittest.main()

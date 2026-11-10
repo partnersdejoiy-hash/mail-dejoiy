@@ -16,10 +16,7 @@
 .shine-dock[hidden]{display:none}
 .shine-dock-head{display:flex;align-items:center;gap:8px;padding:10px 10px 10px 14px;background:var(--dj-soft,#FFE3F1);border-bottom:2px solid #121212;color:#121212}
 .shine-dock-head b{font-size:18px;letter-spacing:-.03em}
-.shine-dock-head small{font-weight:700;color:#5b5560}
-.shine-dock-logo{width:26px;height:22px;border-radius:7px;background:var(--dj-pop,#FF4FA3);border:2px solid #121212;box-shadow:2px 2px 0 #121212;transform:rotate(-6deg);
-  background-image:radial-gradient(circle,#121212 1.6px,transparent 2px),radial-gradient(circle,#121212 1.6px,transparent 2px),radial-gradient(circle,#121212 1.6px,transparent 2px);
-  background-size:6px 6px;background-repeat:no-repeat;background-position:4px 6px,9px 6px,14px 6px}
+.shine-dock-logo{width:30px;height:30px;flex:none;filter:drop-shadow(2px 2px 0 #121212)}
 .shine-dock-tools{margin-left:auto;display:flex;gap:6px}
 .shine-dock-btn{width:36px;height:36px;border-radius:50%;border:1.5px solid #121212;background:#fff;color:#121212;font:inherit;font-size:18px;font-weight:800;line-height:1;cursor:pointer}
 .shine-dock-btn:active{transform:scale(.94)}
@@ -39,6 +36,8 @@
   .shine-dock-head{padding-left:8px}
   .shine-back{display:block;border:0;background:transparent;font-size:30px;width:40px}
   .shine-x{display:none}
+  /* the iframe can't see the phone's home bar, so the panel leaves room for it */
+  .shine-dock-body{margin-bottom:env(safe-area-inset-bottom)}
 }
 @media (prefers-reduced-motion:reduce){.shine-dock,.shine-bubble,.shine-dock-body iframe{transition:none}}
 @media (prefers-color-scheme:dark){html:not([data-theme="light"]) .shine-dock,html:not([data-theme="light"]) .shine-dock-body{background:#141216}}

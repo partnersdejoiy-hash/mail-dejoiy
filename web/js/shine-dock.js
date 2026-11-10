@@ -24,7 +24,7 @@ const ShineDock = (() => {
     panel.setAttribute("role", "dialog"); panel.setAttribute("aria-label", "Shine chat");
     panel.innerHTML = `<header class="shine-dock-head">
         <button class="shine-dock-btn shine-back" data-act="close" aria-label="Back to mail">‹</button>
-        <span class="shine-dock-logo" aria-hidden="true"></span><b>Shine</b><small>chat</small>
+        <svg class="shine-dock-logo" viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" rx="25" fill="#FF4FA3"/><path fill="#fff" fill-rule="evenodd" d="M34.8 24.8H59.2A23.8 23.8 0 0 1 59.2 72.4H46.3L35.8 81.9V72.4H34.8Z M47.2 38.9H58.1A9.5 9.5 0 0 1 58.1 57.9H47.2Z"/><circle cx="22.8" cy="37.9" r="6.7" fill="#D4F53C"/><circle cx="22.8" cy="59" r="6.7" fill="#fff"/></svg><b>Shine</b>
         <span class="shine-dock-tools">
           <button class="shine-dock-btn" data-act="full" title="Open Shine in a new tab" aria-label="Open Shine in a new tab">↗</button>
           <button class="shine-dock-btn shine-x" data-act="close" title="Close" aria-label="Close chat">×</button>

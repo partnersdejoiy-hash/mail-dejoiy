@@ -1431,6 +1431,7 @@ class Handler(SimpleHTTPRequestHandler):
                     return self.reply(200,{'posts':[{k:p.get(k) for k in ('id','kind','title','body','date','pinned','link','files','photo')} for p in posts[:12]]})
                 if self.path.startswith('/api/public/photo/'): return self.update_photo(self.path.rsplit('/',1)[1])
                 if self.path.startswith('/api/public/booking/'): return self.reply(200,self.public_booking(self.path.rsplit('/',1)[1]))
+                if self.path=='/api/shine/directory': return self.reply(200,self.shine_directory())
                 if self.path.startswith('/api/public/update-file?'):
                     return self.update_file(None,urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get('id',[''])[0])
                 _,s=self.session()
@@ -1543,6 +1544,23 @@ class Handler(SimpleHTTPRequestHandler):
         # Shine loads it from here, so the usual rule holds: only signed-in colleagues on the same domain see it.
         version=self.server.avatars.versions(email.lower().rsplit('@',1)[1]).get(email.lower())
         return f"{self.server.app_origin}/api/avatar?email={urllib.parse.quote(email.lower())}&v={version}" if version else ''
+    def shine_directory(self):
+        """Every mailbox, for Shine's people list. Server to server only: Shine sends the shared secret."""
+        secret=self.server.shine_secret
+        auth=self.headers.get('Authorization') or ''
+        if not secret or not auth.startswith('Bearer ') or not hmac.compare_digest(auth[7:].strip().encode(),secret.encode()): raise APIError('Not allowed',403)
+        provisioner=getattr(self.server,'provisioner',None)
+        if not provisioner: raise APIError('The directory needs the service admin account (PROVISION_ADMIN).',503)
+        out=provisioner.admin.call(node(ADMIN,'GetAllAccountsRequest'),provisioner.token())
+        people=[]
+        for account in out.findall('{'+ADMIN+'}account'):
+            a={x.get('n'):x.text or '' for x in account.findall('{'+ADMIN+'}a')}
+            email=(account.get('name') or '').lower()
+            if a.get('zimbraIsSystemResource')=='TRUE' or not EMAIL.fullmatch(email) or email.startswith(('galsync','spam.','ham.','virus-quarantine.')): continue
+            admin='platform' if a.get('zimbraIsAdminAccount')=='TRUE' else 'company' if a.get('zimbraIsDelegatedAdminAccount')=='TRUE' else ''
+            people.append({'email':email,'name':a.get('displayName') or '','active':a.get('zimbraAccountStatus','active')=='active',
+                'admin':admin,'department':a.get('ou',''),'title':a.get('title',''),'photo':self.shine_photo(email)})
+        return {'people':people}
     def shine_sso(self):
         # Shine's "Continue with Dejoiy Mail": signed in here -> back to Shine with a token; otherwise sign in first.
         back=safe_return(urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get('return',[''])[0])
