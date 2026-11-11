@@ -29,7 +29,7 @@ async function load(){
 }
 
 window.JoiDock = {
-  avatar: "/assets/brand/joi-avatar.webp?v=2",
+  avatar: "/assets/brand/joi-avatar.webp?v=3",
   async open(){
     try{ await load(); window.Joi.open(); }
     catch(e){ App.toast(e.message); }
