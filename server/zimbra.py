@@ -441,7 +441,7 @@ def joi_template(inner, app_url):
         f'<tr><td style="padding:18px 22px 0 28px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>'
         f'<td valign="middle"><div style="font:800 34px/1 {font};color:#121212;letter-spacing:-1px">Joi</div>'
         f'<div style="font:600 13px/1.4 {font};color:#5b5560;padding-top:4px">your buddy from DEJOIY</div></td>'
-        f'<td valign="bottom" align="right" width="150"><img src="{a}joi-peek.gif" width="150" height="140" alt="Joi peeking out to say hi" style="display:block;border:0;width:150px;height:140px"></td>'
+        f'<td valign="bottom" align="right" width="150"><img src="{a}joi-peek.gif?v=2" width="150" height="140" alt="Joi peeking out to say hi" style="display:block;border:0;width:150px;height:140px"></td>'
         f'</tr></table></td></tr>'
         f'<tr><td style="background:#d4f53c;padding:9px 28px;border-top:2px solid #121212;border-bottom:2px solid #121212;font:700 13px/1.4 {font};color:#121212">Joi is feeling: happy to write to you</td></tr>'
         f'<tr><td style="padding:26px 28px 10px;color:#121212;font:400 16px/1.6 {font}">{inner}'
