@@ -36,7 +36,7 @@ class DirectoryTests(unittest.TestCase):
         class Admin:
             def call(self, request, token): return ET.fromstring('<GetAllAccountsResponse xmlns="urn:zimbraAdmin">' + accounts + '</GetAllAccountsResponse>')
         class Prov: admin = Admin(); token = lambda self: 't'
-        class Avatars: versions = lambda self, domain: {'a@x.in': 5}
+        class Avatars: version = lambda self, email: {'a@x.in': 5}.get(email)
         h = z.Handler.__new__(z.Handler)
         h.headers = {'Authorization': auth}
         h.server = type('S', (), {'shine_secret': secret, 'provisioner': Prov(), 'avatars': Avatars(), 'app_origin': 'https://mail.dejoiy.com'})()
@@ -94,7 +94,7 @@ class ShineLoginTests(unittest.TestCase):
                 return 'tok', 3600
             def capabilities(self, token): return {'isAdmin': True, 'canManageRoles': False}
             def preferences(self, token): return {'name': 'Khushi Sharma'}
-        class Avatars: versions = lambda self, domain: {}
+        class Avatars: version = lambda self, email: None
         h = z.Handler.__new__(z.Handler)
         h.server = type('S', (), {'zimbra': Zim(), 'attempts': {}, 'avatars': Avatars(), 'app_origin': 'https://mail.dejoiy.com'})()
         return h

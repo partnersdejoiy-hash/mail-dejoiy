@@ -2,6 +2,18 @@
 (function(){
 "use strict";
 
+/* Kept in memory, not in Store (that is saved to this browser), so it is fresh on every visit. */
+let supervisorList = null;
+window.Contacts = {
+  get list(){ return supervisorList||[]; },
+  /* fetched once per page load; [] when Shine isn't connected or your admin switched it off */
+  async supervisors(){
+    if(supervisorList) return supervisorList;
+    try{ supervisorList=(await Live.request("supervisors")).people||[]; }catch(_){ supervisorList=[]; }
+    return supervisorList;
+  },
+};
+
 Views.contacts = function(el){
   if(window.Live?.enabled && !el._liveContactsReady){
     el.innerHTML='<div class="card" role="status">Loading contacts…</div>';
@@ -14,6 +26,9 @@ Views.contacts = function(el){
   const mine = String(s.user?.email||"").split("@")[1]||"";
   const division = c => c.division || (mine && String(c.email).toLowerCase().endsWith("@"+mine.toLowerCase()) ? "Work family" : "Others");
   let group = "all";
+  /* Supervisors at other companies on Dejoiy you may write to; admins switch this on or off in Shine. */
+  const sups = () => Contacts.list.filter(p=>(p.name+" "+p.email+" "+(p.company||"")+" "+(p.title||"")).toLowerCase().includes(q.toLowerCase()));
+  if(window.Live?.enabled && supervisorList===null) Contacts.supervisors().then(()=>{ if(App.route==="contacts") render(); });
   function render(){
     const list = s.contacts.filter(c=>
       (c.name+" "+c.email+" "+(c.org||"")).toLowerCase().includes(q.toLowerCase()) && (group==="all" || division(c)===group))
@@ -27,6 +42,10 @@ Views.contacts = function(el){
         </tr>`;
     const sections = ["Work family","Others"].map(name=>{ const people=list.filter(c=>division(c)===name);
       return people.length ? `<tr class="ct-div" data-div="${name==="Work family"?"work":"others"}"><th colspan="5">${name==="Work family"?"🏢 Work family":"🌍 Others"} <span>${people.length}</span></th></tr>${people.map(row).join("")}` : ""; }).join("");
+    const supList = (group==="all"||group==="Supervisors") ? sups() : [];
+    const supRows = supList.length ? `<tr class="ct-div" data-div="sup"><th colspan="5">🧭 Supervisors at other companies <span>${supList.length}</span></th></tr>${supList.map(p=>`<tr>
+          <td><b>${esc(p.name||p.email)}</b>${p.status?`<div class="ct-status">${esc(p.status)}</div>`:""}</td><td>${esc(p.email)}</td><td>${esc(p.title||"—")}</td><td>${esc(p.company||"—")}</td>
+          <td style="white-space:nowrap;text-align:right"><button class="btn sm ghost" data-mailto="${esc(p.email)}" title="Email ${esc(p.name||p.email)}">✉️</button></td></tr>`).join("")}` : "";
     const counts = {"Work family":s.contacts.filter(c=>division(c)==="Work family").length, Others:s.contacts.filter(c=>division(c)==="Others").length};
     el.innerHTML = `
       <div class="view-head"><h1>👥 Contacts</h1><span class="sub">${list.length} contacts · people you write to are saved here automatically</span><span style="flex:1"></span>
@@ -36,11 +55,11 @@ Views.contacts = function(el){
           <button class="btn sm" id="ct-export">Export CSV</button>
           <label class="btn sm" style="cursor:pointer">Import CSV<input type="file" id="ct-import" accept=".csv" class="sr"></label>
         </div></div>
-      <div class="ct-groups" role="radiogroup" aria-label="Division">${[["all","All",s.contacts.length],["Work family","🏢 Work family"+(mine?" · @"+mine:""),counts["Work family"]],["Others","🌍 Others",counts.Others]].map(([id,label,n])=>
+      <div class="ct-groups" role="radiogroup" aria-label="Division">${[["all","All",s.contacts.length],["Work family","🏢 Work family"+(mine?" · @"+mine:""),counts["Work family"]],["Others","🌍 Others",counts.Others],...(Contacts.list.length?[["Supervisors","🧭 Supervisors",Contacts.list.length]]:[])].map(([id,label,n])=>
         `<button type="button" role="radio" class="chip-filter" data-group="${esc(id)}" aria-checked="${group===id}">${esc(label)} <b>${n}</b></button>`).join("")}</div>
       <div class="card" style="padding:0;overflow:hidden"><table class="tbl ct-tbl">
         <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Organisation</th><th></th></tr></thead>
-        <tbody>${sections || `<tr><td colspan="5"><div class="empty-note">No contacts match.</div></td></tr>`}</tbody>
+        <tbody>${(group==="Supervisors"?"":sections)+supRows || `<tr><td colspan="5"><div class="empty-note">No contacts match.</div></td></tr>`}</tbody>
       </table></div>`;
     el.querySelectorAll("[data-group]").forEach(b=>b.addEventListener("click",()=>{ group=b.dataset.group; render(); }));
     el.querySelector("#ct-q").addEventListener("input", ev=>{ q = ev.target.value;
@@ -53,10 +72,9 @@ Views.contacts = function(el){
       const c = s.contacts.find(x=>x.id===b.dataset.del);
       App.confirm(`Delete ${c.name}?`, async ()=>{try{if(window.Live?.enabled)await Live.request('contacts',{op:'delete',id:c.id});s.contacts = s.contacts.filter(x=>x.id!==c.id); Store.save(); render(); App.toast("Contact deleted.");}catch(error){App.toast(error.message);} });
     }));
-    el.querySelectorAll("[data-mail]").forEach(b=> b.addEventListener("click", ()=>{
-      const c = s.contacts.find(x=>x.id===b.dataset.mail);
-      App.go("compose:new"); setTimeout(()=>{ const t=document.getElementById("c-to"); if(t) t.value=c.email; },120);
-    }));
+    const mailTo = email=>{ App.go("compose:new"); setTimeout(()=>{ const t=document.getElementById("c-to"); if(t) t.value=email; },120); };
+    el.querySelectorAll("[data-mail]").forEach(b=> b.addEventListener("click", ()=> mailTo(s.contacts.find(x=>x.id===b.dataset.mail).email)));
+    el.querySelectorAll("[data-mailto]").forEach(b=> b.addEventListener("click", ()=> mailTo(b.dataset.mailto)));
   }
 
   function editDialog(c){

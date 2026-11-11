@@ -24,7 +24,7 @@ Views.mail = function(el, folder){
 
   el.innerHTML = `
   <div class="mail-heading"><div><div class="mail-title-line"><h1>${esc(Mail.folderName(ui.folder))}</h1><span class="folder-total">${list.length}</span></div><p class="mail-subtitle">A little clarity for your day.</p></div><div class="mail-controls"><label><span class="sr">Sort messages</span><select id="mail-sort" aria-label="Sort messages">${[['dateDesc','Newest first'],['dateAsc','Oldest first'],['sender','Sender A–Z'],['subject','Subject A–Z']].map(([v,n])=>`<option value="${v}" ${Store.state.prefs.mailSort===v?'selected':''}>${n}</option>`).join('')}</select></label><label><span class="sr">Reading pane</span><select id="mail-layout" aria-label="Reading pane">${[['list','No split'],['right','Right of inbox'],['bottom','Below inbox']].map(([v,n])=>`<option value="${v}" ${document.documentElement.dataset.mailLayout===v?'selected':''}>${n}</option>`).join('')}</select></label></div></div>
-  <div class="mail-filterbar" aria-label="Filter messages">${[['all','All messages'],['unread','Unread'],['starred','Starred'],['attachments','With attachments']].map(([key,label])=>`<button data-mail-filter="${key}" class="${(ui.quickFilter||'all')===key?'active':''}" aria-pressed="${(ui.quickFilter||'all')===key}">${label}</button>`).join('')}<span class="mail-filter-hint">Your day, in order.</span></div>
+  <div class="mail-filterbar" aria-label="Filter messages">${[['all','All messages'],['received','Received'],['unread','Unread'],['starred','Starred'],['attachments','With attachments']].map(([key,label])=>`<button data-mail-filter="${key}" class="${(ui.quickFilter||'all')===key?'active':''}" aria-pressed="${(ui.quickFilter||'all')===key}">${label}</button>`).join('')}<span class="mail-filter-hint">Your day, in order.</span></div>
   <div class="mail-wrap">
     <div class="folder-col">
       ${Mail.FOLDERS.map(folderBtn).join("")}
@@ -66,7 +66,9 @@ Views.mail = function(el, folder){
   }));
   /* Inbox type (Settings → Inbox) brings unread, starred or important conversations to the top. */
   const rank=e=>{const type=Settings.ui.inboxType;return ui.folder!=='inbox'||type==='default'?0:type==='unread'?(e.unreadCount>0?0:1):type==='starred'?(e.messages.some(m=>m.starred)?0:1):(e.important?0:1);};
-  const visibleItems=()=>Mail.threadList(ui.folder).filter(e=>ui.quickFilter==='unread'?e.unreadCount>0:ui.quickFilter==='starred'?e.messages.some(m=>m.starred):ui.quickFilter==='attachments'?e.hasAttachment:true)
+  // Received: conversations with at least one message from someone else (not only mail you sent)
+  const fromOthers=e=>e.messages.some(m=>String(m.from?.email||'').toLowerCase()!==String(Store.state.user.email||'').toLowerCase());
+  const visibleItems=()=>Mail.threadList(ui.folder).filter(e=>ui.quickFilter==='received'?fromOthers(e):ui.quickFilter==='unread'?e.unreadCount>0:ui.quickFilter==='starred'?e.messages.some(m=>m.starred):ui.quickFilter==='attachments'?e.hasAttachment:true)
     .map((e,i)=>[rank(e),i,e]).sort((a,b)=>a[0]-b[0]||a[1]-b[1]).map(x=>x[2]);
   ui.page=ui.page||0;
   const pageItems=()=>{const all=visibleItems(),size=Settings.pageSize(),pages=Math.max(1,Math.ceil(all.length/size));ui.page=Math.min(ui.page,pages-1);return {all,items:all.slice(ui.page*size,(ui.page+1)*size),pages,size};};

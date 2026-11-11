@@ -1,3 +1,4 @@
+import base64
 from types import SimpleNamespace
 import sys
 import tempfile
@@ -226,6 +227,37 @@ class PresenceTests(unittest.TestCase):
         out=h.people_status(self.SESSION,{'emails':['a@dejoiy.com','A@dejoiy.com','x@gmail.com','joi-ai@mail.dejoiy.com','bad']})
         self.assertTrue(out['enabled'])
         h.shine_post.assert_called_once_with('/dejoiy/people',{'emails':['a@dejoiy.com','joi-ai@mail.dejoiy.com']})
+
+class PhotoTests(unittest.TestCase):
+    PNG='data:image/png;base64,'+base64.b64encode(b'\x89PNG\r\n\x1a\n'+b'0'*40).decode()
+    def handler(self):
+        h=z.Handler.__new__(z.Handler)
+        h.server=SimpleNamespace(shine_secret='secret',app_origin='https://mail.example',avatars=z.AvatarStore())
+        return h
+    def test_photos_are_shared_across_domains(self):
+        h=self.handler(); h.server.avatars.put('a@one.com','png',b'x'); h.server.avatars.put('b@two.com','png',b'y')
+        self.assertEqual(set(h.server.avatars.versions()),{'a@one.com','b@two.com'})
+    def test_shine_upload_is_stored_and_gets_a_signed_public_link(self):
+        h=self.handler()
+        out=h.shine_avatar({'email':'Riya@Two.com','image':self.PNG})
+        self.assertTrue(out['photo'].startswith('https://mail.example/api/public/avatar?e=riya%40two.com&s='))
+        self.assertIsNotNone(h.server.avatars.get('riya@two.com'))
+        self.assertEqual(h.shine_avatar({'email':'riya@two.com','image':''})['photo'],'')
+        self.assertIsNone(h.server.avatars.get('riya@two.com'))
+    def test_public_link_needs_the_right_signature(self):
+        h=self.handler(); h.server.avatars.put('a@one.com','png',b'x')
+        h.image=Mock(return_value='sent')
+        h.path='/api/public/avatar?'+z.urllib.parse.urlencode({'e':'a@one.com','s':h.avatar_sig('a@one.com')})
+        self.assertEqual(h.public_avatar(),'sent')
+        h.path='/api/public/avatar?e=a%40one.com&s=forged'
+        with self.assertRaises(z.APIError): h.public_avatar()
+    def test_supervisors_come_from_shine_and_bad_rows_are_dropped(self):
+        h=self.handler(); session={'user':{'email':'Asha@One.com'}}
+        h.shine_post=Mock(return_value={'people':[{'name':'Dev','email':'dev@two.com','title':'Team lead'},{'email':'nope'}]})
+        self.assertEqual(h.supervisors(session),{'enabled':True,'people':[{'name':'Dev','email':'dev@two.com','title':'Team lead'}]})
+        h.shine_post.assert_called_with('/dejoiy/supervisors',{'email':'asha@one.com'})
+        h.shine_post=Mock(return_value=None)
+        self.assertEqual(h.supervisors(session),{'enabled':False,'people':[]})
 
 class HTTPTests(unittest.TestCase):
     def setUp(self):

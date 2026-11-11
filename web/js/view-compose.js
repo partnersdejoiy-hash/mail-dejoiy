@@ -50,6 +50,7 @@ Views.compose = function(el, arg){
   </div>`;
 
   const $ = id => el.querySelector("#"+id);
+  suggestions(el);
   const chips = {to:chipField(el.querySelector('[data-field="to"]'), draft.to), cc:chipField(el.querySelector('[data-field="cc"]'), draft.cc), bcc:chipField(el.querySelector('[data-field="bcc"]'), draft.bcc)};
   el.querySelector("#c-ccbtn").addEventListener("click", async ()=>{
     const open = el.querySelector("#c-ccrow").style.display==="none";
@@ -186,11 +187,24 @@ function chipField(box, initial){
     if(["Enter",",",";"].includes(e.key) || (e.key==="Tab" && input.value.trim())){ if(input.value.trim()){ e.preventDefault(); commit(); } else if(e.key==="Enter") e.preventDefault(); }
     else if(e.key==="Backspace" && !input.value && list.length){ list.pop(); draw(); }
   });
+  // a picked suggestion becomes a chip straight away
+  input.addEventListener("input",e=>{ if((!e.inputType || e.inputType==="insertReplacementText") && ADDRESS.test(input.value.trim())) commit(); });
   input.addEventListener("paste",e=>{ const t=e.clipboardData?.getData("text"); if(t && /[,;\s]/.test(t.trim())){ e.preventDefault(); add(t); } });
   input.addEventListener("blur",commit);
   box.addEventListener("click",e=>{ if(e.target===box) input.focus(); });
   add(initial||"");
   return { value:()=>{ commit(); return list.join(", "); }, invalid:()=>{ commit(); return list.filter(a=>!ADDRESS.test(a)); } };
+}
+
+/* Address suggestions: your contacts, plus supervisors at other companies when your admin allows it. */
+function suggestions(el){
+  const dl=document.createElement("datalist"); dl.id="c-people";
+  const fill=extra=>{ const seen=new Set();
+    dl.innerHTML=[...(Store.state.contacts||[]), ...extra].filter(p=>p.email && !seen.has(p.email.toLowerCase()) && seen.add(p.email.toLowerCase()))
+      .slice(0,800).map(p=>`<option value="${esc(p.email)}">${esc([p.name, p.title, p.company||p.org].filter(Boolean).join(" · "))}</option>`).join(""); };
+  fill([]); el.appendChild(dl);
+  if(window.Live?.enabled && window.Contacts) Contacts.supervisors().then(fill);
+  el.querySelectorAll(".chip-field input").forEach(i=>i.setAttribute("list","c-people"));
 }
 
 function strip(h){ return (new DOMParser().parseFromString(h||"","text/html").body.textContent||"").replace(/\s+/g," ").trim(); }

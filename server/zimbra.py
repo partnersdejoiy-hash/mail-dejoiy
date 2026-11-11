@@ -148,7 +148,8 @@ def decode_image(value, kinds, limit, what):
 
 MAX_AVATAR_BYTES = 300*1024
 class AvatarStore:
-    """Profile photos keyed by mailbox address; colleagues on the same domain can see each other's."""
+    """Profile photos keyed by mailbox address. Everyone signed in to Dejoiy Mail sees everyone's photo, on every
+    domain, and Shine shows the same photo (no BIMI needed: these are our own mailboxes)."""
     def __init__(self, path=None):
         self.lock=threading.Lock(); self.memory={}; self.db=None
         if path:
@@ -169,10 +170,12 @@ class AvatarStore:
             if self.db is None: row=self.memory.get(email.lower()); return (row[2],row[3]) if row else None
             row=self.db.execute('SELECT ext,data FROM avatars WHERE email=?',(email.lower(),)).fetchone()
             return (row[0],bytes(row[1])) if row else None
-    def versions(self, domain):
+    def versions(self):
         with self.lock:
-            if self.db is None: return {r[0]:r[4] for r in self.memory.values() if r[1]==domain}
-            return {email:version for email,version in self.db.execute('SELECT email,version FROM avatars WHERE domain=?',(domain,))}
+            if self.db is None: return {r[0]:r[4] for r in self.memory.values()}
+            return {email:version for email,version in self.db.execute('SELECT email,version FROM avatars')}
+    def version(self, email):
+        return self.versions().get(email.lower())
 
 MAX_SIGNATURE_IMAGE_BYTES = 512*1024
 MEDIA_NAME = re.compile(r'([a-f0-9]{32})\.(png|jpg|gif)')
@@ -1484,6 +1487,7 @@ class Handler(SimpleHTTPRequestHandler):
                     posts=[p for p in dejoiy_posts(self.server.updates.get('dejoiy')) if p.get('audience','both')!='internal']
                     return self.reply(200,{'posts':[{k:p.get(k) for k in ('id','kind','title','body','date','pinned','link','files','photo','art')} for p in posts[:12]]})
                 if self.path.startswith('/api/public/photo/'): return self.update_photo(self.path.rsplit('/',1)[1])
+                if self.path.startswith('/api/public/avatar?'): return self.public_avatar()
                 if self.path.startswith('/api/public/booking/'): return self.reply(200,self.public_booking(self.path.rsplit('/',1)[1]))
                 if self.path=='/api/shine/directory': return self.reply(200,self.shine_directory())
                 if self.path.startswith('/api/public/update-file?'):
@@ -1517,11 +1521,11 @@ class Handler(SimpleHTTPRequestHandler):
                 if self.path=='/api/account': return self.reply(200,self.server.zimbra.account_info(s['token']))
                 if self.path=='/api/labels': return self.reply(200,self.server.zimbra.labels(s['token']))
                 if self.path=='/api/filters': return self.reply(200,self.server.zimbra.filters(s['token']))
-                if self.path=='/api/avatars': return self.reply(200,{'avatars':self.server.avatars.versions(self.domain(s))})
+                if self.path=='/api/supervisors': return self.reply(200,self.supervisors(s))
+                if self.path=='/api/avatars': return self.reply(200,{'avatars':self.server.avatars.versions()})
                 if self.path.startswith('/api/avatar?'):
                     email=urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get('email',[''])[0].strip().lower()
-                    # Photos are only shared inside a company: other tenants' mailboxes stay invisible.
-                    found=self.server.avatars.get(email) if EMAIL.fullmatch(email) and email.rsplit('@',1)[1]==self.domain(s) else None
+                    found=self.server.avatars.get(email) if EMAIL.fullmatch(email) else None
                     if not found: raise APIError('No photo',404)
                     return self.image(found[1],IMAGE_MIME[found[0]],'private, max-age=31536000, immutable')
                 if self.path.startswith('/api/mail?'):
@@ -1594,10 +1598,37 @@ class Handler(SimpleHTTPRequestHandler):
     def domain(self, session):
         email=session['user']['email'].lower()
         return email.rsplit('@',1)[1] if '@' in email else ''
+    def avatar_sig(self, email):
+        key=(self.server.shine_secret or os.environ.get('SESSION_SECRET') or 'dejoiy-mail').encode()
+        return hmac.new(key,('avatar:'+email.lower()).encode(),'sha256').hexdigest()[:32]
     def shine_photo(self, email):
-        # Shine loads it from here, so the usual rule holds: only signed-in colleagues on the same domain see it.
-        version=self.server.avatars.versions(email.lower().rsplit('@',1)[1]).get(email.lower())
-        return f"{self.server.app_origin}/api/avatar?email={urllib.parse.quote(email.lower())}&v={version}" if version else ''
+        """The mailbox's photo as a signed link Shine (and anyone given it) can load without a Dejoiy Mail session."""
+        version=self.server.avatars.version(email)
+        if not version: return ''
+        q=urllib.parse.urlencode({'e':email.lower(),'s':self.avatar_sig(email),'v':version})
+        return f"{self.server.app_origin}/api/public/avatar?{q}"
+    def public_avatar(self):
+        q=urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+        email=q.get('e',[''])[0].strip().lower(); sig=q.get('s',[''])[0]
+        found=self.server.avatars.get(email) if EMAIL.fullmatch(email) and hmac.compare_digest(sig.encode(),self.avatar_sig(email).encode()) else None
+        if not found: raise APIError('No photo',404)
+        return self.image(found[1],IMAGE_MIME[found[0]],'public, max-age=31536000, immutable')
+    def shine_avatar(self, data):
+        """Shine sends a photo uploaded there (or '' when removed), so both apps show the same picture."""
+        email=str(data.get('email','')).strip().lower()
+        if not EMAIL.fullmatch(email): raise APIError('Invalid mailbox')
+        if data.get('image')=='':
+            self.server.avatars.delete(email); return {'ok':True,'photo':''}
+        ext,raw=decode_image(data.get('image'),('png','jpeg','webp'),MAX_AVATAR_BYTES,'Profile photo')
+        self.server.avatars.put(email,ext,raw)
+        return {'ok':True,'photo':self.shine_photo(email)}
+    def tell_shine_photo(self, email):
+        """A photo changed here: Shine shows it too (best effort; the directory sync catches up anyway)."""
+        payload={'email':email.lower(),'photo':self.shine_photo(email)}
+        def send():
+            try: self.shine_post('/dejoiy/photo',payload)
+            except APIError: pass
+        threading.Thread(target=send,daemon=True).start()
     def shine_allowed(self):
         secret=self.server.shine_secret
         auth=self.headers.get('Authorization') or ''
@@ -1679,6 +1710,13 @@ class Handler(SimpleHTTPRequestHandler):
         out=self.shine_post('/dejoiy/people',{'emails':emails})
         if out is None: return {'enabled':False,'people':{}}
         return {'enabled':True,'people':out.get('people',{})}
+    def supervisors(self, session):
+        """Supervisors at the other companies on Dejoiy (team leads up to admins and IT) this mailbox may write to.
+        Shine decides: admins switch it on or off per company or per person."""
+        out=self.shine_post('/dejoiy/supervisors',{'email':session['user']['email'].lower()})
+        if out is None: return {'enabled':False,'people':[]}
+        people=[p for p in out.get('people',[]) if isinstance(p,dict) and EMAIL.fullmatch(str(p.get('email','')))]
+        return {'enabled':True,'people':people[:500]}
     def shine_directory(self):
         """Every mailbox, for Shine's people list. Server to server only: Shine sends the shared secret."""
         self.shine_allowed()
@@ -1924,12 +1962,13 @@ class Handler(SimpleHTTPRequestHandler):
     def do_POST(self):
         try:
             # Shine's server asking for calendar work: no browser, so no Origin; the shared secret instead.
-            if self.path in ('/api/shine/calendar','/api/shine/login'):
+            if self.path in ('/api/shine/calendar','/api/shine/login','/api/shine/avatar'):
                 self.shine_allowed()
                 length=int(self.headers.get('Content-Length','0'))
                 if not 0<length<=MAX_REQUEST_BYTES: raise APIError('Request too large or empty',413)
                 data=json.loads(self.rfile.read(length))
                 if not isinstance(data,dict): raise APIError('JSON object required')
+                if self.path=='/api/shine/avatar': return self.reply(200,self.shine_avatar(data))
                 return self.reply(200,self.shine_calendar(data) if self.path=='/api/shine/calendar' else self.shine_login(data))
             origin=self.headers.get('Origin')
             if origin not in (self.server.app_origin,getattr(self.server,'admin_origin',None)) or not origin: raise APIError('Invalid request origin',403)
@@ -2028,9 +2067,10 @@ class Handler(SimpleHTTPRequestHandler):
                 email=s['user']['email'].lower()
                 if not EMAIL.fullmatch(email): raise APIError('Sign in with your full email address to set a profile photo.')
                 if data.get('image')=='':
-                    self.server.avatars.delete(email); return self.reply(200,{'ok':True,'version':None})
+                    self.server.avatars.delete(email); self.tell_shine_photo(email); return self.reply(200,{'ok':True,'version':None})
                 ext,raw=decode_image(data.get('image'),('png','jpeg','webp'),MAX_AVATAR_BYTES,'Profile photo')
-                return self.reply(200,{'ok':True,'version':self.server.avatars.put(email,ext,raw)})
+                version=self.server.avatars.put(email,ext,raw); self.tell_shine_photo(email)
+                return self.reply(200,{'ok':True,'version':version})
             if self.path=='/api/signature-image':
                 ext,raw=decode_image(data.get('image'),('png','jpeg','gif'),MAX_SIGNATURE_IMAGE_BYTES,'Signature image')
                 name=self.server.media.save(self.account(s),ext,raw)

@@ -396,6 +396,8 @@ html[data-scenic="true"] .upd-card{background:color-mix(in srgb,var(--surface) 9
 .ct-div th{text-align:left;font-size:13px;font-weight:800;padding:12px 14px 8px;background:var(--surface-2);color:var(--ink)}
 .ct-div th span{opacity:.55;margin-left:6px}
 .ct-div[data-div="work"] th{box-shadow:inset 4px 0 0 var(--pop,#ff4fa3)}
+.ct-div[data-div="sup"] th{box-shadow:inset 4px 0 0 var(--accent,#2f6bff)}
+.ct-status{font-size:12px;color:var(--muted);margin-top:2px}
 
 /* ============ smoothness ============ */
 /* rows no longer blur the photo behind each one: one glass layer for the page is enough, and scrolling stays at full speed */
