@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 import sys
 import tempfile
 import json
@@ -201,6 +202,30 @@ class DeleteDomainTests(unittest.TestCase):
         client=self.client(self.FOUND,z.APIError('x',500,'account.DOMAIN_NOT_EMPTY'))
         with self.assertRaises(z.APIError) as e: client.action('token',{'op':'delete_domain','id':self.ID,'confirm':'old.example.com'},'admin@example.com')
         self.assertEqual(e.exception.status,409); self.assertIn('Delete them first',str(e.exception))
+
+class PresenceTests(unittest.TestCase):
+    def handler(self, answer):
+        h=z.Handler.__new__(z.Handler)
+        h.server=SimpleNamespace(shine_secret='secret',shine_site='https://shine.example')
+        h.shine_post=Mock(return_value=answer)
+        return h
+    SESSION={'user':{'email':'Deepak@Dejoiy.com'}}
+    def test_heartbeat_and_status_go_to_shine_for_your_own_mailbox(self):
+        h=self.handler({'choice':'busy','text':'In a meeting'})
+        out=h.presence(self.SESSION,{'idle':False,'choice':'busy','text':'In a meeting','email':'someone@else.com'})
+        self.assertEqual(out,{'enabled':True,'choice':'busy','text':'In a meeting'})
+        h.shine_post.assert_called_once_with('/dejoiy/presence',{'email':'deepak@dejoiy.com','idle':False,'choice':'busy','text':'In a meeting'})
+    def test_unknown_choice_is_dropped(self):
+        h=self.handler({'choice':'auto','text':''})
+        h.presence(self.SESSION,{'choice':'sleeping'})
+        self.assertNotIn('choice',h.shine_post.call_args.args[1])
+    def test_without_shine_it_says_disabled(self):
+        self.assertEqual(self.handler(None).presence(self.SESSION,{'idle':True}),{'enabled':False})
+    def test_people_status_only_asks_about_colleagues_and_joi(self):
+        h=self.handler({'people':{'a@dejoiy.com':{'status':'online','text':''}}})
+        out=h.people_status(self.SESSION,{'emails':['a@dejoiy.com','A@dejoiy.com','x@gmail.com','joi-ai@mail.dejoiy.com','bad']})
+        self.assertTrue(out['enabled'])
+        h.shine_post.assert_called_once_with('/dejoiy/people',{'emails':['a@dejoiy.com','joi-ai@mail.dejoiy.com']})
 
 class HTTPTests(unittest.TestCase):
     def setUp(self):

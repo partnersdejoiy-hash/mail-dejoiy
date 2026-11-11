@@ -29,8 +29,9 @@ const Profile = {
   },
   avatar(email, name, cls){
     const url=this.photo(email);
-    return url ? `<span class="${cls} has-photo" aria-hidden="true"><img src="${esc(url)}" alt="" loading="lazy"></span>`
-      : `<span class="${cls}" aria-hidden="true" style="--h:${hue(email||name)}"><span class="av-initials">${esc(initials(name||email||"?"))}</span></span>`;
+    const dot = window.Presence ? Presence.dot(email) : "";
+    return url ? `<span class="${cls} has-photo pres-host" aria-hidden="true"><img src="${esc(url)}" alt="" loading="lazy">${dot}</span>`
+      : `<span class="${cls} pres-host" aria-hidden="true" style="--h:${hue(email||name)}"><span class="av-initials">${esc(initials(name||email||"?"))}</span>${dot}</span>`;
   },
 
   /* Profile photos are cropped to a centred square and kept small, so lists stay fast. */

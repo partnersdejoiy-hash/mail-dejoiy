@@ -295,6 +295,7 @@ Views.mail = function(el, folder){
       <div class="tm-head" role="button" tabindex="0" aria-expanded="${open}">
         ${Profile.avatar(m.from.email, m.from.name, "r-avatar")}
         <div class="tm-who"><div class="tm-line"><b>${esc(m.from.name||m.from.email)}</b>${Profile.isJoi(m.from.email)?` <span class="ai-badge" title="Joi is an AI. It can make mistakes.">AI</span>`:""} <span class="tm-email">&lt;${esc(m.from.email)}&gt;</span></div>
+          <div class="tm-ps" data-ps="${esc(String(m.from.email||"").toLowerCase())}" hidden></div>
           <div class="tm-to">to ${esc(recipients(m))}</div>
           <div class="tm-snip">${esc(strip(m.body)).slice(0,160)}</div></div>
         <div class="tm-side">${m.hasAttachment?Icons.get("paperclip"):""}<span class="tm-date">${fmtDate(m.date)}</span>

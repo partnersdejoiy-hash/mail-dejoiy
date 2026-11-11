@@ -1649,6 +1649,36 @@ class Handler(SimpleHTTPRequestHandler):
         except (urllib.error.URLError,TimeoutError,ValueError): raise APIError('Shine is not reachable right now.',502)
         if not str(out.get('url','')).startswith('https://'): raise APIError('Shine could not make the meeting.',502)
         return {'url':out['url'],'roomCode':out.get('roomCode','')}
+    def shine_post(self, path, payload):
+        """Server to server call to Shine with the shared secret. None when Shine isn't connected or answers 404."""
+        if not self.server.shine_secret: return None
+        request=urllib.request.Request(self.server.shine_site+path,data=json.dumps(payload).encode(),method='POST',
+            headers={'Content-Type':'application/json','Authorization':'Bearer '+self.server.shine_secret})
+        try:
+            with urllib.request.urlopen(request,timeout=8) as response: return json.loads(response.read())
+        except urllib.error.HTTPError as error:
+            if error.code==404: return None
+            raise APIError('Shine is not reachable right now.',502)
+        except (urllib.error.URLError,TimeoutError,ValueError): raise APIError('Shine is not reachable right now.',502)
+    def presence(self, session, data):
+        """Your Active/Away dot and written status, kept in Shine so both apps show the same thing.
+        A heartbeat sends idle; the status menu sends choice and/or text."""
+        body={'email':session['user']['email'].lower()}
+        if isinstance(data.get('idle'),bool): body['idle']=data['idle']
+        if data.get('choice') in ('auto','away','busy','invisible'): body['choice']=data['choice']
+        if isinstance(data.get('text'),str): body['text']=data['text'][:140]
+        out=self.shine_post('/dejoiy/presence',body)
+        if out is None: return {'enabled':False}
+        return {'enabled':True,'choice':out.get('choice','auto'),'text':out.get('text','')}
+    def people_status(self, session, data):
+        """Presence and status for colleagues on your own domain (the same people who see each other's photos)."""
+        domain=self.domain(session)
+        emails=[e.lower() for e in (data.get('emails') or []) if isinstance(e,str) and EMAIL.fullmatch(e)]
+        emails=[e for e in dict.fromkeys(emails) if e.rsplit('@',1)[1]==domain or e in JOI_MAILBOXES][:200]
+        if not emails: return {'enabled':bool(self.server.shine_secret),'people':{}}
+        out=self.shine_post('/dejoiy/people',{'emails':emails})
+        if out is None: return {'enabled':False,'people':{}}
+        return {'enabled':True,'people':out.get('people',{})}
     def shine_directory(self):
         """Every mailbox, for Shine's people list. Server to server only: Shine sends the shared secret."""
         self.shine_allowed()
@@ -1971,6 +2001,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.reply(200,self.cal(dcalendar.save_event,self.server.zimbra,s['token'],data,s['user']['email']))
             if self.path=='/api/booking': return self.reply(200,self.save_booking(s,data))
             if self.path=='/api/shine/meeting': return self.reply(200,self.shine_meeting(s,data))
+            if self.path=='/api/presence': return self.reply(200,self.presence(s,data))
+            if self.path=='/api/people-status': return self.reply(200,self.people_status(s,data))
             if self.path=='/api/draft': return self.reply(200,self.server.zimbra.write_message(s['token'],data,True))
             if self.path=='/api/action': return self.reply(200,self.server.zimbra.action(s['token'],data))
             if self.path=='/api/contacts': return self.reply(200,self.server.zimbra.contact_action(s['token'],data))

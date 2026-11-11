@@ -146,7 +146,8 @@ const App = {
     document.getElementById("storage-label").textContent = st.total ? `${st.used} MB of ${(st.total/1024).toFixed(st.total<1024?1:0)} GB used` : "";
     const account=document.getElementById("account-btn"), photo=Profile.photo(Store.state.user.email);
     if(account.dataset.photo!==photo || !photo){ account.dataset.photo=photo; account.classList.toggle("has-photo",!!photo);
-      account.innerHTML = photo ? `<img src="${esc(photo)}" alt="">` : esc(initials(Store.state.user.name||Store.state.user.email||"?")); }
+      account.classList.add("pres-host");
+      account.innerHTML = (photo ? `<img src="${esc(photo)}" alt="">` : esc(initials(Store.state.user.name||Store.state.user.email||"?"))) + (window.Presence?Presence.dot(Store.state.user.email):""); }
     document.getElementById("account-label").textContent = Store.state.user.name.split(" ")[0];
   },
 
@@ -351,6 +352,7 @@ const App = {
       const u = Store.state.user;
       this.menu(ev.currentTarget, [
         {label:`👤 ${u.name} — ${u.email}`, fn:()=>this.go("settings:general")},
+        ...(window.Presence && Presence.enabled ? [{label:`${{online:"🟢",away:"🟡",busy:"🔴",offline:"⚪"}[{auto:"online",away:"away",busy:"busy",invisible:"offline"}[Presence.mine.choice]]} ${Presence.mine.text||"Set a status"}`, fn:()=>Presence.open()}] : []),
         {label:"📷 Change profile photo", fn:()=>{
           // Opens the file picker straight away; the photo is cropped and saved for every device.
           const pick=document.createElement("input"); pick.type="file"; pick.accept="image/png,image/jpeg,image/webp";
@@ -372,5 +374,5 @@ const App = {
 };
 
 window.App = App;
-document.addEventListener("DOMContentLoaded", async ()=>{try{await Live.boot(); App.init();}finally{window.DmSplash&&DmSplash.hide();}});
+document.addEventListener("DOMContentLoaded", async ()=>{try{await Live.boot(); App.init(); window.Presence&&Presence.beat();}finally{window.DmSplash&&DmSplash.hide();}});
 })();
