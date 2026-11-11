@@ -27,7 +27,7 @@ Views.compose = function(el, arg){
   <div class="compose">
     <div class="compose-head"><button class="icon-btn sm c-back" id="c-back" type="button" title="Back" aria-label="Back">${Icons.get("back")}</button><span class="c-ico">${Icons.get("compose")}</span> <span class="c-title">${mode==="new"?"New message":mode==="replyall"?"Reply all":mode[0].toUpperCase()+mode.slice(1)}</span> <span class="sp"></span>
       <button class="btn sm ghost" id="c-discard">Discard</button><button class="btn sm primary c-send-top" id="c-send-top" aria-label="Send">${Icons.get("sent")}</button></div>
-    <div class="c-row"><span class="c-lab">To</span><div class="chip-field" data-field="to"><input id="c-to" type="email" multiple placeholder="Type an address, press Enter" autocomplete="off" enterkeyhint="next" aria-label="To"></div>
+    <div class="c-row"><span class="c-lab">To</span><div class="chip-field" data-field="to"><input id="c-to" type="email" multiple placeholder="Type an address or @all, press Enter" autocomplete="off" enterkeyhint="next" aria-label="To"></div>
       <button class="btn sm ghost" id="c-ccbtn">Cc/Bcc</button></div>
     <div class="c-row" id="c-ccrow" style="display:${draft.cc?"flex":"none"}"><span class="c-lab">Cc</span><div class="chip-field" data-field="cc"><input id="c-cc" type="email" multiple placeholder="cc@example.com" autocomplete="off" aria-label="Cc"></div></div>
     <div class="c-row" id="c-bccrow" style="display:none"><span class="c-lab">Bcc</span><div class="chip-field" data-field="bcc"><input id="c-bcc" type="email" multiple placeholder="Hidden recipients" autocomplete="off" aria-label="Bcc"></div></div>
@@ -121,7 +121,7 @@ Views.compose = function(el, arg){
     if(!wait){
       const button=$("c-send"); button.disabled=true;
       try{ await deliver(d, archiveAfter); }catch(error){ App.toast(error.message); button.disabled=false; return; }
-      App.go(archiveAfter?back:"mail:sent"); App.toast(window.Live?.enabled?"Message sent ✓":"Message sent ✓"); return;
+      App.go(archiveAfter?back:"mail:sent"); App.toast(/(^|\s)@joi\b/i.test(strip(d.body)) ? "Message sent ✓ Joi is copied in and will answer." : "Message sent ✓"); return;
     }
     /* Undo Send: the message waits a few seconds on this device before it goes to the server. */
     App.queueSend({deliver:()=>deliver(d, archiveAfter), restore:{data:raw, draftId, mode, srcId}, seconds:wait});
@@ -169,14 +169,18 @@ Views.compose = function(el, arg){
 /* Recipient field: typed addresses become removable chips on Enter, comma, semicolon, Tab or
    blur; pasting a list adds them all. value() returns the comma-separated list the server expects. */
 const ADDRESS = /^[^\s<>@,;]+@[^\s<>@,;]+\.[^\s<>@,;]+$/;
+/* group mentions: @all = everyone on your domain, @allS = everyone on Dejoiy Mail (DEJOIY super admins and IT) */
+const GROUP = /^@alls?$/i;
+const okAddress = a => ADDRESS.test(a) || GROUP.test(a);
+const GROUP_LABEL = a => /^@alls$/i.test(a) ? "🌐 @allS · everyone, every domain" : "👥 @all · everyone on your domain";
 function chipField(box, initial){
   const input = box.querySelector("input"), list = [];
   const draw = ()=>{
     box.querySelectorAll(".chip").forEach(c=>c.remove());
     list.forEach((address,i)=>{
-      const chip=document.createElement("span"); chip.className="chip"+(ADDRESS.test(address)?"":" bad");
-      chip.title=ADDRESS.test(address)?address:"This doesn't look like an email address";
-      chip.innerHTML=`<span>${esc(address)}</span><button type="button" aria-label="Remove ${esc(address)}">×</button>`;
+      const chip=document.createElement("span"); chip.className="chip"+(okAddress(address)?"":" bad")+(GROUP.test(address)?" group":"");
+      chip.title=GROUP.test(address)?"Everyone in this group gets the mail as Bcc":okAddress(address)?address:"This doesn't look like an email address";
+      chip.innerHTML=`<span>${esc(GROUP.test(address)?GROUP_LABEL(address):address)}</span><button type="button" aria-label="Remove ${esc(address)}">×</button>`;
       chip.querySelector("button").addEventListener("click",()=>{ list.splice(i,1); draw(); input.focus(); });
       box.insertBefore(chip,input);
     });
@@ -188,12 +192,12 @@ function chipField(box, initial){
     else if(e.key==="Backspace" && !input.value && list.length){ list.pop(); draw(); }
   });
   // a picked suggestion becomes a chip straight away
-  input.addEventListener("input",e=>{ if((!e.inputType || e.inputType==="insertReplacementText") && ADDRESS.test(input.value.trim())) commit(); });
+  input.addEventListener("input",e=>{ if((!e.inputType || e.inputType==="insertReplacementText") && okAddress(input.value.trim())) commit(); });
   input.addEventListener("paste",e=>{ const t=e.clipboardData?.getData("text"); if(t && /[,;\s]/.test(t.trim())){ e.preventDefault(); add(t); } });
   input.addEventListener("blur",commit);
   box.addEventListener("click",e=>{ if(e.target===box) input.focus(); });
   add(initial||"");
-  return { value:()=>{ commit(); return list.join(", "); }, invalid:()=>{ commit(); return list.filter(a=>!ADDRESS.test(a)); } };
+  return { value:()=>{ commit(); return list.join(", "); }, invalid:()=>{ commit(); return list.filter(a=>!okAddress(a)); } };
 }
 
 /* Address suggestions: your contacts, plus supervisors at other companies when your admin allows it. */
@@ -202,8 +206,11 @@ function suggestions(el){
   const fill=extra=>{ const seen=new Set();
     dl.innerHTML=[...(Store.state.contacts||[]), ...extra].filter(p=>p.email && !seen.has(p.email.toLowerCase()) && seen.add(p.email.toLowerCase()))
       .slice(0,800).map(p=>`<option value="${esc(p.email)}">${esc([p.name, p.title, p.company||p.org].filter(Boolean).join(" · "))}</option>`).join(""); };
-  fill([]); el.appendChild(dl);
-  if(window.Live?.enabled && window.Contacts) Contacts.supervisors().then(fill);
+  const u=Store.state.user||{};
+  const groups=[{email:"@all", name:"Everyone on your domain"}, ...(u.canManageRoles||u.isAdmin ? [{email:"@allS", name:"Everyone on Dejoiy Mail, every domain (super admins and IT)"}] : [])];
+  const fillAll=extra=>fill([...groups, ...extra]);
+  fillAll([]); el.appendChild(dl);
+  if(window.Live?.enabled && window.Contacts) Contacts.supervisors().then(fillAll);
   el.querySelectorAll(".chip-field input").forEach(i=>i.setAttribute("list","c-people"));
 }
 

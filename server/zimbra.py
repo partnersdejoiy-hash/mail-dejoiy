@@ -1755,17 +1755,54 @@ class Handler(SimpleHTTPRequestHandler):
         if out is None: return {'enabled':False,'people':[]}
         people=[p for p in out.get('people',[]) if isinstance(p,dict) and EMAIL.fullmatch(str(p.get('email','')))]
         return {'enabled':True,'people':people[:500]}
-    def shine_directory(self):
-        """Every mailbox, for Shine's people list. Server to server only: Shine sends the shared secret."""
-        self.shine_allowed()
+    def mention_recipients(self, session, data):
+        """Group mentions in a mail, like in Shine chat:
+        @all  in To/Cc/Bcc = every mailbox on your own domain;
+        @allS              = every mailbox on Dejoiy Mail, every domain (DEJOIY super admins and IT only);
+        @Joi  in the text  = Joi is copied in (Cc) and answers everyone on the mail.
+        The group goes in Bcc, so nobody sees the whole list; the mail is To you when there's no one else."""
+        data=dict(data); me=session['user']['email'].lower(); fields={}; groups=set()
+        for kind in ('to','cc','bcc'):
+            keep=[]
+            for address in re.split(r'[,;\n]+',str(data.get(kind,''))):
+                address=address.strip()
+                if address.lower() in ('@all','@alls'): groups.add('allS' if address.lower()=='@alls' else 'all')
+                elif address: keep.append(address)
+            fields[kind]=keep
+        if groups:
+            user=session['user']; mine=self.domain(session)
+            if 'allS' in groups and not (user.get('canManageRoles') is True or (user.get('isAdmin') is True and mine in getattr(self.server,'joi_internal',[]))):
+                raise APIError('Only DEJOIY super admins and IT can mail everyone with @allS. Use @all for your own domain.',403)
+            every=[p['email'] for p in self.mailboxes() if p['active'] and p['email']!=me and p['email'] not in JOI_MAILBOXES]
+            group=every if 'allS' in groups else [e for e in every if e.rsplit('@',1)[1]==mine]
+            have={a.lower() for k in fields for a in fields[k]}
+            fields['bcc']+=[e for e in group if e not in have]
+            if not fields['to']: fields['to']=[me]
+        joi=sorted(JOI_MAILBOXES)[0]
+        if re.search(r'(^|[\s>(])@joi\b',plain(str(data.get('body',''))),re.I) and joi not in {a.lower() for k in fields for a in fields[k]} and me!=joi:
+            fields['cc'].append(joi)
+        for kind in fields: data[kind]=', '.join(fields[kind])
+        return data
+    def mailboxes(self):
+        """Every real mailbox (system and spam-training boxes left out)."""
         provisioner=getattr(self.server,'provisioner',None)
-        if not provisioner: raise APIError('The directory needs the service admin account (PROVISION_ADMIN).',503)
+        if not provisioner: raise APIError('This needs the service admin account (PROVISION_ADMIN).',503)
         out=provisioner.admin.call(node(ADMIN,'GetAllAccountsRequest'),provisioner.token())
         people=[]
         for account in out.findall('{'+ADMIN+'}account'):
             a={x.get('n'):x.text or '' for x in account.findall('{'+ADMIN+'}a')}
             email=(account.get('name') or '').lower()
             if a.get('zimbraIsSystemResource')=='TRUE' or not EMAIL.fullmatch(email) or email.startswith(('galsync','spam.','ham.','virus-quarantine.')): continue
+            people.append({'email':email,'a':a,'active':a.get('zimbraAccountStatus','active')=='active'})
+        return people
+    def shine_directory(self):
+        """Every mailbox, for Shine's people list. Server to server only: Shine sends the shared secret."""
+        self.shine_allowed()
+        provisioner=getattr(self.server,'provisioner',None)
+        if not provisioner: raise APIError('The directory needs the service admin account (PROVISION_ADMIN).',503)
+        people=[]
+        for box in self.mailboxes():
+            a=box['a']; email=box['email']
             admin='platform' if a.get('zimbraIsAdminAccount')=='TRUE' else 'company' if a.get('zimbraIsDelegatedAdminAccount')=='TRUE' else ''
             people.append({'email':email,'name':a.get('displayName') or '','active':a.get('zimbraAccountStatus','active')=='active',
                 'admin':admin,'department':a.get('ou',''),'title':a.get('title',''),'photo':self.shine_photo(email)})
@@ -2068,6 +2105,7 @@ class Handler(SimpleHTTPRequestHandler):
                 perms=client.actor_perms(token,s['user']['email'],scope)
                 return self.reply(200,client.action(token,data,s['user']['email'],scope,provisioner.token if provisioner else None,perms))
             if self.path=='/api/send':
+                data=self.mention_recipients(s,data)
                 result=self.server.zimbra.write_message(s['token'],data,sender=s['user']['email'])
                 try: self.server.zimbra.remember_recipients(s['token'],data,s['user']['email'])
                 except APIError: pass  # the message went out; a missed contact is not worth an error

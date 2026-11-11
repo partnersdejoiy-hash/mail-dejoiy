@@ -274,6 +274,20 @@ class PhotoTests(unittest.TestCase):
         claims=json.loads(base64.urlsafe_b64decode(body+'=='))
         self.assertEqual(claims['app'],'mail'); self.assertGreater(claims['exp'],time.time()*1000)
         self.assertEqual(h.joi({'user':{'email':'riya@other.com'}})['token'],'')
+    def test_group_mentions_and_joi_in_mail(self):
+        h=self.handler()
+        h.mailboxes=Mock(return_value=[{'email':e,'active':True} for e in ['me@one.com','a@one.com','b@two.com','joi-ai@mail.dejoiy.com']])
+        h.server.joi_internal=['dejoiy.com']
+        me={'user':{'email':'me@one.com'}}
+        out=h.mention_recipients(me,{'to':'@all','body':'<p>Hi team</p>'})
+        self.assertEqual((out['to'],out['bcc'],out['cc']),('me@one.com','a@one.com',''))
+        with self.assertRaises(z.APIError): h.mention_recipients(me,{'to':'@allS'})
+        boss={'user':{'email':'it@dejoiy.com','isAdmin':True}}
+        out=h.mention_recipients(boss,{'to':'x@y.com','bcc':'@allS'})
+        self.assertEqual(out['bcc'],'me@one.com, a@one.com, b@two.com')
+        out=h.mention_recipients(me,{'to':'x@y.com','body':'<p>@Joi can you sum this up?</p>'})
+        self.assertEqual(out['cc'],'joi-ai@mail.dejoiy.com')
+        self.assertEqual(h.mention_recipients(me,{'to':'x@y.com','body':'mail me at joi@x.com'})['cc'],'')
     def test_supervisors_come_from_shine_and_bad_rows_are_dropped(self):
         h=self.handler(); session={'user':{'email':'Asha@One.com'}}
         h.shine_post=Mock(return_value={'people':[{'name':'Dev','email':'dev@two.com','title':'Team lead'},{'email':'nope'}]})

@@ -153,3 +153,5 @@ html[data-photo-theme="true"] #view{box-shadow:0 10px 35px #0002}
 .joi-btn:hover{transform:translate(-1px,-1px);box-shadow:3px 3px 0 #121212}.joi-btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 #121212}
 .joi-btn:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 @media(max-width:680px){.joi-btn{padding:2px;margin-right:6px;height:34px}.joi-btn span{display:none}}
+/* a group mention chip in To/Cc/Bcc (@all, @allS) */
+.chip.group{background:#ff4fa3;color:#121212;font-weight:700}
