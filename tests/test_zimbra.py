@@ -166,6 +166,34 @@ class AdminTests(unittest.TestCase):
             with self.assertRaises(z.APIError):client.action('token',data,'admin@example.com')
         client.call.assert_not_called()
 
+class DeleteDomainTests(unittest.TestCase):
+    ID='12345678-1234-1234-1234-123456789012'
+    def client(self, *responses):
+        client=z.Admin('https://mail.example.com:7071')
+        client.call=Mock(side_effect=[z.ET.fromstring(r) if isinstance(r,str) else r for r in responses])
+        return client
+    FOUND='<GetDomainResponse xmlns="urn:zimbraAdmin"><domain id="x" name="old.example.com"/></GetDomainResponse>'
+    def test_deletes_an_empty_domain_after_typed_confirmation(self):
+        client=self.client(self.FOUND,'<DeleteDomainResponse xmlns="urn:zimbraAdmin"/>')
+        out=client.action('token',{'op':'delete_domain','id':self.ID,'confirm':'Old.Example.com'},'admin@example.com')
+        self.assertEqual(out,{'ok':True,'deleted':'old.example.com'})
+        self.assertEqual(client.call.call_args.args[0].tag,'{urn:zimbraAdmin}DeleteDomainRequest')
+    def test_needs_the_name_typed(self):
+        client=self.client(self.FOUND)
+        with self.assertRaises(z.APIError): client.action('token',{'op':'delete_domain','id':self.ID,'confirm':'nope'},'admin@example.com')
+        self.assertEqual(client.call.call_count,1)
+    def test_not_your_own_domain(self):
+        client=self.client(self.FOUND)
+        with self.assertRaises(z.APIError): client.action('token',{'op':'delete_domain','id':self.ID,'confirm':'old.example.com'},'boss@old.example.com')
+    def test_company_admins_cannot_delete_domains(self):
+        client=self.client()
+        with self.assertRaises(z.APIError) as e: client.action('token',{'op':'delete_domain','id':self.ID,'confirm':'x'},'a@acme.com','acme.com')
+        self.assertEqual(e.exception.status,403); client.call.assert_not_called()
+    def test_domain_with_mailboxes_explains_what_to_do(self):
+        client=self.client(self.FOUND,z.APIError('x',500,'account.DOMAIN_NOT_EMPTY'))
+        with self.assertRaises(z.APIError) as e: client.action('token',{'op':'delete_domain','id':self.ID,'confirm':'old.example.com'},'admin@example.com')
+        self.assertEqual(e.exception.status,409); self.assertIn('Delete them first',str(e.exception))
+
 class HTTPTests(unittest.TestCase):
     def setUp(self):
         self.server.attempts={}

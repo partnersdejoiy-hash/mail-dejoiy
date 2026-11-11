@@ -1151,7 +1151,7 @@ class Admin(Zimbra):
         need=OP_PERMISSIONS.get(op)
         if scope and perms is not None and need and need not in perms:
             raise APIError(f'Your role does not allow this. Ask an admin for "{PERMISSIONS[need]}".',403)
-        if scope and op in ('create_domain','domain_status','plan_update','set_plan','settings_update'):
+        if scope and op in ('create_domain','delete_domain','domain_status','plan_update','set_plan','settings_update'):
             raise APIError('This setting is managed by the Dejoiy platform team.',403)
         def own(address):
             # Company admins may only touch addresses in their own domain (the server enforces this too).
@@ -1279,6 +1279,22 @@ class Admin(Zimbra):
             if not DOMAIN_NAME.fullmatch(domain) or (scope and domain!=scope): raise APIError('You can only check your own domain.',403)
             lookup=node(ADMIN,'GetDomainRequest'); lookup.append(node(ADMIN,'domain',{'by':'name'},domain)); self.call(lookup,token)
             return {'domain':domain,'records':domain_records(domain,self.mail_host,self.dkim_dir)}
+        elif op=='delete_domain':
+            # Platform admins only (checked above). Zimbra refuses a domain that still has mailboxes or lists.
+            ident=str(data.get('id',''))
+            if not UUID.fullmatch(ident): raise APIError('Invalid domain selection.')
+            lookup=node(ADMIN,'GetDomainRequest'); lookup.append(node(ADMIN,'domain',{'by':'id'},ident))
+            found=self.call(lookup,token).find('{'+ADMIN+'}domain')
+            if found is None: raise APIError('Domain not found.',404)
+            name=found.get('name','').lower()
+            if str(data.get('confirm','')).strip().lower()!=name: raise APIError('Type the domain name to confirm deletion.')
+            if actor.lower().endswith('@'+name): raise APIError('You cannot delete the domain your own administrator mailbox is on.')
+            try: self.call(node(ADMIN,'DeleteDomainRequest',{'id':ident}),token)
+            except APIError as e:
+                if 'NOT_EMPTY' in (e.code or '').upper():
+                    raise APIError(f'{name} still has mailboxes, aliases or mailing lists. Delete them first, then delete the domain.',409)
+                raise
+            return {'ok':True,'deleted':name}
         elif op=='domain_status':
             ident=str(data.get('id',''));status=data.get('status')
             if not UUID.fullmatch(ident): raise APIError('Invalid domain selection.')

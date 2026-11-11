@@ -275,13 +275,31 @@ function domains(main, d){
     <div class="adm-card adm-flush"><table class="adm-table"><thead><tr><th>Domain</th><th>Mailboxes</th><th>Status</th><th></th></tr></thead><tbody>
     ${d.domains.map((x,i)=>`<tr><td><b>${esc(x.domain)}</b></td><td>${d.users.filter(u=>u.email.endsWith("@"+x.domain)).length}</td>
       <td>${d.scope?`<span class="adm-pill ${x.status==="active"?"good":"warn"}">${esc(x.status)}</span>`:`<select data-dstatus="${i}" aria-label="Status for ${esc(x.domain)}">${["active","locked","maintenance","suspended"].map(s=>`<option ${s===x.status?"selected":""}>${s}</option>`).join("")}</select>`}</td>
-      <td class="adm-right"><button class="adm-btn ghost sm" data-dns="${esc(x.domain)}">DNS setup</button></td></tr>`).join("")}
+      <td class="adm-right"><button class="adm-btn ghost sm" data-dns="${esc(x.domain)}">DNS setup</button>${d.scope?"":` <button class="adm-btn ghost sm" data-ddel="${i}" aria-label="Delete ${esc(x.domain)}">Delete</button>`}</td></tr>`).join("")}
     </tbody></table></div>
     <div class="adm-card"><h2>DNS checklist</h2><p class="adm-muted">Adding a domain here does not change public DNS. At your DNS provider, point <b>MX</b> to this server and publish <b>SPF</b>, <b>DKIM</b> and <b>DMARC</b> records so mail is delivered and trusted.</p></div>`;
   main.querySelectorAll("[data-dstatus]").forEach(s=>s.addEventListener("change",async()=>{const x=d.domains[+s.dataset.dstatus];s.disabled=true;try{await act({op:"domain_status",id:x.id,status:s.value});x.status=s.value;toast("Domain status updated.");}catch(e){s.value=x.status;toast(e.message);}finally{s.disabled=false;}}));
   main.querySelectorAll("[data-dns]").forEach(b=>b.addEventListener("click",()=>dnsSetup(b.dataset.dns)));
+  main.querySelectorAll("[data-ddel]").forEach(b=>b.addEventListener("click",()=>deleteDomain(d,d.domains[+b.dataset.ddel])));
   if(!d.scope) $("d-add").addEventListener("click",()=>dialog({title:"Add domain",body:`<label>Domain name<input id="nd-name" placeholder="example.com" autocomplete="off"></label><p role="alert" class="adm-error"></p>`,
     actions:[{label:"Cancel"},{label:"Add domain",primary:true,fn:async()=>{await act({op:"create_domain",domain:$("nd-name").value});await reload("Domain added. Configure its DNS next.");}}]}));
+}
+
+// A domain can only go once it is empty: Zimbra refuses otherwise, so say so up front.
+function deleteDomain(d, x){
+  const boxes=d.users.filter(u=>u.email.toLowerCase().endsWith("@"+x.domain)).length;
+  const lists=(d.lists||[]).concat(d.departments||[]).filter(l=>String(l.email||"").toLowerCase().endsWith("@"+x.domain)).length;
+  if(boxes||lists) return dialog({title:"Delete "+x.domain,
+    body:`<p><b>${esc(x.domain)}</b> still has ${boxes?`${boxes} mailbox${boxes===1?"":"es"}`:""}${boxes&&lists?" and ":""}${lists?`${lists} mailing list${lists===1?"":"s"}`:""}.</p>
+      <p class="adm-muted">Delete or move them first, then delete the domain. This keeps anyone's mail from disappearing by accident.</p>`,
+    actions:[{label:"Close"},...(boxes?[{label:"Show mailboxes",primary:true,fn:()=>{location.hash="#/users";}}]:[])]});
+  dialog({title:"Delete "+x.domain,
+    body:`<p>This removes <b>${esc(x.domain)}</b> from Dejoiy Mail. It has no mailboxes, so no mail is lost. You can add it again later.</p>
+      <p class="adm-muted">Also remove its MX, SPF, DKIM and DMARC records at your DNS provider.</p>
+      <label>Type <b>${esc(x.domain)}</b> to confirm<input id="dd-confirm" autocomplete="off" spellcheck="false"></label><p role="alert" class="adm-error"></p>`,
+    actions:[{label:"Cancel"},{label:"Delete domain",danger:true,fn:async()=>{
+      if($("dd-confirm").value.trim().toLowerCase()!==x.domain.toLowerCase()) throw new Error("Type the domain name exactly to confirm.");
+      await act({op:"delete_domain",id:x.id,confirm:$("dd-confirm").value.trim()}); await reload(x.domain+" deleted.");}}]});
 }
 
 async function dnsSetup(domain){
