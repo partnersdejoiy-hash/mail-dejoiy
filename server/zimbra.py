@@ -419,6 +419,32 @@ def email_template(inner, label, app_url):
         f'<a href="{app}" style="color:#D6338A;font-weight:700;text-decoration:none">Dejoiy Mail</a></p>'
         f'</td></tr></table></div>')
 
+# Joi's mailboxes send in Joi's own look (the same layout as the mails the Joi server sends).
+JOI_MAILBOXES={a.strip().lower() for a in os.environ.get('JOI_MAILBOXES','joi-ai@mail.dejoiy.com').split(',') if a.strip()}
+JOI_ASSETS=os.environ.get('JOI_PUBLIC_URL','https://joi-ai.dejoiy.com').rstrip('/')+'/email/'
+
+def joi_template(inner, app_url):
+    """Joi peeking out of her round window up top, the message in a cream card, "Love, Joi", and
+    Powered by Dejoiy Mail with the little mail logo. Tables and inline styles only."""
+    app=html.escape(app_url,quote=True); a=html.escape(JOI_ASSETS,quote=True)
+    font="'Bricolage Grotesque','Segoe UI',Roboto,Helvetica,Arial,sans-serif"
+    return (f'<div data-dejoiy-mail data-joi style="margin:0;padding:24px 12px;background:#fff1e6">'
+        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;margin:0 auto;background:#fffbf7;border:2px solid #121212;border-radius:28px;box-shadow:6px 6px 0 #121212">'
+        f'<tr><td style="padding:18px 22px 0 28px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>'
+        f'<td valign="middle"><div style="font:800 34px/1 {font};color:#121212;letter-spacing:-1px">Joi</div>'
+        f'<div style="font:600 13px/1.4 {font};color:#5b5560;padding-top:4px">your buddy from DEJOIY</div></td>'
+        f'<td valign="bottom" align="right" width="150"><img src="{a}joi-peek.gif" width="150" height="140" alt="Joi peeking out to say hi" style="display:block;border:0;width:150px;height:140px"></td>'
+        f'</tr></table></td></tr>'
+        f'<tr><td style="background:#d4f53c;padding:9px 28px;border-top:2px solid #121212;border-bottom:2px solid #121212;font:700 13px/1.4 {font};color:#121212">Joi is feeling: happy to write to you</td></tr>'
+        f'<tr><td style="padding:26px 28px 10px;color:#121212;font:400 16px/1.6 {font}">{inner}'
+        f'<p style="margin:18px 0 14px;font:400 16px/1.6 {font};color:#121212">Love,<br><b>Joi</b> &#128153;</p></td></tr>'
+        f'<tr><td style="padding:16px 28px 20px;border-top:2px dashed #121212"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>'
+        f'<td valign="middle" width="52"><a href="{app}"><img src="{a}dmail-logo.gif" width="44" height="44" alt="Dejoiy Mail" style="display:block;border:0"></a></td>'
+        f'<td valign="middle" style="font:700 13px/1.4 {font};color:#121212">Powered by <a href="{app}" style="color:#121212;text-decoration:none">Dejoiy Mail</a><br>'
+        f'<span style="font-weight:400;color:#5b5560">Dmail &middot; made with love by DEJOIY</span></td></tr></table>'
+        f'<p style="margin:12px 0 0;font:400 12px/1.5 {font};color:#5b5560">Joi is DEJOIY\'s AI buddy, so double-check anything important with the DEJOIY team.</p></td></tr>'
+        f'</table></div>')
+
 def safe_html(value, images=None):
     parser=SafeHTML(images); parser.feed(value); parser.close()
     return ''.join(parser.parts)+''.join('</'+t+'>' for t in reversed(parser.stack))
@@ -537,7 +563,7 @@ class Zimbra:
             subject=m.find('{'+MAIL+'}su')
             result.append({'id':m.get('id'),'conversationId':m.get('cid') or m.get('id'),'messageId':m.get('mid') or '', 'inReplyTo':m.get('irt') or '', 'from':{'name':sender.get('p') or sender.get('a','') if sender is not None else '', 'email':sender.get('a','') if sender is not None else ''},'to':[e.get('a','') for e in addresses if e.get('t')=='t'],'cc':[e.get('a','') for e in addresses if e.get('t')=='c'],'subject':subject.text or '' if subject is not None else '', 'body':display,'folder':reverse.get(m.get('l'),'other'),'read':'u' not in flags,'starred':'f' in flags,'important':'+' in flags or '!' in flags,'date':int(m.get('d','0')),'labels':[label for label in m.get('tn','').split(',') if label],'hasAttachment':bool(attachments),'attachments':attachments})
         return {'emails':result,'more':more,'limit':50,'offset':offset,'nextOffset':offset+len(out.findall('{'+MAIL+'}m'))}
-    def write_message(self, token, data, draft=False):
+    def write_message(self, token, data, draft=False, sender=''):
         request=node(MAIL,'SaveDraftRequest' if draft else 'SendMsgRequest')
         attrs={}
         if data.get('id'):
@@ -574,8 +600,12 @@ class Zimbra:
         text,markup=plain(body),safe_html(body,web_image)
         if not draft:
             # Drafts stay plain so the template is added once, when the message actually goes out.
-            text+='\n\n--\nThis mail is being sent using Dejoiy Mail: '+self.app_url
-            markup=email_template(markup,label,self.app_url)
+            if sender.lower() in JOI_MAILBOXES:
+                text+='\n\nLove,\nJoi\n\n--\nPowered by Dejoiy Mail: '+self.app_url
+                markup=joi_template(markup,self.app_url)
+            else:
+                text+='\n\n--\nThis mail is being sent using Dejoiy Mail: '+self.app_url
+                markup=email_template(markup,label,self.app_url)
         part=node(MAIL,'mp',{'ct':'text/plain'}); part.append(node(MAIL,'content',text=text)); alternative.append(part)
         part=node(MAIL,'mp',{'ct':'text/html'}); part.append(node(MAIL,'content',text=markup)); alternative.append(part)
         m.append(alternative)
@@ -1931,7 +1961,7 @@ class Handler(SimpleHTTPRequestHandler):
                 perms=client.actor_perms(token,s['user']['email'],scope)
                 return self.reply(200,client.action(token,data,s['user']['email'],scope,provisioner.token if provisioner else None,perms))
             if self.path=='/api/send':
-                result=self.server.zimbra.write_message(s['token'],data)
+                result=self.server.zimbra.write_message(s['token'],data,sender=s['user']['email'])
                 try: self.server.zimbra.remember_recipients(s['token'],data,s['user']['email'])
                 except APIError: pass  # the message went out; a missed contact is not worth an error
                 return self.reply(200,result)

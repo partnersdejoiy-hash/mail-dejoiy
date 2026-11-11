@@ -73,6 +73,14 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(out['id'],'42');self.assertTrue(parts[0].text.startswith('Hello\n\n--\nThis mail is being sent using Dejoiy Mail'))
         self.assertNotIn('<script',parts[1].text);self.assertIn('data-dejoiy-mail',parts[1].text);self.assertIn('href="https://mail.dejoiy.com"',parts[1].text)
         self.assertEqual(len(request.findall('.//{urn:zimbraMail}e')),1)
+    def test_joi_mailbox_sends_in_joi_look(self):
+        client=z.Zimbra('https://mail.example.com');client.call=Mock(return_value=z.ET.fromstring('<SendMsgResponse xmlns="urn:zimbraMail"><m id="42"/></SendMsgResponse>'))
+        client.write_message('token',{'to':'a@b.com','subject':'Hi','body':'Hello there'},sender='Joi-AI@mail.dejoiy.com')
+        text,markup=[c.text for c in client.call.call_args.args[0].findall('.//{urn:zimbraMail}content')]
+        self.assertIn('joi-peek.gif',markup);self.assertIn('dmail-logo.gif',markup);self.assertIn('Powered by',markup);self.assertNotIn('banner-',markup)
+        self.assertIn('Love,\nJoi',text)
+        client.write_message('token',{'to':'a@b.com','subject':'Hi','body':'Hello'},sender='deepak@dejoiy.com')
+        self.assertNotIn('joi-peek.gif',client.call.call_args.args[0].findall('.//{urn:zimbraMail}content')[1].text)
     def test_sent_mail_takes_label_colour(self):
         client=z.Zimbra('https://mail.example.com');client.call=Mock(return_value=z.ET.fromstring('<SendMsgResponse xmlns="urn:zimbraMail"><m id="42"/></SendMsgResponse>'))
         client.write_message('token',{'to':'a@b.com','subject':'Invoice','body':'Hi','label':'Money','important':True})
