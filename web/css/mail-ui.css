@@ -115,3 +115,7 @@ html[data-photo-theme="true"] #view{box-shadow:0 10px 35px #0002}
   .list-toolbar::-webkit-scrollbar{display:none}
 }
 
+
+/* Joi, DEJOIY's AI buddy: "AI" next to her name and a note on her mail */
+.ai-badge{display:inline-block;margin-left:4px;padding:1px 7px;border-radius:999px;background:#ff4fa3;color:#121212;font-size:10px;font-weight:800;letter-spacing:.04em;vertical-align:2px}
+.ai-note{display:flex;align-items:center;gap:6px;margin:0 0 12px;padding:8px 12px;border-radius:12px;background:color-mix(in srgb,#ff4fa3 12%,transparent);color:var(--ink-2);font-size:13px}

@@ -442,7 +442,7 @@ def joi_template(inner, app_url):
         f'<td valign="middle" width="52"><a href="{app}"><img src="{a}dmail-logo.gif" width="44" height="44" alt="Dejoiy Mail" style="display:block;border:0"></a></td>'
         f'<td valign="middle" style="font:700 13px/1.4 {font};color:#121212">Powered by <a href="{app}" style="color:#121212;text-decoration:none">Dejoiy Mail</a><br>'
         f'<span style="font-weight:400;color:#5b5560">Dmail &middot; made with love by DEJOIY</span></td></tr></table>'
-        f'<p style="margin:12px 0 0;font:400 12px/1.5 {font};color:#5b5560">Joi is DEJOIY\'s AI buddy, so double-check anything important with the DEJOIY team.</p></td></tr>'
+        f'<p style="margin:12px 0 0;font:400 12px/1.5 {font};color:#5b5560">&#129302; Joi is an AI. It can make mistakes.</p></td></tr>'
         f'</table></div>')
 
 def safe_html(value, images=None):
@@ -601,7 +601,7 @@ class Zimbra:
         if not draft:
             # Drafts stay plain so the template is added once, when the message actually goes out.
             if sender.lower() in JOI_MAILBOXES:
-                text+='\n\nLove,\nJoi\n\n--\nPowered by Dejoiy Mail: '+self.app_url
+                text+='\n\nLove,\nJoi\n(Joi is an AI. It can make mistakes.)\n\n--\nPowered by Dejoiy Mail: '+self.app_url
                 markup=joi_template(markup,self.app_url)
             else:
                 text+='\n\n--\nThis mail is being sent using Dejoiy Mail: '+self.app_url

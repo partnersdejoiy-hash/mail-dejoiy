@@ -12,12 +12,19 @@ const loadImage = src => new Promise((resolve,reject)=>{
   img.onerror=()=>reject(new Error("That file is not an image Dmail can use.")); img.src=src;
 });
 
+/* Joi, DEJOIY's AI buddy: her mailbox always has her animated picture and an "AI" note.
+   Keep in step with JOI_MAILBOXES on the server. */
+const JOI = new Set(["joi-ai@mail.dejoiy.com"]);
+
 const Profile = {
+  isJoi(email){ return JOI.has(String(email||"").toLowerCase()); },
   /* Photo address for a mailbox, or "" when it has none (initials are shown instead). Signed-in
      mailboxes see their colleagues' photos; the demo only knows your own. */
   photo(email){
     const key=String(email||"").toLowerCase(); if(!key) return "";
-    if(window.Live?.enabled){ const v=Live.avatars?.[key]; return v ? `/api/avatar?email=${encodeURIComponent(key)}&v=${v}` : ""; }
+    if(window.Live?.enabled){ const v=Live.avatars?.[key]; if(v) return `/api/avatar?email=${encodeURIComponent(key)}&v=${v}`; }
+    if(JOI.has(key)) return "/assets/brand/joi-avatar.webp";
+    if(window.Live?.enabled) return "";
     return key===String(Store.state.user.email||"").toLowerCase() ? (Store.state.prefs.avatar||"") : "";
   },
   avatar(email, name, cls){

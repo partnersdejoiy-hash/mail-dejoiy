@@ -294,7 +294,7 @@ Views.mail = function(el, folder){
   const messageHtml = (m, open)=>`<article class="thread-message ${open?"open":""}" data-mid="${esc(m.id)}">
       <div class="tm-head" role="button" tabindex="0" aria-expanded="${open}">
         ${Profile.avatar(m.from.email, m.from.name, "r-avatar")}
-        <div class="tm-who"><div class="tm-line"><b>${esc(m.from.name||m.from.email)}</b> <span class="tm-email">&lt;${esc(m.from.email)}&gt;</span></div>
+        <div class="tm-who"><div class="tm-line"><b>${esc(m.from.name||m.from.email)}</b>${Profile.isJoi(m.from.email)?` <span class="ai-badge" title="Joi is an AI. It can make mistakes.">AI</span>`:""} <span class="tm-email">&lt;${esc(m.from.email)}&gt;</span></div>
           <div class="tm-to">to ${esc(recipients(m))}</div>
           <div class="tm-snip">${esc(strip(m.body)).slice(0,160)}</div></div>
         <div class="tm-side">${m.hasAttachment?Icons.get("paperclip"):""}<span class="tm-date">${fmtDate(m.date)}</span>
@@ -302,6 +302,7 @@ Views.mail = function(el, folder){
           <button class="icon-btn sm tm-act" data-mmore="${esc(m.id)}" title="More" aria-label="More options">${Icons.get("more")}</button></div>
       </div>
       <div class="tm-content">
+        ${Profile.isJoi(m.from.email)?`<p class="ai-note"><span aria-hidden="true">&#129302;</span> Joi is an AI. It can make mistakes.</p>`:""}
         ${(m.labels||[]).length?`<div class="thread-labels">${m.labels.map(chip).join(" ")}</div>`:""}
         ${(m.attachments||[]).length ? `<div class="thread-attachments">${m.attachments.map(a=>window.Live?.enabled && a.mid && a.part?`<a class="attach-chip" href="/api/attachment?mid=${encodeURIComponent(a.mid)}&amp;part=${encodeURIComponent(a.part)}&amp;name=${encodeURIComponent(a.name)}" download>📎 ${esc(a.name)} <span style="color:var(--ink-3)">${esc(a.size)} bytes</span></a>`:`<span class="attach-chip">📎 ${esc(a.name)} <span style="color:var(--ink-3)">${esc(a.size)}</span></span>`).join("")}</div>`:""}
         <div class="r-body">${m.body}</div>
