@@ -28,10 +28,30 @@ async function load(){
   return ready;
 }
 
+/* What the person sees right now, so Joi can read their mail when asked ("check my latest email").
+   It stays in this browser and goes only to Joi, with the message they send her. */
+const text = html => { const d=document.createElement("div"); d.innerHTML=String(html||""); return (d.textContent||"").replace(/\s+/g," ").trim(); };
+const when = ts => { try{ return new Date(ts).toLocaleString(); }catch(_){ return ""; } };
+function mailContext(){
+  const st=Store.state, me=st.user||{};
+  const line=(m,len)=>`- ${when(m.date)} | from ${m.from?.name||""} <${m.from?.email||""}> | to ${(m.to||[]).join(", ")} | "${m.subject||"(no subject)"}"${m.read?"":" [unread]"}${m.hasAttachment?" [attachment]":""}\n  ${text(m.body).slice(0,len)}`;
+  const inbox=(st.emails||[]).filter(m=>m.folder==="inbox").sort((a,b)=>b.date-a.date);
+  const sent=(st.emails||[]).filter(m=>m.folder==="sent").sort((a,b)=>b.date-a.date);
+  const open=window.App?.ui?.activeTab ? Mail.get(App.ui.activeTab) : null;
+  const parts=[`Signed in to Dejoiy Mail as ${me.name||""} <${me.email||""}>. Now: ${when(Date.now())}.`];
+  if(open) parts.push("THE MAIL THEY HAVE OPEN:\n"+line(open,4000));
+  parts.push(`INBOX, newest first (${inbox.length} messages, ${inbox.filter(m=>!m.read).length} unread):\n`+inbox.slice(0,15).map((m,i)=>line(m,i<3?1500:200)).join("\n"));
+  if(sent.length) parts.push("RECENTLY SENT:\n"+sent.slice(0,5).map(m=>line(m,200)).join("\n"));
+  return parts.join("\n\n").slice(0,12000);
+}
+function share(){ try{ if(window.Joi?.setContext) Joi.setContext(mailContext()); }catch(_){ } }
+addEventListener("hashchange", ()=>{ if(ready) share(); });
+setInterval(()=>{ if(ready && document.visibilityState==="visible") share(); }, 30000);
+
 window.JoiDock = {
   avatar: "/assets/brand/joi-avatar.webp?v=6",
   async open(){
-    try{ await load(); window.Joi.open(); }
+    try{ await load(); share(); window.Joi.open(); }
     catch(e){ App.toast(e.message); }
   },
 };
