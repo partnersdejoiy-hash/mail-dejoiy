@@ -343,6 +343,7 @@ const App = {
     });
     document.getElementById("theme-btn").addEventListener("click", ()=> Themes.openPicker());
     document.getElementById("settings-btn").addEventListener("click", ()=> this.go("settings"));
+    document.getElementById("joi-btn").addEventListener("click", ()=> JoiDock.open());
     document.getElementById("shortcuts-btn").addEventListener("click", ()=> this.go("settings:shortcuts"));
     document.getElementById("adv-search-btn").addEventListener("click", ()=> this.advSearch());
     document.getElementById("menu-btn").addEventListener("click", ()=>{ if(document.body.classList.toggle("nav-open")) Back.open(); else Back.closed(); });
@@ -359,6 +360,7 @@ const App = {
           pick.addEventListener("change",async()=>{ const file=pick.files[0]; if(!file) return;
             try{ await Profile.setPhoto(file); this.toast("Profile photo updated."); if(this.route==="settings") this.render(); }catch(error){ this.toast(error.message); } });
           pick.click(); }},
+        {label:"✨ Ask Joi, your AI buddy", fn:()=>JoiDock.open()},
         {label:"🎨 Themes", fn:()=>Themes.openPicker()},
         {label:"⚙️ Settings", fn:()=>this.go("settings")},
         {sep:true},

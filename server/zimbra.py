@@ -94,6 +94,11 @@ def shine_token(secret, email, name, admin='', photo='', now=None, ttl=120):
     claims={'e':email.lower(),'n':name or '','a':admin,'p':photo,'x':int(((now or time.time())+ttl)*1000),'d':secrets.token_urlsafe(9)}
     body=b64u(json.dumps(claims,separators=(',',':')).encode())
     return body+'.'+b64u(hmac.new(secret.encode(),body.encode(),hashlib.sha256).digest())
+def joi_app_token(secret, app='mail', minutes=12*60, now=None):
+    """Joi checks this with the app's secret from her admin page (app id 'mail'): it lets her use
+    DEJOIY's internal memory inside Dejoiy Mail. Same format as Joi's own signAppToken."""
+    body=b64u(json.dumps({'app':app,'exp':int(((now or time.time())+minutes*60)*1000)},separators=(',',':')).encode())
+    return body+'.'+b64u(hmac.new(secret.encode(),body.encode(),hashlib.sha256).digest())
 def shine_admin(user):
     return 'platform' if user.get('canManageRoles') is True else 'company' if user.get('isAdmin') is True else ''
 def safe_return(raw, fallback='/app/chats'):
@@ -1522,6 +1527,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if self.path=='/api/labels': return self.reply(200,self.server.zimbra.labels(s['token']))
                 if self.path=='/api/filters': return self.reply(200,self.server.zimbra.filters(s['token']))
                 if self.path=='/api/supervisors': return self.reply(200,self.supervisors(s))
+                if self.path=='/api/joi': return self.reply(200,self.joi(s))
                 if self.path=='/api/avatars': return self.reply(200,{'avatars':self.avatar_versions()})
                 if self.path.startswith('/api/avatar?'):
                     email=urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get('email',[''])[0].strip().lower()
@@ -1736,6 +1742,12 @@ class Handler(SimpleHTTPRequestHandler):
         out=self.shine_post('/dejoiy/people',{'emails':emails})
         if out is None: return {'enabled':False,'people':{}}
         return {'enabled':True,'people':out.get('people',{})}
+    def joi(self, session):
+        """Where Joi's chat lives, and (for DEJOIY's own people) a token so she may use internal memory."""
+        srv=self.server; url=getattr(srv,'joi_url','https://joi-ai.dejoiy.com')
+        internal=self.domain(session) in getattr(srv,'joi_internal',[])
+        secret=getattr(srv,'joi_secret','')
+        return {'url':url,'api':getattr(srv,'joi_api',url),'token':joi_app_token(secret) if secret and internal else ''}
     def supervisors(self, session):
         """Supervisors at the other companies on Dejoiy (team leads up to admins and IT) this mailbox may write to.
         Shine decides: admins switch it on or off per company or per person."""
@@ -2127,6 +2139,11 @@ def serve():
     server.mail_host=os.environ.get('MAIL_HOST') or parsed.hostname
     server.shine_origin=(os.environ.get('SHINE_ORIGIN') or 'https://app.shine.dejoiy.com').rstrip('/')
     server.shine_secret=os.environ.get('SHINE_SSO_SECRET','')
+    # Joi, DEJOIY's AI buddy, is the assistant here: her page, her API (once her server is up) and the mail app's secret on her admin page
+    server.joi_url=(os.environ.get('JOI_URL') or 'https://joi-ai.dejoiy.com').rstrip('/')
+    server.joi_api=(os.environ.get('JOI_API_URL') or server.joi_url).rstrip('/')
+    server.joi_secret=os.environ.get('JOI_APP_SECRET','')
+    server.joi_internal=[d.strip().lower() for d in (os.environ.get('JOI_INTERNAL_DOMAINS') or 'dejoiy.com,mail.dejoiy.com').split(',') if d.strip()]
     server.shine_site=(os.environ.get('SHINE_SITE') or 'https://convex-site.shine.dejoiy.com').rstrip('/')
     state_dir=Path(os.environ['SESSION_DB']).parent if os.environ.get('SESSION_DB') else None
     server.avatars=AvatarStore(str(state_dir/'avatars.sqlite') if state_dir else None)

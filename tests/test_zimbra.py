@@ -3,6 +3,7 @@ from types import SimpleNamespace
 import sys
 import tempfile
 import json
+import time
 import threading
 import unittest
 import urllib.request
@@ -265,6 +266,14 @@ class PhotoTests(unittest.TestCase):
             self.assertEqual(h.import_shine_photo('b@two.com'),('png',png))
         self.assertEqual(h.server.avatars.get('b@two.com'),('png',png))
         h.shine_post.assert_called_once()  # cached
+    def test_joi_token_only_for_dejoiy_people_and_joi_can_check_it(self):
+        h=self.handler(); h.server.joi_secret='joi-secret'; h.server.joi_internal=['dejoiy.com']; h.server.joi_url=h.server.joi_api='https://joi.example'
+        out=h.joi({'user':{'email':'deepak@dejoiy.com'}})
+        body,mac=out['token'].split('.')
+        self.assertEqual(mac,z.b64u(z.hmac.new(b'joi-secret',body.encode(),z.hashlib.sha256).digest()))
+        claims=json.loads(base64.urlsafe_b64decode(body+'=='))
+        self.assertEqual(claims['app'],'mail'); self.assertGreater(claims['exp'],time.time()*1000)
+        self.assertEqual(h.joi({'user':{'email':'riya@other.com'}})['token'],'')
     def test_supervisors_come_from_shine_and_bad_rows_are_dropped(self):
         h=self.handler(); session={'user':{'email':'Asha@One.com'}}
         h.shine_post=Mock(return_value={'people':[{'name':'Dev','email':'dev@two.com','title':'Team lead'},{'email':'nope'}]})

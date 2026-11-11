@@ -147,3 +147,9 @@ html[data-photo-theme="true"] #view{box-shadow:0 10px 35px #0002}
 .pres-choices span b{display:block;font-size:13px;font-weight:600}.pres-choices span small{font-size:11px;color:var(--ink-3)}
 .pres-choices input{accent-color:var(--accent)}
 .pres-note{font-size:11px;color:var(--ink-3);margin:12px 0 0}
+/* Joi, DEJOIY's AI buddy: the assistant button in the top bar */
+.joi-btn{display:inline-flex;align-items:center;gap:7px;height:38px;padding:3px 14px 3px 3px;margin-right:4px;border-radius:999px;border:1.5px solid #121212;background:#ff4fa3;color:#121212;font:800 14px/1 inherit;cursor:pointer;box-shadow:2px 2px 0 #121212;transition:transform .14s,box-shadow .14s}
+.joi-btn img{width:30px;height:30px;border-radius:50%;border:1.5px solid #121212;background:#fff;object-fit:cover}
+.joi-btn:hover{transform:translate(-1px,-1px);box-shadow:3px 3px 0 #121212}.joi-btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 #121212}
+.joi-btn:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+@media(max-width:680px){.joi-btn{padding:2px;margin-right:6px;height:34px}.joi-btn span{display:none}}
