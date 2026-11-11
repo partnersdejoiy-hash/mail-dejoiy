@@ -485,3 +485,11 @@ body:is([data-route="news"],[data-route="company"]) .fab{display:none!important}
 figure.upd-cover.is-gone .upd-sticker{left:22px;right:auto;top:22px;bottom:auto;width:72px;height:72px;font-size:38px}
 .upd-hero figure.upd-cover.is-gone .upd-sticker{left:50%;top:50%;width:120px;height:120px;font-size:64px;transform:translate(-50%,-50%) rotate(-6deg)}
 .upd-hero figure.upd-cover.is-gone{min-height:220px;background:color-mix(in srgb,var(--k) 80%,#fff)}
+
+/* ===== Solid panels, not glass (Zoho Cliq / Claude apps look) =====
+   Photo and scene themes keep their picture around the edges; every panel on top of it is solid. */
+html :is(#app,#topbar,#sidebar,#app-rail,#view,.mail-card,.msg-row,.dlg-back){-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+html #shell::before{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+html:is([data-photo-theme="true"],[data-scenic="true"]) :is(#topbar,#sidebar,#app-rail,#view){background:var(--surface)!important}
+html[data-scenic="true"] .mail-card{background:var(--card)!important}
+html[data-scenic="true"] .msg-row{--row-base:var(--card)!important;background:color-mix(in srgb,var(--t,var(--accent)) 15%,var(--card))!important}
