@@ -1522,10 +1522,10 @@ class Handler(SimpleHTTPRequestHandler):
                 if self.path=='/api/labels': return self.reply(200,self.server.zimbra.labels(s['token']))
                 if self.path=='/api/filters': return self.reply(200,self.server.zimbra.filters(s['token']))
                 if self.path=='/api/supervisors': return self.reply(200,self.supervisors(s))
-                if self.path=='/api/avatars': return self.reply(200,{'avatars':self.server.avatars.versions()})
+                if self.path=='/api/avatars': return self.reply(200,{'avatars':self.avatar_versions()})
                 if self.path.startswith('/api/avatar?'):
                     email=urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get('email',[''])[0].strip().lower()
-                    found=self.server.avatars.get(email) if EMAIL.fullmatch(email) else None
+                    found=(self.server.avatars.get(email) or self.import_shine_photo(email)) if EMAIL.fullmatch(email) else None
                     if not found: raise APIError('No photo',404)
                     return self.image(found[1],IMAGE_MIME[found[0]],'private, max-age=31536000, immutable')
                 if self.path.startswith('/api/mail?'):
@@ -1622,6 +1622,32 @@ class Handler(SimpleHTTPRequestHandler):
         ext,raw=decode_image(data.get('image'),('png','jpeg','webp'),MAX_AVATAR_BYTES,'Profile photo')
         self.server.avatars.put(email,ext,raw)
         return {'ok':True,'photo':self.shine_photo(email)}
+    def shine_photos(self):
+        """{email: url} for photos people uploaded in Shine, asked for at most every 5 minutes."""
+        cache=getattr(self.server,'shine_photo_cache',None)
+        if cache and time.time()-cache[0]<300: return cache[1]
+        try: photos=(self.shine_post('/dejoiy/photos',{}) or {}).get('photos') or {}
+        except APIError: photos=cache[1] if cache else {}
+        photos={str(k).lower():v for k,v in photos.items() if isinstance(v,str) and v.startswith('https://')} if isinstance(photos,dict) else {}
+        self.server.shine_photo_cache=(time.time(),photos)
+        return photos
+    def avatar_versions(self):
+        """Every mailbox photo, plus photos set only in Shine (fetched and kept here the first time they're shown)."""
+        versions=self.server.avatars.versions()
+        for email,url in self.shine_photos().items():
+            if email not in versions: versions[email]='s'+hashlib.sha256(url.encode()).hexdigest()[:10]
+        return versions
+    def import_shine_photo(self, email):
+        """A photo uploaded in Shine before the two apps shared photos: copy it here once."""
+        url=self.shine_photos().get(email)
+        if not url: return None
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url,headers={'User-Agent':'DejoiyMail'}),timeout=8) as response: raw=response.read(2*1024*1024+1)
+        except (urllib.error.URLError,TimeoutError,ValueError): return None
+        kind=next((k for k,ok in IMAGE_MAGIC.items() if ok(raw)),None)
+        if not kind or len(raw)>2*1024*1024: return None
+        self.server.avatars.put(email,IMAGE_EXT[kind],raw)
+        return (IMAGE_EXT[kind],raw)
     def tell_shine_photo(self, email):
         """A photo changed here: Shine shows it too (best effort; the directory sync catches up anyway)."""
         payload={'email':email.lower(),'photo':self.shine_photo(email)}

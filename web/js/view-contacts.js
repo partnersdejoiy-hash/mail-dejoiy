@@ -43,7 +43,7 @@ Views.contacts = function(el){
     const sections = ["Work family","Others"].map(name=>{ const people=list.filter(c=>division(c)===name);
       return people.length ? `<tr class="ct-div" data-div="${name==="Work family"?"work":"others"}"><th colspan="5">${name==="Work family"?"🏢 Work family":"🌍 Others"} <span>${people.length}</span></th></tr>${people.map(row).join("")}` : ""; }).join("");
     const supList = (group==="all"||group==="Supervisors") ? sups() : [];
-    const supRows = supList.length ? `<tr class="ct-div" data-div="sup"><th colspan="5">🧭 Supervisors at other companies <span>${supList.length}</span></th></tr>${supList.map(p=>`<tr>
+    const supRows = supList.length ? `<tr class="ct-div" data-div="sup"><th colspan="5">🧭 Other companies <span>${supList.length}</span></th></tr>${supList.map(p=>`<tr>
           <td><b>${esc(p.name||p.email)}</b>${p.status?`<div class="ct-status">${esc(p.status)}</div>`:""}</td><td>${esc(p.email)}</td><td>${esc(p.title||"—")}</td><td>${esc(p.company||"—")}</td>
           <td style="white-space:nowrap;text-align:right"><button class="btn sm ghost" data-mailto="${esc(p.email)}" title="Email ${esc(p.name||p.email)}">✉️</button></td></tr>`).join("")}` : "";
     const counts = {"Work family":s.contacts.filter(c=>division(c)==="Work family").length, Others:s.contacts.filter(c=>division(c)==="Others").length};
@@ -55,7 +55,7 @@ Views.contacts = function(el){
           <button class="btn sm" id="ct-export">Export CSV</button>
           <label class="btn sm" style="cursor:pointer">Import CSV<input type="file" id="ct-import" accept=".csv" class="sr"></label>
         </div></div>
-      <div class="ct-groups" role="radiogroup" aria-label="Division">${[["all","All",s.contacts.length],["Work family","🏢 Work family"+(mine?" · @"+mine:""),counts["Work family"]],["Others","🌍 Others",counts.Others],...(Contacts.list.length?[["Supervisors","🧭 Supervisors",Contacts.list.length]]:[])].map(([id,label,n])=>
+      <div class="ct-groups" role="radiogroup" aria-label="Division">${[["all","All",s.contacts.length],["Work family","🏢 Work family"+(mine?" · @"+mine:""),counts["Work family"]],["Others","🌍 Others",counts.Others],...(Contacts.list.length?[["Supervisors","🧭 Other companies",Contacts.list.length]]:[])].map(([id,label,n])=>
         `<button type="button" role="radio" class="chip-filter" data-group="${esc(id)}" aria-checked="${group===id}">${esc(label)} <b>${n}</b></button>`).join("")}</div>
       <div class="card" style="padding:0;overflow:hidden"><table class="tbl ct-tbl">
         <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Organisation</th><th></th></tr></thead>

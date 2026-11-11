@@ -251,6 +251,20 @@ class PhotoTests(unittest.TestCase):
         self.assertEqual(h.public_avatar(),'sent')
         h.path='/api/public/avatar?e=a%40one.com&s=forged'
         with self.assertRaises(z.APIError): h.public_avatar()
+    def test_photo_set_only_in_shine_is_listed_and_copied_once(self):
+        h=self.handler(); h.server.avatars.put('a@one.com','png',b'x')
+        h.shine_post=Mock(return_value={'photos':{'B@Two.com':'https://convex.example/b.png','c@two.com':'http://plain'}})
+        v=h.avatar_versions()
+        self.assertEqual(set(v),{'a@one.com','b@two.com'}); self.assertTrue(v['b@two.com'].startswith('s'))
+        png=b'\x89PNG\r\n\x1a\n'+b'0'*20
+        class R:
+            def __enter__(s): return s
+            def __exit__(s,*a): pass
+            def read(s,n): return png
+        with unittest.mock.patch.object(z.urllib.request,'urlopen',return_value=R()):
+            self.assertEqual(h.import_shine_photo('b@two.com'),('png',png))
+        self.assertEqual(h.server.avatars.get('b@two.com'),('png',png))
+        h.shine_post.assert_called_once()  # cached
     def test_supervisors_come_from_shine_and_bad_rows_are_dropped(self):
         h=self.handler(); session={'user':{'email':'Asha@One.com'}}
         h.shine_post=Mock(return_value={'people':[{'name':'Dev','email':'dev@two.com','title':'Team lead'},{'email':'nope'}]})
