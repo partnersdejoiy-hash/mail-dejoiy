@@ -177,3 +177,8 @@ html[data-mail-layout="list"] .code-chip{grid-column:2/4;grid-row:2}
 .code-card>b{font:600 30px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.18em;font-variant-numeric:tabular-nums;color:var(--ink);user-select:all}
 .code-card>small{font-size:11px;color:var(--ink-3)}
 @media(max-width:680px){html[data-mail-layout] .code-chip{display:inline-block;min-height:32px}.tm-person{min-height:32px}.tm-drow>span{padding-top:8px}}
+
+.tm-unsub{margin-left:6px;padding:2px 8px;border:1px solid var(--line);border-radius:999px;background:none;font:500 11px/1.4 inherit;color:var(--ink-2);cursor:pointer;white-space:nowrap}
+.tm-unsub:hover,.tm-unsub:focus-visible{color:var(--ink);border-color:var(--ink-3)}
+.thread-message:not(.open) .tm-unsub{display:none}
+@media(max-width:680px){.tm-unsub{min-height:28px;padding:4px 10px}}

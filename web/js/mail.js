@@ -15,8 +15,18 @@ const SMART = [
   {id:"unread", name:"Unread", ico:"✉️", fn: e=>!e.read && !["trash","spam"].includes(e.folder)},
   {id:"starredv", name:"Starred", ico:"⭐", fn: e=>e.starred && e.folder!=="trash"},
   {id:"attach", name:"Has attachments", ico:"📎", fn: e=>e.hasAttachment && e.folder!=="trash"},
-  {id:"important", name:"Important", ico:"❗", fn: e=>e.important && e.folder!=="trash"}
+  {id:"important", name:"Important", ico:"❗", fn: e=>e.important && e.folder!=="trash"},
+  /* Sorted for you, like Zoho's Newsletter/Notification folders and AOL's Photos/Documents views. */
+  {id:"newsletters", name:"Newsletters", ico:"📰", fn: e=>received(e) && isNewsletter(e)},
+  {id:"notifications", name:"Notifications", ico:"🔔", fn: e=>received(e) && !isNewsletter(e) && isAutomatic(e)},
+  {id:"photos", name:"Photos", ico:"🖼️", fn: e=>received(e) && hasFile(e, /\.(jpe?g|png|gif|webp|heic|bmp)$/i, /^image\//)},
+  {id:"documents", name:"Documents", ico:"📄", fn: e=>received(e) && hasFile(e, /\.(pdf|docx?|xlsx?|pptx?|csv|txt|odt|ods)$/i, /pdf|word|excel|sheet|presentation|text\//)}
 ];
+const received = e=>!["trash","spam","sent","drafts"].includes(e.folder);
+/* A mailing: it carries an unsubscribe link. A notification: sent by a machine (no-reply, alerts…) without one. */
+const isNewsletter = e=>/<a\b[^>]*https?:[^>]*>[^<]{0,80}(unsubscribe|opt[- ]?out|email preferences)|<a\b[^>]*href="https?:[^"]*unsubscribe/i.test(e.body||"");
+const isAutomatic = e=>/^(no-?reply|do-?not-?reply|notifications?|alerts?|mailer|info|news|updates?|support|billing|security|team|hello)[@+._-]|noreply|no-reply|notification/i.test(e.from?.email||"");
+const hasFile = (e, ext, type)=>(e.attachments||[]).some(a=>ext.test(a.name||"") || type.test(a.type||a.mimeType||a.ct||""));
 
 const Mail = {
   FOLDERS, SMART,

@@ -306,7 +306,7 @@ Views.mail = function(el, folder){
   const messageHtml = (m, open)=>`<article class="thread-message ${open?"open":""}" data-mid="${esc(m.id)}">
       <div class="tm-head" role="button" tabindex="0" aria-expanded="${open}">
         ${Profile.avatar(m.from.email, m.from.name, "r-avatar")}
-        <div class="tm-who"><div class="tm-line"><b>${esc(m.from.name||m.from.email)}</b>${Profile.isJoi(m.from.email)?` <span class="ai-badge" title="Joi is an AI. It can make mistakes.">AI</span>`:""} <span class="tm-email">&lt;${esc(m.from.email)}&gt;</span></div>
+        <div class="tm-who"><div class="tm-line"><b>${esc(m.from.name||m.from.email)}</b>${Profile.isJoi(m.from.email)?` <span class="ai-badge" title="Joi is an AI. It can make mistakes.">AI</span>`:""} <span class="tm-email">&lt;${esc(m.from.email)}&gt;</span>${(u=>u?` <button class="tm-unsub" data-unsub="${esc(u)}">Unsubscribe</button>`:"")(unsubLink(m))}</div>
           <div class="tm-ps" data-ps="${esc(String(m.from.email||"").toLowerCase())}" hidden></div>
           <button class="tm-to" data-details aria-expanded="false" title="Show details">to ${esc(recipients(m))} <span class="tm-caret" aria-hidden="true">▾</span></button>
           <div class="tm-snip">${esc(strip(m.body)).slice(0,160)}</div></div>
@@ -372,6 +372,12 @@ Views.mail = function(el, folder){
       head.addEventListener("click", ev=>{ if(!ev.target.closest("button")) toggle(); });
       head.addEventListener("keydown", ev=>{ if(ev.target===head&&(ev.key==="Enter"||ev.key===" ")){ ev.preventDefault(); toggle(); } });
     });
+    /* Gmail's Unsubscribe next to the sender: shows where it goes before opening the sender's own page. */
+    readerEl.querySelectorAll("[data-unsub]").forEach(b=> b.addEventListener("click", ev=>{ ev.stopPropagation(); const u=b.dataset.unsub;
+      const mail=u.startsWith("mailto:"), where=mail?u.slice(7).split("?")[0]:new URL(u).hostname;
+      App.menu(b,[{label:(mail?"Email ":"Open ")+where+" to unsubscribe",fn:()=>{
+        if(mail){ App.go("compose:new"); setTimeout(()=>{ const t=document.getElementById("c-to"), su=document.getElementById("c-subj"); if(t) t.value=where; if(su&&!su.value) su.value="Unsubscribe"; },120); }
+        else window.open(u,"_blank","noopener,noreferrer"); }}]); }));
     readerEl.querySelectorAll("[data-code]").forEach(b=> b.addEventListener("click", ()=> copyText(b.dataset.code, "Code copied.")));
     readerEl.querySelectorAll("[data-details]").forEach(b=> b.addEventListener("click", ev=>{ ev.stopPropagation();
       const box=b.closest(".thread-message").querySelector(".tm-details"); box.hidden=!box.hidden; b.setAttribute("aria-expanded",String(!box.hidden)); }));
@@ -450,6 +456,14 @@ function foldQuote(body){
   button.addEventListener("click", ()=>{ const show=button.getAttribute("aria-expanded")!=="true"; button.setAttribute("aria-expanded",String(show)); parts.forEach(p=>p.classList.toggle("quoted-hidden",!show)); });
 }
 
+/* The sender's own unsubscribe link in a mail they sent you (https or mailto only), or "". */
+function unsubLink(m){
+  if(!m || m.folder==="sent" || m.folder==="drafts" || !/unsubscribe/i.test(m.body||"")) return "";
+  const d=new DOMParser().parseFromString(m.body,"text/html");
+  const a=[...d.querySelectorAll("a[href]")].find(a=>/unsubscribe|opt[- ]?out/i.test(a.textContent+" "+a.getAttribute("href")));
+  const href=a?a.getAttribute("href").trim():"";
+  return /^(https:\/\/|mailto:)/i.test(href) ? href : "";
+}
 async function copyText(text, done){
   try{ await navigator.clipboard.writeText(text); App.toast(done); }
   catch(_){ App.toast("Couldn't copy. The code is "+text); }

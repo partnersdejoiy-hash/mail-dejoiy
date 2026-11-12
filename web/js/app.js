@@ -109,7 +109,7 @@ const App = {
   ],
   refreshNav(){
     const c = Mail.counts(), nav = document.getElementById("main-nav");
-    const icons={inbox:'inbox',starred:'star',drafts:'draft',sent:'sent',archive:'archive',spam:'spam',trash:'trash',unread:'unread',attach:'paperclip',important:'important',contacts:'contacts',admin:'shield',news:'megaphone',company:'building',settings:'settings',today:'home',calendar:'calendar',notes:'note',chat:'chat'};
+    const icons={inbox:'inbox',starred:'star',drafts:'draft',sent:'sent',archive:'archive',spam:'spam',trash:'trash',unread:'unread',attach:'paperclip',important:'important',newsletters:'megaphone',notifications:'mail',photos:'photo',documents:'file',contacts:'contacts',admin:'shield',news:'megaphone',company:'building',settings:'settings',today:'home',calendar:'calendar',notes:'note',chat:'chat'};
     const entries=[...Mail.FOLDERS.map(f=>['mail:'+f.id,Icons.get(icons[f.id]),f.name]),...Mail.SMART.filter(f=>f.id!=='starredv').map(f=>['mail:'+f.id,Icons.get(icons[f.id]),f.name]),...this.NAV.filter(([r])=>!r.startsWith('mail:')).map(([r,ico,label])=>[r,Icons.get(icons[r]),r==='company'&&this.companyName?this.companyName:label])];
     /* Labels hidden in Settings → Labels stay reachable from Settings but leave the list. */
     const hidden=new Set((window.Settings&&Settings.ui.hiddenFolders)||[]);
