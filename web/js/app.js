@@ -80,7 +80,7 @@ const App = {
   /* brand logo uploaded from settings (v0.2) */
   applyLogo(){
     const mark=document.querySelector(".brand-mark"); if(!mark) return;
-    const logo=Store.state.prefs.customLogo;
+    const logo=window.DM_LOGO||Store.state.prefs.customLogo; // the company's logo (Admin → Domains) comes before a personal one
     if(logo){ if(!mark.dataset.logoApplied){ mark.dataset.logoApplied="1"; mark.innerHTML=`<img class="brand-logo" src="${logo}" alt="Dejoiy Mail logo">`; } }
     else if(mark.dataset.logoApplied){ delete mark.dataset.logoApplied; mark.innerHTML=`<img src="assets/brand/dmail-logo.svg?v=20261110a" alt="" width="40" height="40">`; }
   },

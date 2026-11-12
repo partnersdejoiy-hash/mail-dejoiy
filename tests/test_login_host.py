@@ -51,9 +51,22 @@ class LoginHostHTTPTests(unittest.TestCase):
         except urllib.error.HTTPError as e: return e.code, json.loads(e.read())
 
     def test_brand_only_on_the_custom_address(self):
-        self.assertEqual(self.call('/api/config', host='mail.acme.in')[1]['brand'], {'name': 'Acme', 'tagline': '', 'colour': '#112233', 'domain': 'acme.in'})
+        self.assertEqual(self.call('/api/config', host='mail.acme.in')[1]['brand'], {'name': 'Acme', 'tagline': '', 'colour': '#112233', 'logo': '', 'domain': 'acme.in'})
         self.assertNotIn('brand', self.call('/api/config')[1])
         self.assertNotIn('brand', self.call('/api/config', host='mail.unknown.in')[1])
+
+    def test_brand_follows_the_company_on_the_main_site_too(self):
+        logo = 'a' * 32 + '.png'
+        self.server.hosts.put('brands', {'acme.in': {'name': 'Acme', 'tagline': 'Hi', 'colour': '#112233', 'logo': logo}, 'evil.in': {'name': 'X', 'logo': '../../etc/passwd'}})
+        def session_for(email):
+            req = urllib.request.Request(self.url + '/api/login', json.dumps({'email': email, 'password': 'pw'}).encode(), {'Content-Type': 'application/json', 'Origin': self.url})
+            with urllib.request.urlopen(req) as r: cookie = r.headers['Set-Cookie'].split(';')[0]
+            with urllib.request.urlopen(urllib.request.Request(self.url + '/api/session', headers={'Cookie': cookie})) as r: return json.loads(r.read())
+        try:
+            self.assertEqual(session_for('priya@acme.in')['brand'], {'name': 'Acme', 'tagline': 'Hi', 'colour': '#112233', 'logo': self.url + '/media/' + logo, 'domain': 'acme.in'})
+            self.assertNotIn('brand', session_for('someone@plain.in'))            # companies without a brand see Dejoiy Mail
+            self.assertEqual(session_for('a@evil.in')['brand']['logo'], '')       # only a stored image name ever becomes a link
+        finally: self.server.hosts.put('brands', {})
 
     def test_sign_in_rules(self):
         login = lambda email, host, origin: self.call('/api/login', {'email': email, 'password': 'pw'}, host, origin)

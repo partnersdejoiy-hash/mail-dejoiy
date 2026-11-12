@@ -1692,7 +1692,7 @@ class Handler(SimpleHTTPRequestHandler):
             try:
                 if self.path=='/api/config':
                     custom=self.custom_host()
-                    return self.reply(200,{'mode':'live','configured':bool(self.server.zimbra),**({'brand':{**custom['brand'],'domain':custom['domain']}} if custom else {})})
+                    return self.reply(200,{'mode':'live','configured':bool(self.server.zimbra),**({'brand':custom['brand']} if custom else {})})
                 # Dejoiy Updates are public news, shown on the home and admin landing pages too. Company boxes never are.
                 if self.path=='/api/public/updates':
                     posts=[p for p in dejoiy_posts(self.server.updates.get('dejoiy')) if p.get('audience','both')!='internal']
@@ -1706,7 +1706,8 @@ class Handler(SimpleHTTPRequestHandler):
                 _,s=self.session()
                 if self.path=='/api/session':
                     capabilities=self.server.zimbra.capabilities(s['token'])
-                    return self.reply(200,{'user':{**s['user'],**capabilities},'csrf':s['csrf']})
+                    brand=self.brand_for(self.domain(s))  # the company's own name and logo follow its people everywhere
+                    return self.reply(200,{'user':{**s['user'],**capabilities},'csrf':s['csrf'],**({'brand':brand} if brand else {})})
                 if self.path=='/api/mail': return self.reply(200,self.server.zimbra.messages(s['token']))
                 if self.path=='/api/contacts': return self.reply(200,self.server.zimbra.contacts(s['token'],self.domain(s)))
                 if self.path=='/api/updates': return self.reply(200,self.updates_view(s))
@@ -1820,11 +1821,21 @@ class Handler(SimpleHTTPRequestHandler):
     def login_hosts(self):
         store=getattr(self.server,'hosts',None)
         return store.get('all') if store else {}
+    def brand_for(self, domain):
+        """A company's own name, line, colour and logo for the app (empty when it set none)."""
+        store=getattr(self.server,'hosts',None)
+        if not store or not domain: return {}
+        brand=store.get('brands').get(domain)
+        if not isinstance(brand,dict):  # set before brands had their own place: it lived with the sign-in address
+            brand=next((e.get('brand') for e in store.get('all').values() if isinstance(e,dict) and e.get('domain')==domain and isinstance(e.get('brand'),dict)),None)
+        if not isinstance(brand,dict) or not (brand.get('name') or brand.get('logo')): return {}
+        logo=brand.get('logo') if MEDIA_NAME.fullmatch(str(brand.get('logo') or '')) else ''
+        return {'name':brand.get('name',''),'tagline':brand.get('tagline',''),'colour':brand.get('colour',''),'logo':self.server.app_origin+'/media/'+logo if logo else '','domain':domain}
     def custom_host(self):
         """The company whose own sign-in address this request came in on, or None."""
         host=(self.headers.get('Host') or '').split(':')[0].lower()
         entry=self.login_hosts().get(host)
-        return {**entry,'host':host} if isinstance(entry,dict) else None
+        return {**entry,'host':host,'brand':self.brand_for(entry.get('domain')) or {'name':'','tagline':'','colour':'','logo':'','domain':entry.get('domain')}} if isinstance(entry,dict) else None
     def login_host_action(self, session, data):
         """Admin console: see, set or remove a domain's own sign-in address and its sign-in page look."""
         client,token,scope=self.admin_session(session)
@@ -1843,18 +1854,24 @@ class Handler(SimpleHTTPRequestHandler):
                 if len(hosts)>=200 and host not in hosts: raise APIError('No more sign-in addresses can be added right now. Contact Dejoiy.',503)
                 if not host_points_here(host,mail_host): raise APIError(f'{host} does not point to {mail_host} yet. Add a CNAME record: {host.split(".")[0]} -> {mail_host}, wait a few minutes and try again.',409)
                 if current and current!=host: hosts.pop(current,None)
-                hosts[host]={'domain':domain,'brand':clean_brand(data)}; current=host
+                hosts[host]={'domain':domain}; current=host
             elif op=='login_host_remove':
                 if current: hosts.pop(current,None)
                 current=None
+            if op=='brand_set':
+                brands=store.get('brands'); brand={**clean_brand(data),'logo':(brands.get(domain) or {}).get('logo','')}
+                if data.get('removeLogo') is True: brand['logo']=''
+                if data.get('logo'):
+                    ext,raw=decode_image(data.get('logo'),('png','jpeg'),200*1024,'The logo')
+                    brand['logo']=self.server.media.save('brand:'+domain,ext,raw)
+                brands[domain]=brand; store.put('brands',brands)
             if op in ('login_host_set','login_host_remove'):
                 store.put('all',hosts)
                 target=getattr(self.server,'hosts_file',None)
                 if target:  # the list the server's certificate job reads (deploy/custom-hosts.sh)
                     try: Path(target).write_text(''.join(h+'\n' for h in sorted(hosts)))
                     except OSError: pass
-        entry=hosts.get(current) if current else None
-        return {'domain':domain,'host':current or '','brand':(entry or {}).get('brand',{'name':'','tagline':'','colour':''}),'target':mail_host,
+        return {'domain':domain,'host':current or '','brand':self.brand_for(domain) or {'name':'','tagline':'','colour':'','logo':''},'target':mail_host,
             'pointing':bool(current) and host_points_here(current,mail_host)}
     def domain(self, session):
         email=session['user']['email'].lower()
@@ -2397,7 +2414,7 @@ class Handler(SimpleHTTPRequestHandler):
                 audit=getattr(self.server,'audit',None)
                 if not audit: raise APIError('Reports are not switched on for this server.',503)
                 return self.reply(200,audit.report(scope))
-            if self.path=='/api/admin/action' and data.get('op') in ('login_host_get','login_host_set','login_host_remove'):
+            if self.path=='/api/admin/action' and data.get('op') in ('login_host_get','login_host_set','login_host_remove','brand_set'):
                 out=self.login_host_action(s,data)
                 if data.get('op')!='login_host_get': self.log('admin:'+data['op'],s['user']['email'],out.get('host') or out.get('domain'))
                 return self.reply(200,out)

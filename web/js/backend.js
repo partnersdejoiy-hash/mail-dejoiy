@@ -68,10 +68,17 @@ const Live={enabled:!!window.DEJOIY_LIVE,csrf:'',more:false,avatars:{},
     Store.save=()=>{try{localStorage.setItem('dejoiy-live-prefs',JSON.stringify(Store.state.prefs));}catch(_){}}; Store.reset=()=>location.reload();
     let session;
     try{session=await this.request('session');}catch(_){session=await this.login();}
-    // on a company's own sign-in address the app carries the company's name: the tab title and the name at the top left
-    this.request('config').then(c=>{ const name=c.brand?.name; if(!name) return; window.DM_BRAND=name+' Mail'; document.title=window.DM_BRAND;
-      const el=document.querySelector('#brand-home .brand-name'); if(el){ el.textContent=window.DM_BRAND; el.classList.add('is-text'); }
-      document.getElementById('brand-home')?.setAttribute('aria-label',window.DM_BRAND+' home'); }).catch(()=>{});
+    // the company's own name and logo (set in Admin → Domains): top left and the tab title. The Dejoiy tab icon stays,
+    // and with a company logo a small Dejoiy mark sits beside the name.
+    const brandIt=b=>{ if(!b||!(b.name||b.logo)||window.DM_BRAND) return; window.DM_BRAND=(b.name||'Dejoiy')+' Mail'; document.title=window.DM_BRAND;
+      const home=document.getElementById('brand-home'), el=home?.querySelector('.brand-name'); if(!home) return;
+      if(b.name&&el){ el.textContent=window.DM_BRAND; el.classList.add('is-text'); }
+      if(/^https:\/\/[^"'<>\s]+\/media\/[a-f0-9]{32}\.(png|jpg)$/.test(b.logo||'')){ window.DM_LOGO=b.logo; const m=home.querySelector('.brand-mark'); if(m) delete m.dataset.logoApplied; if(window.App?.applyLogo) App.applyLogo();
+        const by=document.createElement('span'); by.className='brand-by'; by.title='Powered by Dejoiy Mail';
+        by.innerHTML='<img src="assets/brand/dmail-logo.svg?v=20261110a" alt="Dejoiy Mail" width="18" height="18">'; home.appendChild(by); }
+      home.setAttribute('aria-label',window.DM_BRAND+' home'); };
+    brandIt(session.brand);
+    if(!session.brand) this.request('config').then(c=>brandIt(c.brand)).catch(()=>{});
     this.csrf=session.csrf; Store.state.user=session.user;
     const onAdminSite=String(location.hostname||'').startsWith('admin-');
     if(new URLSearchParams(location.search).get('next')==='joi'){location.replace('/joi/sso');return new Promise(()=>{});}
@@ -103,7 +110,8 @@ const Live={enabled:!!window.DEJOIY_LIVE,csrf:'',more:false,avatars:{},
         if(b.name){ h1.textContent='Sign in to '+b.name; document.title=b.name+' Mail'; }
         sub.textContent=b.tagline||('with your '+b.domain+' mailbox');
         if(em) em.placeholder='you@'+b.domain;
-        if(/^#[0-9a-f]{6}$/.test(b.colour||'')) layer.style.setProperty('--lg-pink',b.colour); }
+        if(/^#[0-9a-f]{6}$/.test(b.colour||'')) layer.style.setProperty('--lg-pink',b.colour);
+        if(/^https:\/\/[^"'<>\s]+\/media\/[a-f0-9]{32}\.(png|jpg)$/.test(b.logo||'')){ const img=document.createElement('img'); img.src=b.logo; img.alt=b.name||''; img.className='lg-company-logo'; h1.before(img); } }
       Themes.apply();
       document.body.appendChild(layer); if(window.DmSplash)DmSplash.hide(); if(window.DejoiyAccent)DejoiyAccent.recolour(layer);
       const form=layer.querySelector('form'),email=form.elements.email,pass=form.elements.password,btn=form.querySelector('.lg-btn'),

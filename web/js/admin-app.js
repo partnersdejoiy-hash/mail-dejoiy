@@ -230,7 +230,7 @@ const OPS={create_user:"Created mailbox",delete_user:"Deleted mailbox",password:
   add_alias:"Added alias",remove_alias:"Removed alias",set_name:"Renamed",set_plan:"Changed plan",role:"Changed role",set_title:"Changed title",save_roles:"Edited roles",
   company_settings:"Changed company settings",create_domain:"Added domain",delete_domain:"Removed domain",domain_status:"Changed domain status",create_list:"Created list",
   delete_list:"Deleted list",add_member:"Added list member",remove_member:"Removed list member",create_department:"Created department",set_department:"Changed department",
-  policies_save:"Changed mailbox policies",policy_assign:"Changed a mailbox's policy",login_host_set:"Set sign-in address",login_host_remove:"Removed sign-in address",plan_update:"Edited plan",settings_update:"Changed server settings"};
+  policies_save:"Changed mailbox policies",policy_assign:"Changed a mailbox's policy",brand_set:"Changed name or logo",login_host_set:"Set sign-in address",login_host_remove:"Removed sign-in address",plan_update:"Edited plan",settings_update:"Changed server settings"};
 async function reports(main, d){
   main.innerHTML=head("Reports",d.scope?`Email and sign-in activity on ${d.scope}.`:"Email and sign-in activity across all domains.",`<button class="adm-btn ghost" id="rp-refresh">${icon("refresh")} Refresh</button>`)+`<div id="rp-body"><p class="adm-muted">Loading…</p></div>`;
   $("rp-refresh").addEventListener("click",()=>reports(main,d));
@@ -418,7 +418,7 @@ function domains(main, d){
     <div class="adm-card adm-flush"><table class="adm-table"><thead><tr><th>Domain</th><th>Mailboxes</th><th>Status</th><th></th></tr></thead><tbody>
     ${d.domains.map((x,i)=>`<tr><td><b>${esc(x.domain)}</b></td><td>${d.users.filter(u=>u.email.endsWith("@"+x.domain)).length}</td>
       <td>${d.scope?`<span class="adm-pill ${x.status==="active"?"good":"warn"}">${esc(x.status)}</span>`:`<select data-dstatus="${i}" aria-label="Status for ${esc(x.domain)}">${["active","locked","maintenance","suspended"].map(s=>`<option ${s===x.status?"selected":""}>${s}</option>`).join("")}</select>`}</td>
-      <td class="adm-right"><button class="adm-btn ghost sm" data-dns="${esc(x.domain)}">DNS setup</button> <button class="adm-btn ghost sm" data-host="${esc(x.domain)}">Sign-in address</button>${d.scope?"":` <button class="adm-btn ghost sm" data-ddel="${i}" aria-label="Delete ${esc(x.domain)}">Delete</button>`}</td></tr>`).join("")}
+      <td class="adm-right"><button class="adm-btn ghost sm" data-dns="${esc(x.domain)}">DNS setup</button> <button class="adm-btn ghost sm" data-host="${esc(x.domain)}">Branding & sign-in</button>${d.scope?"":` <button class="adm-btn ghost sm" data-ddel="${i}" aria-label="Delete ${esc(x.domain)}">Delete</button>`}</td></tr>`).join("")}
     </tbody></table></div>
     <div class="adm-card"><h2>DNS checklist</h2><p class="adm-muted">Adding a domain here does not change public DNS. At your DNS provider, point <b>MX</b> to this server and publish <b>SPF</b>, <b>DKIM</b> and <b>DMARC</b> records so mail is delivered and trusted.</p></div>`;
   main.querySelectorAll("[data-dstatus]").forEach(s=>s.addEventListener("change",async()=>{const x=d.domains[+s.dataset.dstatus];s.disabled=true;try{await act({op:"domain_status",id:x.id,status:s.value});x.status=s.value;toast("Domain status updated.");}catch(e){s.value=x.status;toast(e.message);}finally{s.disabled=false;}}));
@@ -446,31 +446,46 @@ function deleteDomain(d, x){
       await act({op:"delete_domain",id:x.id,confirm:$("dd-confirm").value.trim()}); await reload(x.domain+" deleted.");}}]});
 }
 
-/* A company's own sign-in address (mail.theircompany.com) and how its sign-in page looks. */
+/* A company's own look (name, line, colour, logo: everywhere its people open mail) and its own sign-in address. */
 async function loginHost(domain){
-  const root=dialog({title:"Sign-in address · "+domain, wide:true, body:`<p class="adm-muted">Loading…</p>`});
+  const root=dialog({title:"Branding & sign-in address · "+domain, wide:true, body:`<p class="adm-muted">Loading…</p>`});
   const body=root.querySelector(".adm-dialog-body");
   const draw=(out,note)=>{
-    const b=out.brand||{}, suggested="mail."+domain;
+    const b=out.brand||{}, suggested="mail."+domain; let logoData="", removeLogo=false;
     body.innerHTML=`${note?`<p class="${note.bad?"adm-error":"adm-muted"}" role="status">${esc(note.text)}</p>`:""}
-      <p>Let your team sign in at your own address instead of ${esc(out.target)}. Only ${esc(domain)} mailboxes can sign in there.</p>
+      <h3 class="adm-h3">Your name and logo</h3>
+      <p class="adm-muted">Shown to everyone with a ${esc(domain)} mailbox, wherever they open mail: the name at the top, the browser tab and your sign-in page. A small Dejoiy mark and the Dejoiy tab icon stay.</p>
       <div class="adm-form">
-        <label>Your address<input id="lh-host" value="${esc(out.host||suggested)}" placeholder="${esc(suggested)}" autocapitalize="off" spellcheck="false"></label>
-        <label>Company name on the sign-in page<input id="lh-name" maxlength="60" value="${esc(b.name||"")}" placeholder="Your company"></label>
-        <label>One line under it<input id="lh-tag" maxlength="120" value="${esc(b.tagline||"")}" placeholder="Mail for the whole team"></label>
-        <label>Button colour<input id="lh-colour" type="color" value="${esc(b.colour||"#ff4fa3")}"></label>
+        <label>Name<input id="lh-name" maxlength="60" value="${esc(b.name||"")}" placeholder="Your company (shown as “Your company Mail”)"></label>
+        <label>One line on the sign-in page<input id="lh-tag" maxlength="120" value="${esc(b.tagline||"")}" placeholder="Mail for the whole team"></label>
+        <label>Button colour on the sign-in page<input id="lh-colour" type="color" value="${esc(b.colour||"#ff4fa3")}"></label>
+        <div class="adm-logo"><span id="lh-preview">${b.logo?`<img src="${esc(b.logo)}" alt="Current logo">`:`<i>No logo</i>`}</span>
+          <label class="adm-btn ghost">Choose logo<input id="lh-logo" type="file" accept="image/png,image/jpeg" hidden></label>
+          ${b.logo?`<button class="adm-btn ghost" id="lh-nologo" type="button">Remove logo</button>`:""}<small class="adm-muted">PNG or JPG, square works best, up to 200 KB.</small></div>
       </div>
+      <div class="adm-dialog-actions"><button class="adm-btn primary" id="lh-brand">Save name and logo</button></div>
+      <h3 class="adm-h3">Your own sign-in address (optional)</h3>
+      <p class="adm-muted">Let your team sign in at your own address instead of ${esc(out.target)}. Only ${esc(domain)} mailboxes can sign in there.</p>
+      <div class="adm-form"><label>Your address<input id="lh-host" value="${esc(out.host||suggested)}" placeholder="${esc(suggested)}" autocapitalize="off" spellcheck="false"></label></div>
       <div class="adm-dns-row ${out.pointing?"ok":""}"><div class="adm-dns-head"><b>Step 1 · DNS</b><span class="adm-pill ${out.pointing?"good":"warn"}">${out.host?(out.pointing?"Pointing here":"Not pointing here"):"Not set up"}</span></div>
         <dl><dt>Type</dt><dd><code>CNAME</code></dd><dt>Host</dt><dd><code id="lh-label">${esc((out.host||suggested).split(".")[0])}</code></dd><dt>Value</dt><dd><code>${esc(out.target)}</code></dd></dl>
-        <p class="adm-muted">Add this where ${esc(domain)}'s DNS is managed, wait a few minutes, then press Save.</p></div>
+        <p class="adm-muted">Add this where ${esc(domain)}'s DNS is managed, wait a few minutes, then press Save address.</p></div>
       <div class="adm-dns-row"><div class="adm-dns-head"><b>Step 2 · Secure connection</b></div>
-        <p class="adm-muted">After you save, the padlock (HTTPS certificate) is set up by itself within about 10 minutes. Until then the address may show a warning; nothing else changes for your team.</p></div>
-      <div class="adm-dialog-actions">${out.host?`<button class="adm-btn ghost" id="lh-remove">Remove address</button>`:""}<button class="adm-btn primary" id="lh-save">Save</button></div>`;
+        <p class="adm-muted">After you save, the padlock (HTTPS certificate) is set up by itself within about 10 minutes.</p></div>
+      <div class="adm-dialog-actions">${out.host?`<button class="adm-btn ghost" id="lh-remove">Remove address</button>`:""}<button class="adm-btn" id="lh-save">Save address</button></div>`;
+    const fail=e=>{ const old=body.querySelector("[role=status]"); if(old) old.remove(); body.insertAdjacentHTML("afterbegin",`<p class="adm-error" role="status">${esc(e.message)}</p>`); body.scrollTop=0; };
     $("lh-host").addEventListener("input",e=>{ $("lh-label").textContent=e.target.value.trim().split(".")[0]||"mail"; });
+    $("lh-logo").addEventListener("change",e=>{ const f=e.target.files[0]; if(!f) return;
+      if(!/^image\/(png|jpeg)$/.test(f.type)||f.size>200*1024){ fail(new Error("Choose a PNG or JPG logo of up to 200 KB.")); e.target.value=""; return; }
+      const reader=new FileReader(); reader.onload=()=>{ logoData=String(reader.result); removeLogo=false; const img=document.createElement("img"); img.src=logoData; img.alt="New logo"; $("lh-preview").replaceChildren(img); }; reader.readAsDataURL(f); });
+    const nl=$("lh-nologo"); if(nl) nl.addEventListener("click",()=>{ removeLogo=true; logoData=""; $("lh-preview").innerHTML="<i>No logo</i>"; });
+    $("lh-brand").addEventListener("click",async()=>{ const btn=$("lh-brand"); btn.disabled=true;
+      try{ draw(await act({op:"brand_set",domain,name:$("lh-name").value,tagline:$("lh-tag").value,colour:$("lh-colour").value,...(logoData?{logo:logoData}:{}),...(removeLogo?{removeLogo:true}:{})}),{text:"Saved. Your team sees it the next time they open or refresh mail."}); }
+      catch(e){ btn.disabled=false; fail(e); } });
     $("lh-save").addEventListener("click",async()=>{ const btn=$("lh-save"); btn.disabled=true;
-      try{ draw(await act({op:"login_host_set",domain,host:$("lh-host").value,name:$("lh-name").value,tagline:$("lh-tag").value,colour:$("lh-colour").value}),{text:"Saved. Your address will be ready in about 10 minutes."}); }
-      catch(e){ btn.disabled=false; const old=body.querySelector("[role=status]"); if(old) old.remove(); body.insertAdjacentHTML("afterbegin",`<p class="adm-error" role="status">${esc(e.message)}</p>`); } });
-    const rm=$("lh-remove"); if(rm) rm.addEventListener("click",async()=>{ try{ draw(await act({op:"login_host_remove",domain}),{text:"Removed. Your team signs in at "+out.target+" again."}); }catch(e){ draw(out,{text:e.message,bad:true}); } });
+      try{ draw(await act({op:"login_host_set",domain,host:$("lh-host").value}),{text:"Saved. Your address will be ready in about 10 minutes."}); }
+      catch(e){ btn.disabled=false; fail(e); } });
+    const rm=$("lh-remove"); if(rm) rm.addEventListener("click",async()=>{ try{ draw(await act({op:"login_host_remove",domain}),{text:"Removed. Your team signs in at "+out.target+" again."}); }catch(e){ fail(e); } });
   };
   try{ draw(await act({op:"login_host_get",domain})); }catch(e){ body.innerHTML=`<p class="adm-error">${esc(e.message)}</p>`; }
 }

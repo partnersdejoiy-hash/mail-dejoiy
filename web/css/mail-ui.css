@@ -220,4 +220,9 @@ html[data-scenic="true"] .home-card,html[data-scenic="true"] .home-mail{backgrou
 @media(max-width:680px){.home{gap:22px}.home-unread{width:100%;justify-content:space-between}.home-strip{grid-auto-columns:78%}.home-arrows{display:none}}
 @media(prefers-reduced-motion:reduce){.home-card{transition:none}}
 
-.brand-name.is-text{font-weight:800;font-size:20px;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
+.brand-name.is-text{font-weight:800;font-size:17px;line-height:1.15;letter-spacing:-.02em;flex:1 1 auto;min-width:0;width:auto;max-width:none;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.brand:has(.is-text){gap:8px}
+
+.brand-mark[data-logo-applied] img{object-fit:contain;border-radius:10px}
+.brand-by{display:inline-flex;align-items:center;flex:none;opacity:.85}.brand-by img{display:block}
+.lg-company-logo{display:block;width:56px;height:56px;object-fit:contain;border-radius:12px;margin:0 0 14px;background:#fff}
