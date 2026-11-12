@@ -22,6 +22,7 @@ from http.cookies import SimpleCookie
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import dcalendar
+import zconsole
 from html.parser import HTMLParser
 
 SOAP = 'http://www.w3.org/2003/05/soap-envelope'
@@ -2553,6 +2554,18 @@ class Handler(SimpleHTTPRequestHandler):
                 if data['op']=='shine_end_meeting': payload['meetingId']=str(data.get('meetingId',''))[:64]
                 out=self.shine_admin_post(payload)
                 if data['op']!='shine_summary': self.log('admin:'+data['op'],s['user']['email'],payload.get('email') or payload.get('meetingId'))
+                return self.reply(200,out)
+            if self.path=='/api/admin/action' and zconsole.is_console_op(data.get('op')):
+                # the full mail-server console (Monitor, Manage, Configure, Tools, Search): see zconsole.py
+                client,token,scope=self.admin_session(s)
+                perms=client.actor_perms(token,s['user']['email'],scope)
+                def global_admin():
+                    lookup=node(ADMIN,'GetAccountRequest'); lookup.append(node(ADMIN,'account',{'by':'name'},s['user']['email']))
+                    account=client.call(lookup,token).find('{'+ADMIN+'}account')
+                    if account is None or attr(account,'zimbraIsAdminAccount')!='TRUE': raise APIError('Only a full administrator can change this.',403)
+                out=zconsole.Console(client,token,s['user']['email'],scope,perms,APIError,global_admin).run(data)
+                if data['op'] not in zconsole.LOOKUPS:
+                    self.log('admin:'+data['op'],s['user']['email'],str(data.get('email') or data.get('id') or data.get('domain') or data.get('name') or data.get('grantee') or data.get('queue') or '')[:200])
                 return self.reply(200,out)
             if self.path=='/api/admin/action' and data.get('op')=='reports':
                 client,token,scope=self.admin_session(s)
