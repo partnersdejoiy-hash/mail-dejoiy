@@ -152,12 +152,14 @@ const Live={enabled:!!window.DEJOIY_LIVE,csrf:'',more:false,avatars:{},
     App.render=function(){
       if(this.route==='admin'&&Store.state.user?.isAdmin===true){location.assign(ADMIN_URL);return;}
       if(this.route==='admin'&&Store.state.user?.isAdmin!==true){document.getElementById('view').innerHTML='<div class="empty-note"><h1>Administrator access required</h1><p>This mailbox does not have administration permissions.</p><a href="#/mail:inbox">Return to your inbox</a></div>';this.refreshNav();return;}
-      if(['notes','chat','today'].includes(this.route)){
+      if(['chat','today'].includes(this.route)){
         document.getElementById('view').innerHTML='<div class="empty-note">This feature is not connected to your business mailbox yet. <a href="#/mail:inbox">Open Mail</a></div>';this.refreshNav();return;
       }original();
     };
     const adminRoute=location.pathname.startsWith('/admin') || location.hash==='#/admin';
-    App.route=adminRoute?'admin':'mail';location.hash=adminRoute?'#/admin':'#/mail:inbox';
+    // keep the page the person was on (a reload of Drafts stays on Drafts); only start at the inbox when there's no page yet
+    const known=/^#\/(mail:[a-z0-9_-]+|compose(:.*)?|calendar|contacts|notes|settings(:.*)?|search:.+|news|company)$/i.test(location.hash);
+    App.route=adminRoute?'admin':'mail';if(adminRoute)location.hash='#/admin';else if(!known)location.hash='#/mail:inbox';
     window.addEventListener('unhandledrejection',e=>{e.preventDefault();App.toast(e.reason?.message||'Mail operation failed');});
     document.body.classList.add('live-mode');
     const note=document.createElement('div');note.className='live-note';

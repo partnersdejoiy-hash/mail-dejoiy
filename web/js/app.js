@@ -26,6 +26,8 @@ const App = {
     location.hash = "#/" + route;
   },
   parse(){
+    // leaving the composer for anywhere else keeps what was written (it saves as a draft)
+    const guard=this.leaveGuard; this.leaveGuard=null; if(guard){ try{ guard(); }catch(_){} }
     const h = (location.hash||"#/mail:inbox").replace(/^#\//,"");
     const i = h.indexOf(":");
     this.route = i<0 ? h : h.slice(0,i);
@@ -84,7 +86,7 @@ const App = {
   },
 
   renderSearch(el, q){
-    const results = Mail.advancedSearch({has:q});
+    const results = Mail.advancedSearch(Mail.parseQuery(q));
     el.innerHTML = `<div class="view-head"><h1>🔎 Search</h1><span class="sub">${results.length} result${results.length===1?"":"s"} for “${esc(q)}”</span></div>
       ${results.length ? `<div class="card" style="padding:6px">`+results.map(e=>`
         <div class="msg-row ${e.read?"":"unread"}" data-sr="${e.id}" role="button" tabindex="0">

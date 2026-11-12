@@ -32,7 +32,7 @@ const Mail = {
           : folder==="starred" ? all.filter(e=>e.starred && e.folder!=="trash")
           : all.filter(e=>e.folder===folder);
     const q = (App.ui.search||"").trim().toLowerCase();
-    if(q) r = r.filter(e => (e.subject+" "+e.from.name+" "+e.from.email+" "+strip(e.body)).toLowerCase().includes(q));
+    if(q){ const c=this.parseQuery(q); delete c.in; r = r.filter(e => this.matches(e, c)); }
     const sort=Store.state.prefs.mailSort||'dateDesc';
     return r.sort((a,b)=>sort==='dateAsc'?a.date-b.date:sort==='sender'?a.from.name.localeCompare(b.from.name):sort==='subject'?a.subject.localeCompare(b.subject):b.date-a.date);
   },
@@ -155,20 +155,44 @@ const Mail = {
       body:`<br><br><div>---------- Forwarded message ---------<br>From: ${esc(e.from.name)} &lt;${esc(e.from.email)}&gt;<br>Date: ${new Date(e.date).toLocaleString()}<br>Subject: ${esc(e.subject)}<br>To: ${(e.to||[]).map(esc).join(", ")}</div><br>${e.body}` };
   },
 
+  /* Gmail-style search: words, "exact phrases", from: to: subject: has:attachment is:unread|read|starred|important
+     in:folder|anywhere after: before: (also newer:/older:), and -word to leave something out. */
+  parseQuery(q){
+    const c={words:[], not:[]}, re=/(-?)(\w+):("[^"]*"|\S+)|(-?)"([^"]*)"|(-?)(\S+)/g; let m;
+    while((m=re.exec(String(q||"")))){
+      if(m[2]){
+        const k=m[2].toLowerCase(), v=m[3].replace(/^"|"$/g,"");
+        if(k==="from") c.from=v; else if(k==="to") c.to=v; else if(k==="subject") c.subject=v;
+        else if(k==="has" && /^attach/i.test(v)) c.attach=true;
+        else if(k==="is") c.is=v.toLowerCase(); else if(k==="in") c.in=v.toLowerCase();
+        else if(k==="after"||k==="newer") c.after=v; else if(k==="before"||k==="older") c.before=v;
+        else (m[1]?c.not:c.words).push(m[0].replace(/^-/,""));
+      } else if(m[5]!==undefined) (m[4]?c.not:c.words).push(m[5]);
+      else (m[6]?c.not:c.words).push(m[7]);
+    }
+    return c;
+  },
+  matches(e, c){
+    const low=x=>String(x||"").toLowerCase();
+    const hay=low(e.subject+" "+strip(e.body)+" "+e.from.name+" "+e.from.email+" "+(e.to||[]).join(" ")+" "+(e.cc||[]).join(" "));
+    if(c.in && c.in!=="anywhere" && c.in!=="all" && e.folder!==c.in && !(c.in==="starred"&&e.starred)) return false;
+    if(!c.in && e.folder==="trash") return false;
+    if(c.from && !low(e.from.name+" "+e.from.email).includes(low(c.from))) return false;
+    if(c.to && !low([...(e.to||[]),...(e.cc||[])].join(" ")).includes(low(c.to))) return false;
+    if(c.subject && !low(e.subject).includes(low(c.subject))) return false;
+    if(c.has && !c.has.split(/\s+/).every(w=>hay.includes(low(w)))) return false;
+    if(c.words && !c.words.every(w=>hay.includes(low(w)))) return false;
+    if(c.not && c.not.some(w=>hay.includes(low(w)))) return false;
+    if(c.hasnt && c.hasnt.split(/\s+/).some(w=>hay.includes(low(w)))) return false;
+    if(c.attach && !e.hasAttachment) return false;
+    if(c.is==="unread" && e.read) return false; if(c.is==="read" && !e.read) return false;
+    if(c.is==="starred" && !e.starred) return false; if(c.is==="important" && !e.important) return false;
+    if(c.after && e.date < new Date(c.after).getTime()) return false;
+    if(c.before && e.date > new Date(c.before).getTime()+864e5) return false;
+    return true;
+  },
   advancedSearch(c){
-    return Store.state.emails.filter(e=>{
-      if(e.folder==="trash") return false;
-      const hay = e.subject+" "+strip(e.body)+" "+e.from.name+" "+e.from.email+" "+(e.to||[]).join(" ");
-      if(c.from && !hay.toLowerCase().includes(c.from.toLowerCase()) && !e.from.email.toLowerCase().includes(c.from.toLowerCase())) return false;
-      if(c.to && !(e.to||[]).join(" ").toLowerCase().includes(c.to.toLowerCase())) return false;
-      if(c.subject && !e.subject.toLowerCase().includes(c.subject.toLowerCase())) return false;
-      if(c.has && !c.has.split(/\s+/).every(w=>hay.toLowerCase().includes(w.toLowerCase()))) return false;
-      if(c.hasnt && c.hasnt.split(/\s+/).some(w=>hay.toLowerCase().includes(w.toLowerCase()))) return false;
-      if(c.attach && !e.hasAttachment) return false;
-      if(c.after && e.date < new Date(c.after).getTime()) return false;
-      if(c.before && e.date > new Date(c.before).getTime()+864e5) return false;
-      return true;
-    }).sort((a,b)=>b.date-a.date);
+    return Store.state.emails.filter(e=>this.matches(e,c)).sort((a,b)=>b.date-a.date);
   },
 
   /* simulate fetching new mail — applies filters + blocked list, plays sound */

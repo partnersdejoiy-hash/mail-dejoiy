@@ -223,9 +223,9 @@ function accounts(body){
     ${a && a.features && a.features.changePassword===false ? `<p class="st-note">Your administrator manages passwords for this account.</p>` : `
     <input type="text" name="username" value="${esc(u.email)}" autocomplete="username" hidden>
     <div class="st-field"><label for="ac-cur">Current password</label><input type="password" id="ac-cur" autocomplete="current-password" required></div>
-    <div class="st-field"><label for="ac-new">New password</label><input type="password" id="ac-new" autocomplete="new-password" minlength="${a?a.passwordMinLength:6}" required></div>
+    <div class="st-field"><label for="ac-new">New password</label><input type="password" id="ac-new" autocomplete="new-password" minlength="${Math.max(10,a?a.passwordMinLength:10)}" required></div>
     <div class="st-field"><label for="ac-new2">Confirm new password</label><input type="password" id="ac-new2" autocomplete="new-password" required></div>
-    <p class="st-note">At least ${a?a.passwordMinLength:6} characters. Mail apps on your other devices will ask for the new password.</p>
+    <p class="st-note">At least ${Math.max(10,a?a.passwordMinLength:10)} characters, mixing three of: lowercase, uppercase, numbers, symbols. Mail apps on your other devices will ask for the new password.</p>
     <p class="st-error" role="alert"></p><button class="btn primary" ${live()?"":"disabled"}>Change password</button>`}
   </form>
   <div class="st-card"><h2>Sign out</h2><p class="st-note">Sign out of Dejoiy Mail on this device.</p><button class="btn" id="ac-out" type="button">Sign out</button></div>`;

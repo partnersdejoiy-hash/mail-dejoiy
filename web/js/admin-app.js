@@ -355,7 +355,7 @@ function plans(main, d){
     </tbody></table></div>`;
   main.querySelectorAll("[data-plan]").forEach(b=>b.addEventListener("click",()=>{const p=d.plans[+b.dataset.plan];dialog({title:"Edit plan · "+p.name,body:`
     <label>Mailbox storage (MB, 0 = unlimited)<input id="pl-q" type="number" min="0" value="${p.quotaMB}"></label>
-    <label>Minimum password length<input id="pl-min" type="number" min="6" max="64" value="${Math.max(6,p.passwordMinLength)}"></label>
+    <label>Minimum password length<input id="pl-min" type="number" min="10" max="64" value="${Math.max(10,p.passwordMinLength)}"></label>
     <label>Password expires after (days, 0 = never)<input id="pl-age" type="number" min="0" max="3650" value="${p.passwordMaxAgeDays}"></label><p role="alert" class="adm-error"></p>`,
     actions:[{label:"Cancel"},{label:"Save plan",primary:true,fn:async()=>{await act({op:"plan_update",id:p.id,quotaMB:Number($("pl-q").value),passwordMinLength:Number($("pl-min").value),passwordMaxAgeDays:Number($("pl-age").value)});await reload("Plan saved.");}}]});}));
 }

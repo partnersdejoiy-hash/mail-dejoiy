@@ -7,9 +7,9 @@ Views.compose = function(el, arg){
   const restored = arg==="restore" && App.undoneSend; if(restored){ App.undoneSend=null; }
   if(restored){ draft={...restored.data}; draftId=restored.draftId||null; mode=restored.mode||"new"; srcId=restored.srcId||null; }
   else if(arg && arg!=="new"){
-    const [m, id] = arg.split(":");
+    let [m, id] = arg.split(":");
     mode = m; srcId = id;
-    if(m==="draft"){ const e = Mail.get(id); if(e){ draftId=id; draft={to:(e.to||[]).join(", "),cc:(e.cc||[]).join(", "),bcc:"",inReplyTo:"",subject:e.subject,body:e.body}; } }
+    if(m==="draft"){ const e = Mail.get(id) || Store.state.emails.find(x=>x.folder==="drafts" && Mail.threadKey(x)===String(id)); if(e){ id=e.id; draftId=id; draft={to:(e.to||[]).join(", "),cc:(e.cc||[]).join(", "),bcc:"",inReplyTo:"",subject:e.subject,body:e.body}; } }
     else if(m==="reply"){ const d = Mail.replyDraft(id); if(d) draft=d; }
     else if(m==="replyall"){ const d = Mail.replyDraft(id, true); if(d) draft=d; }
     else if(m==="forward"){ const d = Mail.forwardDraft(id); if(d) draft=d; }
@@ -115,12 +115,13 @@ Views.compose = function(el, arg){
     if(!d.to.trim()){ App.toast("Add at least one recipient first."); $("c-to").focus(); return; }
     const bad = Object.values(chips).flatMap(c=>c.invalid());
     if(bad.length){ App.toast("Fix the highlighted address: "+bad[0]); return; }
+    finish(); // it's being sent now: no more autosaves or leave-saves of this one
     const raw = {...d}; d.body = styled(d.body);
     const wait = Settings.ui.undoSendOn===false ? 0 : Number(Settings.ui.undoSend)||0;
     const back = archiveAfter ? "mail:"+(App.ui.folder||"inbox") : App.ui.folder ? "mail:"+App.ui.folder : "mail:inbox";
     if(!wait){
       const button=$("c-send"); button.disabled=true;
-      try{ await deliver(d, archiveAfter); }catch(error){ App.toast(error.message); button.disabled=false; return; }
+      try{ await deliver(d, archiveAfter); }catch(error){ App.toast(error.message); button.disabled=false; done=false; App.leaveGuard=()=>autosave(false); return; }
       App.go(archiveAfter?back:"mail:sent"); App.toast(/(^|\s)@joi\b/i.test(strip(d.body)) ? "Message sent ✓ Joi is copied in and will answer." : "Message sent ✓"); return;
     }
     /* Undo Send: the message waits a few seconds on this device before it goes to the server. */
@@ -148,18 +149,38 @@ Views.compose = function(el, arg){
     let em;
     try{ em=await Mail.saveDraft(Object.assign(collect(), {id:draftId})); }
     catch(error){ App.toast(error.message); button.disabled=false; return; }
-    button.disabled=false; draftId=em.id;
+    button.disabled=false; draftId=em.id; lastSaved=JSON.stringify(collect());
     $("c-status").textContent = "Draft saved " + new Date().toLocaleTimeString();
     App.toast("Draft saved."); App.refreshNav();
   });
   $("c-discard").addEventListener("click", async ()=>{
-    App.confirm("Discard this message?", async ()=>{ if(draftId) await Mail.deleteForever(draftId); App.go("mail:inbox"); });
+    App.confirm("Discard this message?", async ()=>{ finish(); if(draftId) await Mail.deleteForever(draftId); App.go("mail:inbox"); });
   });
   $("c-send-top").addEventListener("click", ()=> $("c-send").click());
+  /* Never lose what's written: autosave a draft every 15 s while something changed, save it when you
+     go elsewhere in the app (sidebar, search, anything), and warn before the tab closes. */
+  let lastSaved=JSON.stringify(collect()), saving=null, done=false;
+  const typedNow=()=>{ const d=collect(); return !!(d.to.trim()||d.subject.trim()||strip($("compose-body").innerHTML)!==strip(draft.body)||attachments.length); };
+  const autosave=async (quiet=true)=>{
+    if(done||pendingFiles||!typedNow()) return;
+    const d=collect(), snap=JSON.stringify(d);
+    if(snap===lastSaved) return;
+    if(saving) return saving;
+    $("c-status").textContent="Saving…";
+    saving=Mail.saveDraft(Object.assign(d,{id:draftId})).then(em=>{ draftId=em.id; lastSaved=snap; if($("c-status")) $("c-status").textContent="Draft saved " + new Date().toLocaleTimeString(); if(!quiet) App.toast("Saved to Drafts."); App.refreshNav(); })
+      .catch(error=>{ if($("c-status")) $("c-status").textContent="Not saved: "+error.message; App.toast("Draft not saved: "+error.message); })
+      .finally(()=>{ saving=null; });
+    return saving;
+  };
+  const timer=setInterval(()=>{ if(!document.getElementById("c-subj")){ clearInterval(timer); return; } autosave(); }, 15000);
+  App.leaveGuard=()=>{ clearInterval(timer); if(!done) autosave(false); };
+  const unload=e=>{ if(!done && typedNow() && JSON.stringify(collect())!==lastSaved){ autosave(); e.preventDefault(); e.returnValue=""; } };
+  window.addEventListener("beforeunload", unload);
+  const finish=()=>{ done=true; clearInterval(timer); App.leaveGuard=null; window.removeEventListener("beforeunload", unload); };
   /* Leaving with something written keeps it as a draft, like the Gmail app's back arrow. */
   $("c-back").addEventListener("click", async ()=>{
-    const d=collect(), typed=d.to.trim()||d.subject.trim()||strip($("compose-body").innerHTML)!==strip(draft.body)||attachments.length;
-    if(typed && !pendingFiles){ try{ await Mail.saveDraft(Object.assign(d,{id:draftId})); App.toast("Saved to Drafts."); }catch(error){ App.toast(error.message); return; } }
+    if(typedNow() && !pendingFiles){ await autosave(false); if(JSON.stringify(collect())!==lastSaved) return; }
+    finish();
     history.length>1 ? history.back() : App.go("mail:inbox");
   });
   renderAtt();

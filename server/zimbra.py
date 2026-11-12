@@ -341,6 +341,20 @@ SESSIONS = {}
 LOCK = threading.Lock()
 ROOT = Path(__file__).resolve().parent.parent / 'web'
 
+# Business password policy: at least 10 characters, three of lower/upper/digit/symbol, not the mailbox
+# name and not a well-known password. Zimbra's own policy (zimbraPasswordMinLength) can only raise it.
+PASSWORD_MIN=10
+COMMON_PASSWORDS={'password','password1','password123','qwerty123','1234567890','123456789','iloveyou','welcome123','admin12345','letmein123','dejoiy123','dejoiymail'}
+def password_problem(new,email=''):
+    if not isinstance(new,str) or len(new)>4096: return 'Choose a new password.'
+    if len(new)<PASSWORD_MIN: return f'Use at least {PASSWORD_MIN} characters.'
+    kinds=sum(bool(re.search(x,new)) for x in (r'[a-z]',r'[A-Z]',r'[0-9]',r'[^A-Za-z0-9]'))
+    if kinds<3: return 'Mix at least three of: lowercase, uppercase, numbers and symbols.'
+    local=(email or '').split('@')[0].lower()
+    parts=[x for x in re.split(r'[^a-z0-9]+',local) if len(x)>=4]
+    if new.lower() in COMMON_PASSWORDS or (len(local)>=3 and local in new.lower()) or any(x in new.lower() for x in parts): return 'That password is too easy to guess. Avoid common words and your mailbox name.'
+    return ''
+
 class APIError(Exception):
     def __init__(self, message, status=400, code=''):
         self.status = status
@@ -835,11 +849,12 @@ class Zimbra:
         return {'email':name.text if name is not None else '','used':int(used.text) if used is not None and (used.text or '').isdigit() else 0,'quota':quota,
             'features':{'forwarding':flag('zimbraFeatureMailForwardingEnabled'),'filters':flag('zimbraFeatureFiltersEnabled'),'vacation':flag('zimbraFeatureOutOfOfficeReplyEnabled'),
                 'changePassword':flag('zimbraFeatureChangePasswordEnabled'),'pop':flag('zimbraPop3Enabled'),'imap':attrs.get('zimbraImapEnabled')!='FALSE'},
-            'passwordMinLength':int(attrs.get('zimbraPasswordMinLength') or 6) if (attrs.get('zimbraPasswordMinLength') or '6').isdigit() else 6}
+            'passwordMinLength':max(PASSWORD_MIN,int(attrs.get('zimbraPasswordMinLength') or 0) if (attrs.get('zimbraPasswordMinLength') or '0').isdigit() else 0)}
     def change_password(self, token, email, data):
         current=data.get('current'); new=data.get('password')
         if not isinstance(current,str) or not current or len(current)>4096: raise APIError('Enter your current password.')
-        if not isinstance(new,str) or not 6<=len(new)<=4096: raise APIError('Choose a new password of at least 6 characters.')
+        problem=password_problem(new,email)
+        if problem: raise APIError(problem)
         if new==current: raise APIError('Choose a password that is different from the current one.')
         r=node(ACCOUNT,'ChangePasswordRequest'); r.append(node(ACCOUNT,'account',{'by':'name'},email))
         r.append(node(ACCOUNT,'oldPassword',text=current)); r.append(node(ACCOUNT,'password',text=new))
@@ -1049,6 +1064,17 @@ def clean_ui_settings(data):
                 if not 1<=len(name)<=100 or len(t['body'])>20000: raise APIError('Template names must be at most 100 characters and bodies 20000.')
                 items.append({'name':name,'subject':str(t.get('subject',''))[:300],'body':safe_html(t['body'])})
             out[key]=items
+        elif key=='notes':
+            # the Notepad: plain-text notes kept with the mailbox, so they follow you to every device
+            if not isinstance(value,list) or len(value)>200: raise APIError('You can keep up to 200 notes.')
+            items=[]
+            for n in value:
+                if not isinstance(n,dict) or not isinstance(n.get('title',''),str) or not isinstance(n.get('body',''),str): raise APIError('Invalid note.')
+                if len(n.get('body',''))>50000: raise APIError('A note can be at most 50000 characters.')
+                ident=str(n.get('id',''))[:40]
+                ts=n.get('ts',0)
+                items.append({'id':ident,'title':n.get('title','')[:200],'body':n.get('body',''),'ts':int(ts) if isinstance(ts,(int,float)) and not isinstance(ts,bool) else 0})
+            out[key]=items
         else: raise APIError('Unknown setting: '+str(key)[:40])
     if len(json.dumps(out))>1200000: raise APIError('Settings are too large.')
     return out
@@ -1222,6 +1248,8 @@ class Admin(Zimbra):
             value=data.get('password')
             if not isinstance(value,str) or not 1<=len(value)<=4096:
                 raise APIError('Enter a password; mailbox password policies also apply.')
+            problem=password_problem(value,str(data.get('email','')))
+            if problem: raise APIError(problem)
             return value
         if op=='create_user':
             email=str(data.get('email','')).strip().lower()
@@ -1369,7 +1397,7 @@ class Admin(Zimbra):
             ident=str(data.get('id',''))
             if not UUID.fullmatch(ident): raise APIError('Invalid plan selection.')
             quota=whole(data,'quotaMB',0,10485760,'Storage must be a whole number from 0 to 10485760 MB; 0 means unlimited.')
-            minimum=whole(data,'passwordMinLength',6,64,'Minimum password length must be from 6 to 64.')
+            minimum=whole(data,'passwordMinLength',PASSWORD_MIN,64,f'Minimum password length must be from {PASSWORD_MIN} to 64.')
             age=whole(data,'passwordMaxAgeDays',0,3650,'Password expiry must be from 0 to 3650 days; 0 means never.')
             r=node(ADMIN,'ModifyCosRequest'); r.append(node(ADMIN,'id',text=ident))
             for name,value in (('zimbraMailQuota',quota*1048576),('zimbraPasswordMinLength',minimum),('zimbraPasswordMaxAge',age)): r.append(node(ADMIN,'a',{'n':name},str(value)))
@@ -1862,7 +1890,8 @@ class Handler(SimpleHTTPRequestHandler):
             records=signup_records(pending,self.server.mail_host,getattr(self.server.admin,'dkim_dir',None)); records[0]['ok']=verified; records[0]['status']='ok' if verified else 'missing'
             return self.reply(200,{'verified':verified,'domain':pending['domain'],'email':pending['email'],'company':pending['company'],'record':{'type':'TXT','host':'@','value':pending['code']},'records':records})
         password=data.get('password')
-        if not isinstance(password,str) or not 8<=len(password)<=4096: raise APIError('Choose a password of at least 8 characters.')
+        problem=password_problem(password,pending['email'])
+        if problem: raise APIError(problem)
         if not verified: raise APIError('We could not find the TXT record yet. DNS changes can take a few minutes.',409)
         if provisioner.domain_exists(pending['domain']): raise APIError('This domain already uses Dejoiy Mail.',409)
         provisioner.provision(pending['domain'],pending['company'],pending['email'],pending['name'],password)

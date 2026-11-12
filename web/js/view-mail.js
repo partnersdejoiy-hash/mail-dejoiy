@@ -11,6 +11,8 @@ Views.mail = function(el, folder){
   document.documentElement.dataset.mailLayout=Store.state.prefs.messageLayout||'list';
   if(folder && folder!==ui.folder) ui.page = 0;
   ui.folder = folder || ui.folder || "inbox";
+  // the address bar follows the folder, so a reload opens the same folder (Drafts stays Drafts)
+  if(location.hash!=="#/mail:"+ui.folder) history.replaceState(null, "", "#/mail:"+ui.folder);
   ui.sel = ui.sel || new Set();
   ui.tabs = ui.tabs || [];
   const list = Mail.list(ui.folder);
@@ -150,7 +152,7 @@ Views.mail = function(el, folder){
       renderList(); App.refreshNav();
     }));
     listEl.querySelectorAll(".msg-row").forEach(row=> {
-      const open = ()=> ui.folder==="drafts"?App.go("compose:draft:"+row.dataset.id):openTab(row.dataset.latestId);
+      const open = ()=> ui.folder==="drafts"?App.go("compose:draft:"+row.dataset.latestId):openTab(row.dataset.latestId); // a draft opens by its own message id, not the conversation's
       row.querySelector(".m-avatar").addEventListener("click", ev=>{ ev.stopPropagation(); toggleSel(row); });
       row.addEventListener("click", async ev=>{
         if(ev.target.closest("input,button")) return;

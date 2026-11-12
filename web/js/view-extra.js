@@ -5,13 +5,26 @@
 /* ---------------- Notepad ---------------- */
 Views.notes = function(el){
   const s = Store.state;
+  /* With a business mailbox the notes live with the account (Settings.ui.notes), so they're on every device. */
+  const live = !!(window.Live && Live.enabled);
+  if(live) s.notes = Array.isArray(Settings.ui.notes) ? Settings.ui.notes.map(n=>({...n})) : [];
+  let syncTimer = null;
+  const persist = () => {
+    if(!live){ Store.save(); return; }
+    const status = el.querySelector("#nt-status"); if(status) status.textContent = "Saving…";
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(async ()=>{
+      try{ await Settings.save({ui:{notes:s.notes}}); const st=el.querySelector("#nt-status"); if(st) st.textContent="Saved ✓"; }
+      catch(error){ const st=el.querySelector("#nt-status"); if(st) st.textContent="Not saved: "+error.message; App.toast("Note not saved: "+error.message); }
+    }, 700);
+  };
   let active = s.notes[0] && s.notes[0].id;
 
   function render(){
     const n = s.notes.find(x=>x.id===active) || s.notes[0];
     active = n && n.id;
     el.innerHTML = `
-      <div class="view-head"><h1>📝 Notepad</h1><span class="sub">autosaves as you type</span><span style="flex:1"></span>
+      <div class="view-head"><h1>📝 Notepad</h1><span class="sub">autosaves as you type${live?" · on every device":""}</span><span style="flex:1"></span>
         <button class="btn sm primary" id="nt-new">+ New note</button></div>
       <div class="grid" style="grid-template-columns:240px 1fr;align-items:start">
         <div class="card" style="padding:8px">${s.notes.map(x=>`
@@ -21,21 +34,21 @@ Views.notes = function(el){
         <div class="card">${n ? `
           <div class="field"><input type="text" id="nt-title" value="${esc(n.title)}" placeholder="Note title" style="font-weight:700;font-size:15px"></div>
           <div class="field"><textarea id="nt-body" rows="16" placeholder="Write here…">${esc(n.body)}</textarea></div>
-          <div class="btn-row"><span style="font-size:12px;color:var(--ink-3)">Saved ✓</span><span style="flex:1"></span>
+          <div class="btn-row"><span id="nt-status" style="font-size:12px;color:var(--ink-3)">Saved ✓</span><span style="flex:1"></span>
           <button class="btn sm danger" id="nt-del">Delete note</button></div>`
           : `<div class="empty-note">Create your first note →</div>`}</div>
       </div>`;
     el.querySelectorAll("[data-note]").forEach(b=> b.addEventListener("click", ()=>{ active=b.dataset.note; render(); }));
     el.querySelector("#nt-new").addEventListener("click", ()=>{
       const nn = {id:uid("n"), title:"Untitled", body:"", ts:Date.now()};
-      s.notes.unshift(nn); active = nn.id; Store.save(); render();
+      s.notes.unshift(nn); active = nn.id; persist(); render();
       el.querySelector("#nt-title").focus();
     });
     if(n){
-      el.querySelector("#nt-title").addEventListener("input", ev=>{ n.title = ev.target.value; Store.save(); });
-      el.querySelector("#nt-body").addEventListener("input", ev=>{ n.body = ev.target.value; n.ts = Date.now(); Store.save(); });
+      el.querySelector("#nt-title").addEventListener("input", ev=>{ n.title = ev.target.value; persist(); });
+      el.querySelector("#nt-body").addEventListener("input", ev=>{ n.body = ev.target.value; n.ts = Date.now(); persist(); });
       el.querySelector("#nt-del").addEventListener("click", ()=>{
-        App.confirm("Delete this note?", ()=>{ s.notes = s.notes.filter(x=>x.id!==n.id); Store.save(); render(); });
+        App.confirm("Delete this note?", ()=>{ s.notes = s.notes.filter(x=>x.id!==n.id); persist(); render(); });
       });
     }
   }
