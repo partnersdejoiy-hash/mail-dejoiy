@@ -216,3 +216,15 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--pop)!imp
 
 .adm-dialog-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:14px}
 .adm-form input[type=color]{width:56px;height:40px;padding:2px;cursor:pointer}
+
+/* Reports */
+.adm-bad{color:var(--bad)}.adm-pad{padding:16px 20px 0}.adm-card.adm-flush>.adm-pad+table{margin-top:10px}p.adm-pad{padding-bottom:16px}
+.adm-chart{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:6px;align-items:end;height:190px;margin:8px 0 6px}
+.adm-day{display:flex;flex-direction:column;height:100%;min-width:0}
+.adm-cols{flex:1;display:flex;align-items:flex-end;justify-content:center;gap:2px;border-bottom:1px solid var(--line)}
+.adm-cols i{display:block;width:30%;max-width:12px;min-height:0;border-radius:3px 3px 0 0}
+.k-sent{background:var(--accent)}.k-in{background:var(--good)}.k-bad{background:var(--bad)}
+.adm-day small{font-size:10px;color:var(--ink-3);text-align:center;white-space:nowrap;overflow:hidden;margin-top:4px}
+.adm-chart-key{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-2)}.adm-chart-key i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-left:8px}
+.adm-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@media(max-width:700px){.adm-day:nth-child(odd) small{visibility:hidden}.adm-chart{height:150px}}

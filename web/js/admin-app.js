@@ -12,7 +12,7 @@ const when = stamp => { const m=/^(\d{4})(\d\d)(\d\d)(\d\d)(\d\d)(\d\d)/.exec(st
 
 const SECTIONS = [
   ["overview","home","Overview"],["users","contacts","Mailboxes"],["org","tag","Teams & roles"],["domains","shield","Domains"],
-  ["lists","mail","Mailing lists"],["plans","tag","Plans"],["settings","settings","Settings"]
+  ["lists","mail","Mailing lists"],["reports","refresh","Reports"],["plans","tag","Plans"],["settings","settings","Settings"]
 ];
 
 const state = { csrf:"", user:null, data:null, section:(location.hash.slice(2)||"overview") };
@@ -72,7 +72,7 @@ async function load(){
   renderNav(); renderSection();
 }
 function renderSection(){
-  const main=$("adm-main"), fn=({overview,users,org,domains,lists,plans,settings})[state.section]||overview;
+  const main=$("adm-main"), fn=({overview,users,org,domains,lists,reports,plans,settings})[state.section]||overview;
   fn(main, state.data); main.focus({preventScroll:true});
 }
 const reload = async msg => { if(msg) toast(msg); await load(); };
@@ -157,6 +157,48 @@ function exportUsers(d){
   const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob(["\ufeff"+rows.map(r=>r.map(cell).join(",")).join("\r\n")],{type:"text/csv"}));
   a.download="mailboxes-"+new Date().toISOString().slice(0,10)+".csv"; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
 }
+/* Reports: email numbers for the last 14 days, sign-ins (failed ones flagged) and who changed what. */
+const OPS={create_user:"Created mailbox",delete_user:"Deleted mailbox",password:"Reset password",status:"Changed status",quota:"Changed storage limit",forward:"Changed forwarding",
+  add_alias:"Added alias",remove_alias:"Removed alias",set_name:"Renamed",set_plan:"Changed plan",role:"Changed role",set_title:"Changed title",save_roles:"Edited roles",
+  company_settings:"Changed company settings",create_domain:"Added domain",delete_domain:"Removed domain",domain_status:"Changed domain status",create_list:"Created list",
+  delete_list:"Deleted list",add_member:"Added list member",remove_member:"Removed list member",create_department:"Created department",set_department:"Changed department",
+  login_host_set:"Set sign-in address",login_host_remove:"Removed sign-in address",plan_update:"Edited plan",settings_update:"Changed server settings"};
+async function reports(main, d){
+  main.innerHTML=head("Reports",d.scope?`Email and sign-in activity on ${d.scope}.`:"Email and sign-in activity across all domains.",`<button class="adm-btn ghost" id="rp-refresh">${icon("refresh")} Refresh</button>`)+`<div id="rp-body"><p class="adm-muted">Loading…</p></div>`;
+  $("rp-refresh").addEventListener("click",()=>reports(main,d));
+  let r; try{ r=await act({op:"reports"}); }catch(e){ if($("rp-body")) $("rp-body").innerHTML=`<p class="adm-error">${esc(e.message)}</p>`; return; }
+  if(!$("rp-body")) return;
+  const t=r.totals, max=Math.max(1,...r.days.map(x=>Math.max(x.sent,x.signins))), who=id=>{ const u=d.users.find(u=>u.id===id); return u?u.email:id; };
+  const at=ms=>new Date(ms).toLocaleString([], {day:"numeric",month:"short",hour:"numeric",minute:"2-digit"});
+  const short=iso=>new Date(iso+"T00:00:00Z").toLocaleDateString([], {day:"numeric",month:"short",timeZone:"UTC"});
+  const rate=t.signins+t.failed?Math.round(t.failed/(t.signins+t.failed)*100):0;
+  $("rp-body").innerHTML=`
+    <div class="adm-stats">
+      <div class="adm-card adm-stat"><b>${t.sent}</b><span>Emails sent (14 days)</span></div>
+      <div class="adm-card adm-stat"><b>${t.active}</b><span>People active</span></div>
+      <div class="adm-card adm-stat"><b>${t.signins}</b><span>Sign-ins</span></div>
+      <div class="adm-card adm-stat"><b class="${t.failed?"adm-bad":""}">${t.failed}</b><span>Failed sign-ins${t.failed?` (${rate}%)`:""}</span></div>
+    </div>
+    <div class="adm-card"><div class="adm-card-head"><h2>Each day</h2><span class="adm-chart-key"><i class="k-sent"></i>Sent <i class="k-in"></i>Sign-ins <i class="k-bad"></i>Failed</span></div>
+      <div class="adm-chart" role="img" aria-label="Emails sent, sign-ins and failed sign-ins for each of the last 14 days">${r.days.map(x=>`<div class="adm-day" title="${short(x.date)}: ${x.sent} sent, ${x.signins} sign-ins, ${x.failed} failed">
+        <div class="adm-cols"><i class="k-sent" style="height:${x.sent/max*100}%"></i><i class="k-in" style="height:${x.signins/max*100}%"></i><i class="k-bad" style="height:${x.failed/max*100}%"></i></div><small>${short(x.date)}</small></div>`).join("")}</div>
+      <table class="adm-table adm-sr"><caption>The same numbers as a table</caption><thead><tr><th>Day</th><th>Sent</th><th>Sign-ins</th><th>Failed</th><th>Active</th></tr></thead><tbody>${r.days.map(x=>`<tr><td>${short(x.date)}</td><td>${x.sent}</td><td>${x.signins}</td><td>${x.failed}</td><td>${x.active}</td></tr>`).join("")}</tbody></table>
+      <p class="adm-muted">Counts mail sent from Dejoiy Mail on the web and in its apps. Mail received, and mail sent from other mail apps (IMAP), is not counted yet.</p></div>
+    <div class="adm-two">
+      <div class="adm-card"><h2>Top senders</h2>${r.topSenders.length?`<table class="adm-table"><tbody>${r.topSenders.map(x=>`<tr><td>${esc(x.email)}</td><td class="adm-right">${x.count}</td></tr>`).join("")}</tbody></table>`:`<p class="adm-muted">No mail sent in this period.</p>`}</div>
+      <div class="adm-card"><h2>Most failed sign-ins</h2>${r.failedSignins.length?`<table class="adm-table"><tbody>${r.failedSignins.map(x=>`<tr><td>${esc(x.email)}${x.count>=5?` <span class="adm-pill bad">Check this</span>`:""}</td><td class="adm-right">${x.count}</td></tr>`).join("")}</tbody></table>
+        <p class="adm-muted">Many wrong passwords on one mailbox can mean someone is guessing. Reset its password if the owner doesn't recognise them.</p>`:`<p class="adm-muted">No failed sign-ins. </p>`}</div>
+    </div>
+    <div class="adm-card adm-flush"><div class="adm-card-head adm-pad"><h2>Sign-ins</h2></div>
+      ${r.signins.length?`<table class="adm-table"><thead><tr><th>When</th><th>Mailbox</th><th>Result</th><th>From (IP)</th></tr></thead><tbody>${r.signins.map(x=>`<tr><td><small>${at(x.at)}</small></td><td>${esc(x.actor)}</td>
+        <td><span class="adm-pill ${x.kind==="signin"?"good":"bad"}">${x.kind==="signin"?"Signed in":"Wrong password"}</span></td><td><small>${esc(x.ip||"—")}</small></td></tr>`).join("")}</tbody></table>`:`<p class="adm-muted adm-pad">No sign-ins recorded yet. They appear here from now on.</p>`}</div>
+    <div class="adm-card adm-flush"><div class="adm-card-head adm-pad"><h2>Admin activity</h2></div>
+      ${r.audit.length?`<table class="adm-table"><thead><tr><th>When</th><th>Admin</th><th>What</th><th>On</th><th>From (IP)</th></tr></thead><tbody>${r.audit.map(x=>{ const op=x.kind.replace(/^admin:?/,"");
+        return `<tr><td><small>${at(x.at)}</small></td><td>${esc(x.actor)}</td><td>${op==="_signin"?"Opened the admin console":op==="_signin_failed"?`<span class="adm-pill bad">Wrong admin password</span>`:esc(OPS[op]||op.replace(/_/g," "))}</td><td>${esc(who(x.target)||"—")}</td><td><small>${esc(x.ip||"—")}</small></td></tr>`; }).join("")}</tbody></table>`
+        :`<p class="adm-muted adm-pad">No admin changes recorded yet. Every change made here is listed from now on.</p>`}</div>
+    <p class="adm-muted">Kept for 90 days. Passwords and the contents of mail are never recorded.</p>`;
+}
+
 function users(main, d){
   const plans=d.plans||[], planName=id=>{const n=(id&&plans.find(p=>p.id===id)?.name)||"default";return n.charAt(0).toUpperCase()+n.slice(1);};
   main.innerHTML=head("Mailboxes",`${d.users.length} mailboxes`,`<input type="search" id="u-search" placeholder="Search name or email" aria-label="Search mailboxes"><button class="adm-btn ghost" id="u-export">Export CSV</button>${can("mailboxes.manage")?'<button class="adm-btn primary" id="u-add">+ New mailbox</button>':""}`)+`

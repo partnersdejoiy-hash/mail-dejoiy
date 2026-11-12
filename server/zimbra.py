@@ -152,6 +152,47 @@ class AppearanceStore:
             if self.db is None: self.memory[account]=dict(data); return
             self.db.execute(f'INSERT OR REPLACE INTO {self.table} VALUES (?, ?)',(account,json.dumps(data))); self.db.commit()
 
+class AuditLog:
+    """What happened, for the admin's Reports page: sign-ins, mail sent from the web app, admin changes.
+    Never passwords or mail content: only who, what kind, which address it touched, from where, when.
+    Kept 90 days."""
+    KEEP=90*86400
+    def __init__(self, path=None):
+        self.lock=threading.Lock()
+        self.db=sqlite3.connect(path or ':memory:', check_same_thread=False, timeout=10)
+        if path: os.chmod(path, 0o600)
+        self.db.execute('CREATE TABLE IF NOT EXISTS events (ts REAL, kind TEXT, actor TEXT, domain TEXT, target TEXT, ip TEXT, n INTEGER)')
+        self.db.execute('CREATE INDEX IF NOT EXISTS events_ts ON events (ts)'); self.db.commit()
+    def add(self, kind, actor, target='', ip='', n=1, now=None):
+        actor=str(actor or '').lower()[:320]; now=now or time.time()
+        try:
+            with self.lock:
+                self.db.execute('INSERT INTO events VALUES (?,?,?,?,?,?,?)',(now,kind,actor,actor.rsplit('@',1)[-1] if '@' in actor else '',str(target or '')[:320],str(ip or '')[:45],int(n)))
+                self.db.execute('DELETE FROM events WHERE ts<?',(now-self.KEEP,)); self.db.commit()
+        except sqlite3.Error: pass  # the log must never break sign-in or sending
+    def report(self, scope=None, days=14, now=None):
+        """Numbers for the last `days` days and the newest events; a company admin (scope) sees only its own domain."""
+        now=now or time.time(); since=now-days*86400; where,args=('AND domain=?',(scope,)) if scope else ('',())
+        with self.lock:
+            rows=self.db.execute(f'SELECT ts,kind,actor,target,ip,n FROM events WHERE ts>=? {where} ORDER BY ts DESC',(since,*args)).fetchall()
+        day=lambda ts: time.strftime('%Y-%m-%d',time.gmtime(ts))
+        series={day(now-i*86400):{'sent':0,'signins':0,'failed':0,'active':set()} for i in range(days-1,-1,-1)}
+        senders={}; failed={}
+        for ts,kind,actor,target,ip,n in rows:
+            d=series.get(day(ts))
+            if d is None: continue
+            if kind=='send': d['sent']+=n; senders[actor]=senders.get(actor,0)+n; d['active'].add(actor)
+            elif kind=='signin': d['signins']+=1; d['active'].add(actor)
+            elif kind=='signin_failed': d['failed']+=1; failed[actor]=failed.get(actor,0)+1
+        top=lambda m: [{'email':k,'count':v} for k,v in sorted(m.items(),key=lambda x:-x[1])[:5]]
+        event=lambda r: {'at':int(r[0]*1000),'kind':r[1],'actor':r[2],'target':r[3],'ip':r[4],'count':r[5]}
+        return {'days':[{'date':k,'sent':v['sent'],'signins':v['signins'],'failed':v['failed'],'active':len(v['active'])} for k,v in series.items()],
+            'totals':{'sent':sum(v['sent'] for v in series.values()),'signins':sum(v['signins'] for v in series.values()),'failed':sum(v['failed'] for v in series.values()),
+                'active':len(set().union(*[v['active'] for v in series.values()]))},
+            'topSenders':top(senders),'failedSignins':top(failed),
+            'signins':[event(r) for r in rows if r[1] in ('signin','signin_failed')][:60],
+            'audit':[event(r) for r in rows if r[1].startswith('admin')][:100]}
+
 IMAGE_MAGIC = {'png':lambda b:b.startswith(b'\x89PNG\r\n\x1a\n'),'jpeg':lambda b:b.startswith(b'\xff\xd8\xff'),
     'gif':lambda b:b[:6] in (b'GIF87a',b'GIF89a'),'webp':lambda b:b[:4]==b'RIFF' and b[8:12]==b'WEBP'}
 IMAGE_EXT = {'png':'png','jpeg':'jpg','gif':'gif','webp':'webp'}
@@ -1671,6 +1712,15 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_response(200); self.send_header('Content-Type',mime); self.send_header('Content-Length',str(len(raw)))
         self.send_header('Cache-Control',cache); self.send_header('Content-Security-Policy',"default-src 'none'; sandbox")
         self.end_headers(); self.wfile.write(raw)
+    def client_ip(self):
+        ip=self.client_address[0]
+        try:
+            if ipaddress.ip_address(ip).is_loopback and self.headers.get('X-Real-IP'): ip=str(ipaddress.ip_address(self.headers['X-Real-IP']))
+        except ValueError: pass
+        return ip
+    def log(self, kind, actor, target='', n=1):
+        audit=getattr(self.server,'audit',None)
+        if audit: audit.add(kind,actor,target,self.client_ip(),n)
     def login_hosts(self):
         store=getattr(self.server,'hosts',None)
         return store.get('all') if store else {}
@@ -2211,7 +2261,12 @@ class Handler(SimpleHTTPRequestHandler):
                 if custom:  # on a company's own address only that company signs in; "priya" means priya@theirdomain
                     if '@' not in email: email=email+'@'+custom['domain']
                     if not email.lower().endswith('@'+custom['domain']): raise APIError('This sign-in page is for '+custom['domain']+' mailboxes. Others sign in at '+self.server.app_origin.split('//')[1]+'.',403)
-                return self.start_session(email,password)
+                try: out=self.start_session(email,password)
+                except APIError:
+                    if EMAIL.fullmatch(email): self.log('signin_failed',email)
+                    raise
+                self.log('signin',email)
+                return out
             sid,s=self.session()
             if not secrets.compare_digest(self.headers.get('X-CSRF-Token',''),s['csrf']): raise APIError('Invalid request token',403)
             if self.path=='/api/dns':
@@ -2225,7 +2280,10 @@ class Handler(SimpleHTTPRequestHandler):
                 if not client: raise APIError('Mail administration is not configured on this server.',503)
                 password=str(data.get('password',''))
                 if not password or len(password)>4096: raise APIError('Enter your administrator password.')
-                token,lifetime=client.login(s['user']['email'],password)
+                try: token,lifetime=client.login(s['user']['email'],password)
+                except APIError:
+                    self.log('admin_signin_failed',s['user']['email']); raise
+                self.log('admin_signin',s['user']['email'])
                 with LOCK:
                     if sid not in SESSIONS: raise APIError('Sign in to your mailbox',401)
                     # Full administrators see everything; company (domain) admins only their own domain.
@@ -2238,16 +2296,28 @@ class Handler(SimpleHTTPRequestHandler):
                     s.pop('admin_token',None); s.pop('admin_expires',None)
                     SESSIONS[sid]=s
                 return self.reply(200,{'ok':True})
+            if self.path=='/api/admin/action' and data.get('op')=='reports':
+                client,token,scope=self.admin_session(s)
+                audit=getattr(self.server,'audit',None)
+                if not audit: raise APIError('Reports are not switched on for this server.',503)
+                return self.reply(200,audit.report(scope))
             if self.path=='/api/admin/action' and data.get('op') in ('login_host_get','login_host_set','login_host_remove'):
-                return self.reply(200,self.login_host_action(s,data))
+                out=self.login_host_action(s,data)
+                if data.get('op')!='login_host_get': self.log('admin:'+data['op'],s['user']['email'],out.get('host') or out.get('domain'))
+                return self.reply(200,out)
             if self.path=='/api/admin/action':
                 client,token,scope=self.admin_session(s)
                 provisioner=getattr(self.server,'provisioner',None)
                 perms=client.actor_perms(token,s['user']['email'],scope)
-                return self.reply(200,client.action(token,data,s['user']['email'],scope,provisioner.token if provisioner else None,perms))
+                out=client.action(token,data,s['user']['email'],scope,provisioner.token if provisioner else None,perms)
+                # what changed and for whom (never the new password or any content); look-ups are not logged
+                if data.get('op') not in ('dns_records','list_members'):
+                    self.log('admin:'+str(data.get('op'))[:40],s['user']['email'],data.get('email') or data.get('alias') or data.get('domain') or data.get('id') or data.get('name') or '')
+                return self.reply(200,out)
             if self.path=='/api/send':
                 data=self.mention_recipients(s,data)
                 result=self.server.zimbra.write_message(s['token'],data,sender=s['user']['email'])
+                self.log('send',s['user']['email'],n=max(1,sum(len([a for a in re.split(r'[,;\n]+',str(data.get(k,''))) if a.strip()]) for k in ('to','cc','bcc'))))
                 try: self.server.zimbra.remember_recipients(s['token'],data,s['user']['email'])
                 except APIError: pass  # the message went out; a missed contact is not worth an error
                 return self.reply(200,result)
@@ -2312,6 +2382,7 @@ def serve():
     server.appearance=AppearanceStore(os.environ.get('APPEARANCE_DB') or (str(Path(os.environ['SESSION_DB']).with_name('appearance.sqlite')) if os.environ.get('SESSION_DB') else None))
     url=os.environ.get('ZIMBRA_URL'); server.zimbra=Zimbra(url) if url else None
     server.update_files=AppearanceStore((str(Path(os.environ['SESSION_DB']).with_name('update-files.sqlite')) if os.environ.get('SESSION_DB') else None),'files')
+    server.audit=AuditLog(str(Path(os.environ['SESSION_DB']).with_name('audit.sqlite')) if os.environ.get('SESSION_DB') else None)
     server.hosts=AppearanceStore((str(Path(os.environ['SESSION_DB']).with_name('login-hosts.sqlite')) if os.environ.get('SESSION_DB') else None),'hosts')
     server.hosts_file=os.environ.get('CUSTOM_HOSTS_FILE') or (str(Path(os.environ['SESSION_DB']).with_name('custom-hosts.txt')) if os.environ.get('SESSION_DB') else None)
     server.booking=AppearanceStore((str(Path(os.environ['SESSION_DB']).with_name('booking.sqlite')) if os.environ.get('SESSION_DB') else None),'booking')

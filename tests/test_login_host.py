@@ -64,3 +64,34 @@ class LoginHostHTTPTests(unittest.TestCase):
         self.assertEqual(login('priya@acme.in', 'mail.unknown.in', 'https://mail.unknown.in')[0], 403)  # unverified address: no
         self.assertEqual(login('priya@acme.in', None, 'https://mail.acme.in')[0], 403)               # custom origin on the main site: no
         self.assertEqual(login('priya@acme.in', 'mail.acme.in', 'https://evil.example')[0], 403)
+
+    def test_sign_ins_are_logged_without_passwords(self):
+        self.server.audit = z.AuditLog()
+        self.call('/api/login', {'email': 'priya@acme.in', 'password': 'pw-secret'}, 'mail.acme.in', 'https://mail.acme.in')
+        self.server.zimbra.login.side_effect = z.APIError('Wrong email or password', 401)
+        self.call('/api/login', {'email': 'priya@acme.in', 'password': 'bad-secret'}, 'mail.acme.in', 'https://mail.acme.in')
+        self.server.zimbra.login.side_effect = None
+        rows = self.server.audit.db.execute('SELECT kind,actor,target,ip FROM events ORDER BY ts').fetchall()
+        self.assertEqual([r[0] for r in rows], ['signin', 'signin_failed']); self.assertEqual(rows[0][1], 'priya@acme.in')
+        self.assertNotIn('secret', json.dumps(rows))
+
+
+class AuditLogTests(unittest.TestCase):
+    def test_report_counts_and_scope(self):
+        log = z.AuditLog(); now = 1_800_000_000.0
+        log.add('send', 'a@acme.in', n=3, now=now); log.add('send', 'b@acme.in', n=1, now=now - 86400)
+        log.add('signin', 'a@acme.in', ip='1.2.3.4', now=now)
+        for _ in range(5): log.add('signin_failed', 'a@acme.in', ip='6.6.6.6', now=now)
+        log.add('send', 'x@other.in', n=9, now=now); log.add('admin:password', 'boss@acme.in', 'a@acme.in', now=now)
+        log.add('send', 'a@acme.in', n=50, now=now - 40 * 86400)   # older than the window
+        r = log.report('acme.in', now=now)
+        self.assertEqual(r['totals'], {'sent': 4, 'signins': 1, 'failed': 5, 'active': 2})
+        self.assertEqual(len(r['days']), 14); self.assertEqual(r['days'][-1]['sent'], 3); self.assertEqual(r['days'][-2]['sent'], 1)
+        self.assertEqual(r['topSenders'][0], {'email': 'a@acme.in', 'count': 3}); self.assertEqual(r['failedSignins'], [{'email': 'a@acme.in', 'count': 5}])
+        self.assertEqual([e['kind'] for e in r['audit']], ['admin:password']); self.assertEqual(r['audit'][0]['target'], 'a@acme.in')
+        self.assertNotIn('other.in', json.dumps(r))                 # a company admin never sees another company
+        self.assertEqual(log.report(None, now=now)['totals']['sent'], 13)
+
+    def test_old_events_are_dropped(self):
+        log = z.AuditLog(); log.add('send', 'a@acme.in', now=1000.0); log.add('send', 'a@acme.in', now=1000.0 + 91 * 86400)
+        self.assertEqual(log.db.execute('SELECT COUNT(*) FROM events').fetchone()[0], 1)
