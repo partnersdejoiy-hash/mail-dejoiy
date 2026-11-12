@@ -234,9 +234,10 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--pop)!imp
 .adm-policy .adm-dialog-actions{margin-top:auto}
 .adm-rule{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center}.adm-rule input[type=number]{width:84px}.adm-rule small{color:var(--ink-3)}
 .adm-rule.adm-check input{width:20px;height:20px}
-.adm-shine{width:100%;height:calc(100dvh - 210px);min-height:480px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface)}
 @media(max-width:700px){.adm-rule{grid-template-columns:1fr}}
 
 .adm-h3{font-size:15px;margin:18px 0 4px}.adm-h3:first-of-type{margin-top:0}
 .adm-logo{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.adm-logo span{display:grid;place-items:center;width:56px;height:56px;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface-2)}
 .adm-logo img{width:100%;height:100%;object-fit:contain}.adm-logo i{font-size:10px;color:var(--ink-3);font-style:normal}
+
+.adm-card-head input[type=search]{max-width:240px}

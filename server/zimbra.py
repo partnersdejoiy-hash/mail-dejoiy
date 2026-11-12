@@ -1995,6 +1995,20 @@ class Handler(SimpleHTTPRequestHandler):
             if error.code==404: return None
             raise APIError('Shine is not reachable right now.',502)
         except (urllib.error.URLError,TimeoutError,ValueError): raise APIError('Shine is not reachable right now.',502)
+    def shine_admin_post(self, payload):
+        """Shine's admin endpoint; its own refusals ("can't switch off the super admin") come back as readable errors."""
+        if not self.server.shine_secret: raise APIError("Shine isn't connected to this mail server yet.",503)
+        request=urllib.request.Request(self.server.shine_site+'/dejoiy/admin',data=json.dumps(payload).encode(),method='POST',
+            headers={'Content-Type':'application/json','Authorization':'Bearer '+self.server.shine_secret})
+        try:
+            with urllib.request.urlopen(request,timeout=15) as response: return json.loads(response.read())
+        except urllib.error.HTTPError as error:
+            if error.code==400:
+                try: raise APIError(str(json.loads(error.read()).get('error') or "Shine couldn't do that.")[:200])
+                except ValueError: pass
+            if error.code==404: raise APIError('Shine needs its latest update before it can be managed from here.',502)
+            raise APIError('Shine is not reachable right now.',502)
+        except (urllib.error.URLError,TimeoutError,ValueError): raise APIError('Shine is not reachable right now.',502)
     def presence(self, session, data):
         """Your Active/Away dot and written status, kept in Shine so both apps show the same thing.
         A heartbeat sends idle; the status menu sends choice and/or text."""
@@ -2409,6 +2423,21 @@ class Handler(SimpleHTTPRequestHandler):
                     s.pop('admin_token',None); s.pop('admin_expires',None)
                     SESSIONS[sid]=s
                 return self.reply(200,{'ok':True})
+            if self.path=='/api/admin/action' and data.get('op') in ('shine_summary','shine_set_active','shine_end_meeting'):
+                # Shine (chat and meetings) managed from this console: Shine does the work, limited to this admin's company
+                client,token,scope=self.admin_session(s)
+                perms=client.actor_perms(token,s['user']['email'],scope)
+                if data['op']!='shine_summary' and scope and perms is not None and 'mailboxes.manage' not in perms:
+                    raise APIError('Your role does not allow this. Ask an admin for "'+PERMISSIONS['mailboxes.manage']+'".',403)
+                payload={'op':data['op'][6:],'actor':s['user']['email'].lower(),**({'scope':scope} if scope else {})}
+                if data['op']=='shine_set_active':
+                    email=str(data.get('email','')).strip().lower()
+                    if not EMAIL.fullmatch(email) or (scope and not email.endswith('@'+scope)): raise APIError('You can only manage people in your own company.',403)
+                    payload.update(email=email,active=data.get('active') is True)
+                if data['op']=='shine_end_meeting': payload['meetingId']=str(data.get('meetingId',''))[:64]
+                out=self.shine_admin_post(payload)
+                if data['op']!='shine_summary': self.log('admin:'+data['op'],s['user']['email'],payload.get('email') or payload.get('meetingId'))
+                return self.reply(200,out)
             if self.path=='/api/admin/action' and data.get('op')=='reports':
                 client,token,scope=self.admin_session(s)
                 audit=getattr(self.server,'audit',None)

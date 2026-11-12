@@ -211,18 +211,49 @@ async function policies(main, d){
   draw();
 }
 
-/* Chat & meetings: Shine's own admin console, signed in as you, inside this one. */
-async function shine(main){
-  main.innerHTML=head("Chat & meetings","Shine's admin console: people, channels, meetings and its audit log.",`<a class="adm-btn ghost" id="sh-open" target="_blank" rel="noopener" hidden>Open in a new tab</a>`)+`<div id="sh-body"><p class="adm-muted">Opening Shine…</p></div>`;
-  let s; try{ s=await api("shine"); }catch(e){ if($("sh-body")) $("sh-body").innerHTML=`<p class="adm-error">${esc(e.message)}</p>`; return; }
+/* Chat & meetings: Shine managed here, with the same sign-in and the same company limits as mail. */
+async function shine(main, d){
+  main.innerHTML=head("Chat & meetings",d.scope?`Shine for ${d.scope}: people, channels and live meetings.`:"Shine across all companies: people, channels and live meetings.",`<button class="adm-btn ghost" id="sh-refresh">${icon("refresh")} Refresh</button>`)+`<div id="sh-body"><p class="adm-muted">Loading…</p></div>`;
+  $("sh-refresh").addEventListener("click",()=>shine(main,d));
+  let r; try{ r=await act({op:"shine_summary"}); }catch(e){ if($("sh-body")) $("sh-body").innerHTML=`<div class="adm-card"><p class="adm-error">${esc(e.message)}</p></div>`; return; }
   if(!$("sh-body")) return;
-  if(!s.enabled||!/^https:\/\//.test(s.origin||"")){ $("sh-body").innerHTML=`<div class="adm-card"><p>${esc(s.error||"Shine isn't connected to this mail server yet.")}</p></div>`; return; }
-  // the sign-in token is one-use and short-lived: one for the frame, a fresh one when "new tab" is pressed
-  const url=(t,embed)=>`${s.origin}/auth/dejoiy${embed?"?embed=1":""}#t=${encodeURIComponent(t)}&next=${encodeURIComponent("/app/admin"+(embed?"?embed=1":""))}`;
-  const open=$("sh-open"); open.hidden=false; open.href=s.origin+"/app/admin";
-  open.addEventListener("click",async e=>{ e.preventDefault(); const w=window.open("about:blank","_blank"); try{ const f=await api("shine"); w.location=url(f.token,false); }catch(_){ w.location=s.origin+"/app/admin"; } });
-  $("sh-body").innerHTML=`<iframe class="adm-shine" title="Shine admin console" src="${esc(url(s.token,true))}" allow="clipboard-write"></iframe>
-    <p class="adm-muted">If this stays empty, use "Open in a new tab".</p>`;
+  const t=r.totals, at=ms=>ms?new Date(ms).toLocaleString([], {day:"numeric",month:"short",hour:"numeric",minute:"2-digit"}):"—";
+  const dot={online:["good","Active"],away:["warn","Away"],busy:["bad","Do not disturb"],offline:["","Offline"]};
+  const ACTS={"user.activated":"Switched an account on","user.deactivated":"Switched an account off","meeting.ended":"Ended a meeting","device.registered":"Signed in on a new device"};
+  $("sh-body").innerHTML=`
+    <div class="adm-stats">
+      <div class="adm-card adm-stat"><b>${t.people}</b><span>People in Shine</span></div>
+      <div class="adm-card adm-stat"><b>${t.activeNow}</b><span>Active right now</span></div>
+      <div class="adm-card adm-stat"><b>${t.messages}${t.messagesCapped?"+":""}</b><span>Messages (7 days)</span></div>
+      <div class="adm-card adm-stat"><b>${t.liveMeetings}</b><span>Live meetings</span></div>
+    </div>
+    <div class="adm-card adm-flush"><div class="adm-card-head adm-pad"><h2>Live meetings</h2></div>
+      ${r.meetings.length?`<table class="adm-table"><thead><tr><th>Meeting</th><th>Host</th><th>Started</th><th>People in it</th><th></th></tr></thead><tbody>${r.meetings.map(m=>`<tr><td><b>${esc(m.title)}</b></td><td>${esc(m.host)}</td><td><small>${at(m.startedAt)}</small></td><td>${m.people}</td>
+        <td class="adm-right">${can("mailboxes.manage")?`<button class="adm-btn ghost sm" data-end="${esc(m.id)}" data-title="${esc(m.title)}">End meeting</button>`:""}</td></tr>`).join("")}</tbody></table>`
+        :`<p class="adm-muted adm-pad">No meetings are running.</p>`}</div>
+    <div class="adm-card adm-flush"><div class="adm-card-head adm-pad"><h2>People</h2><input type="search" id="sh-search" placeholder="Search name or email" aria-label="Search people in Shine"></div>
+      <table class="adm-table" id="sh-people"><thead><tr><th>Person</th><th>Now</th><th>Role in Shine</th><th>Last seen</th><th>Chat access</th><th></th></tr></thead><tbody>
+      ${r.people.map(p=>`<tr data-q="${esc((p.name+" "+p.email).toLowerCase())}"><td><b>${esc(p.name)}</b><small>${esc(p.email)}</small></td>
+        <td><span class="adm-pill ${dot[p.status]?.[0]||""}">${dot[p.status]?.[1]||"Offline"}</span></td><td>${esc(String(p.role).replace(/_/g," "))}</td><td><small>${at(p.lastSeen)}</small></td>
+        <td><span class="adm-pill ${p.active?"good":"bad"}">${p.active?"On":"Switched off"}</span></td>
+        <td class="adm-right">${can("mailboxes.manage")?`<button class="adm-btn ghost sm" data-toggle="${esc(p.email)}" data-on="${p.active?1:0}">${p.active?"Switch off":"Switch on"}</button>`:""}</td></tr>`).join("")||`<tr><td colspan="6"><p class="adm-muted">Nobody has opened Shine yet. People appear here after their first sign-in, or when the mailbox list syncs.</p></td></tr>`}
+      </tbody></table></div>
+    <div class="adm-two">
+      <div class="adm-card adm-flush"><div class="adm-card-head adm-pad"><h2>Channels (${t.channels})</h2></div>
+        ${r.channels.length?`<table class="adm-table"><thead><tr><th>Channel</th><th>Members</th><th>Last message</th></tr></thead><tbody>${r.channels.map(c=>`<tr><td><b>#${esc(c.name)}</b>${c.private?` <span class="adm-pill">Private</span>`:""}<small>by ${esc(c.createdBy)}</small></td><td>${c.members}</td><td><small>${at(c.lastMessageAt)}</small></td></tr>`).join("")}</tbody></table>`
+          :`<p class="adm-muted adm-pad">No channels yet.</p>`}</div>
+      <div class="adm-card adm-flush"><div class="adm-card-head adm-pad"><h2>Shine activity</h2></div>
+        ${r.audit.length?`<table class="adm-table"><thead><tr><th>When</th><th>Who</th><th>What</th></tr></thead><tbody>${r.audit.map(a=>`<tr><td><small>${at(a.at)}</small></td><td>${esc(a.actor)}</td><td>${esc(ACTS[a.action]||a.action.replace(/[._]/g," "))}${a.details?`<small>${esc(a.details)}</small>`:""}</td></tr>`).join("")}</tbody></table>`
+          :`<p class="adm-muted adm-pad">Nothing recorded yet.</p>`}</div>
+    </div>
+    <p class="adm-muted">Switching someone off here stops their chat and meetings only; their mailbox keeps working. To stop both, lock the mailbox in Mailboxes.</p>`;
+  $("sh-search").addEventListener("input",e=>{ const q=e.target.value.trim().toLowerCase(); $("sh-people").querySelectorAll("tbody tr[data-q]").forEach(tr=>tr.hidden=!tr.dataset.q.includes(q)); });
+  $("sh-body").querySelectorAll("[data-toggle]").forEach(b=>b.addEventListener("click",()=>{ const email=b.dataset.toggle, on=b.dataset.on==="1";
+    const go=async()=>{ await act({op:"shine_set_active",email,active:!on}); toast(on?"Chat switched off for "+email+".":"Chat switched on for "+email+"."); shine(main,d); };
+    if(on) dialog({title:"Switch off chat for "+email+"?",body:`<p>They are signed out of Shine and can't chat or join meetings until you switch them on again. Their mailbox keeps working.</p>`,actions:[{label:"Cancel"},{label:"Switch off",danger:true,fn:go}]});
+    else go().catch(e=>toast(e.message)); }));
+  $("sh-body").querySelectorAll("[data-end]").forEach(b=>b.addEventListener("click",()=>dialog({title:"End “"+b.dataset.title+"”?",body:`<p>Everyone in the meeting is disconnected now.</p>`,
+    actions:[{label:"Cancel"},{label:"End meeting",danger:true,fn:async()=>{ await act({op:"shine_end_meeting",meetingId:b.dataset.end}); toast("Meeting ended."); shine(main,d); }}]})));
 }
 
 /* Reports: email numbers for the last 14 days, sign-ins (failed ones flagged) and who changed what. */
@@ -230,7 +261,7 @@ const OPS={create_user:"Created mailbox",delete_user:"Deleted mailbox",password:
   add_alias:"Added alias",remove_alias:"Removed alias",set_name:"Renamed",set_plan:"Changed plan",role:"Changed role",set_title:"Changed title",save_roles:"Edited roles",
   company_settings:"Changed company settings",create_domain:"Added domain",delete_domain:"Removed domain",domain_status:"Changed domain status",create_list:"Created list",
   delete_list:"Deleted list",add_member:"Added list member",remove_member:"Removed list member",create_department:"Created department",set_department:"Changed department",
-  policies_save:"Changed mailbox policies",policy_assign:"Changed a mailbox's policy",brand_set:"Changed name or logo",login_host_set:"Set sign-in address",login_host_remove:"Removed sign-in address",plan_update:"Edited plan",settings_update:"Changed server settings"};
+  policies_save:"Changed mailbox policies",policy_assign:"Changed a mailbox's policy",shine_set_active:"Switched chat on or off",shine_end_meeting:"Ended a meeting",brand_set:"Changed name or logo",login_host_set:"Set sign-in address",login_host_remove:"Removed sign-in address",plan_update:"Edited plan",settings_update:"Changed server settings"};
 async function reports(main, d){
   main.innerHTML=head("Reports",d.scope?`Email and sign-in activity on ${d.scope}.`:"Email and sign-in activity across all domains.",`<button class="adm-btn ghost" id="rp-refresh">${icon("refresh")} Refresh</button>`)+`<div id="rp-body"><p class="adm-muted">Loading…</p></div>`;
   $("rp-refresh").addEventListener("click",()=>reports(main,d));

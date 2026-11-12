@@ -26,7 +26,7 @@ class LoginHostTests(unittest.TestCase):
 if __name__ == '__main__': unittest.main()
 
 
-import json, threading, urllib.request, urllib.error
+import json, threading, time, urllib.request, urllib.error
 from unittest.mock import Mock
 
 class LoginHostHTTPTests(unittest.TestCase):
@@ -108,3 +108,50 @@ class AuditLogTests(unittest.TestCase):
     def test_old_events_are_dropped(self):
         log = z.AuditLog(); log.add('send', 'a@acme.in', now=1000.0); log.add('send', 'a@acme.in', now=1000.0 + 91 * 86400)
         self.assertEqual(log.db.execute('SELECT COUNT(*) FROM events').fetchone()[0], 1)
+
+
+class ShineAdminTests(unittest.TestCase):
+    """Chat & meetings in the admin console: a company admin can only reach its own company's Shine."""
+    @classmethod
+    def setUpClass(cls):
+        cls.server = z.ThreadingHTTPServer(('127.0.0.1', 0), z.Handler)
+        cls.url = 'http://127.0.0.1:' + str(cls.server.server_port); cls.server.app_origin = cls.url; cls.server.attempts = {}
+        cls.server.zimbra = Mock(); cls.server.zimbra.login.return_value = ('t', 3600); cls.server.zimbra.capabilities.return_value = {}; cls.server.zimbra.account_id.return_value = 'id1'
+        cls.server.admin = Mock(); cls.server.admin.actor_perms.return_value = None
+        cls.server.audit = z.AuditLog()
+        threading.Thread(target=cls.server.serve_forever, daemon=True).start()
+    @classmethod
+    def tearDownClass(cls): cls.server.shutdown(); cls.server.server_close()
+    def setUp(self):
+        self.server.attempts = {}; self.sent = []
+        self.real = z.Handler.shine_admin_post
+        z.Handler.shine_admin_post = lambda handler, payload: (self.sent.append(payload), {'ok': True})[1]
+    def tearDown(self): z.Handler.shine_admin_post = self.real
+    def admin(self, email, scope):
+        req = urllib.request.Request(self.url + '/api/login', json.dumps({'email': email, 'password': 'pw'}).encode(), {'Content-Type': 'application/json', 'Origin': self.url})
+        with urllib.request.urlopen(req) as r: cookie = r.headers['Set-Cookie'].split(';')[0]; csrf = json.loads(r.read())['csrf']
+        z.SESSIONS[cookie.split('=')[1]].update(admin_token='a', admin_expires=time.time() + 600, admin_scope=scope)
+        def act(data):
+            req = urllib.request.Request(self.url + '/api/admin/action', json.dumps(data).encode(), {'Content-Type': 'application/json', 'Origin': self.url, 'Cookie': cookie, 'X-CSRF-Token': csrf})
+            try:
+                with urllib.request.urlopen(req) as r: return r.status
+            except urllib.error.HTTPError as e: return e.code
+        return act
+
+    def test_company_admin_is_kept_to_its_own_company(self):
+        act = self.admin('boss@acme.in', 'acme.in')
+        self.assertEqual(act({'op': 'shine_summary'}), 200)
+        self.assertEqual(self.sent[-1], {'op': 'summary', 'actor': 'boss@acme.in', 'scope': 'acme.in'})
+        self.assertEqual(act({'op': 'shine_set_active', 'email': 'x@other.in', 'active': False}), 403)
+        self.assertEqual(len(self.sent), 1)                                   # nothing was sent to Shine for the other company
+        self.assertEqual(act({'op': 'shine_set_active', 'email': 'Priya@Acme.in', 'active': False}), 200)
+        self.assertEqual(self.sent[-1], {'op': 'set_active', 'actor': 'boss@acme.in', 'scope': 'acme.in', 'email': 'priya@acme.in', 'active': False})
+        kinds = [r[0] for r in self.server.audit.db.execute('SELECT kind FROM events').fetchall()]
+        self.assertIn('admin:shine_set_active', kinds)
+
+    def test_platform_admin_has_no_scope_and_needs_the_admin_step(self):
+        act = self.admin('root@dejoiy.com', None)
+        self.assertEqual(act({'op': 'shine_end_meeting', 'meetingId': 'm1'}), 200)
+        self.assertEqual(self.sent[-1], {'op': 'end_meeting', 'actor': 'root@dejoiy.com', 'meetingId': 'm1'})
+        plain = self.admin('user@acme.in', 'acme.in'); z.SESSIONS[next(k for k, v in z.SESSIONS.items() if v['user']['email'] == 'user@acme.in')].pop('admin_token')
+        self.assertEqual(plain({'op': 'shine_summary'}), 403)                 # no admin sign-in: nothing
