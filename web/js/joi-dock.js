@@ -22,6 +22,8 @@ async function load(){
     for(let i=0;i<60 && !document.querySelector(".joi-w");i++) await new Promise(r=>setTimeout(r,100));
     if(!document.querySelector(".joi-w") || !window.Joi) throw new Error("Joi can't be reached right now. Try again in a bit.");
     if(cfg.token) window.Joi.setAppToken(cfg.token);
+    // lets Joi's server read this person's own mailbox (only theirs, only reading) while they talk to her
+    if(cfg.grant && typeof window.Joi.setDataGrant==="function") window.Joi.setDataGrant({app:"mail", grant:cfg.grant, url:cfg.mailbox});
     return true;
   })();
   ready.catch(()=>{ ready=null; });

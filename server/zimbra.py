@@ -114,6 +114,29 @@ def joi_read(secret, token, kind, max_seconds):
     now=time.time()*1000
     if not isinstance(c,dict) or c.get('app')!='mail' or c.get('k')!=kind or not isinstance(c.get('exp'),(int,float)) or not now<c['exp']<now+max_seconds*1000: return None
     return c
+JOI_GRANT_SECONDS=12*3600
+def joi_grant_key(directory=None):
+    """The key for Joi's mailbox grants. Only this server has it (Joi does not), so Joi cannot
+    make a grant for a mailbox whose owner never opened her from here. Kept beside the sessions."""
+    if not directory: return secrets.token_hex(32)
+    path=Path(directory)/'joi-grant.key'
+    try: return path.read_text().strip()
+    except FileNotFoundError: pass
+    key=secrets.token_hex(32)
+    fd=os.open(str(path),os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+    with os.fdopen(fd,'w') as f: f.write(key)
+    return key
+def joi_grant_ok(claims, grant, sessions, now=None):
+    """Joi's mailbox request (claims) is allowed only for the person a live grant names:
+    same mailbox, and that person's sign-in here (which made the grant) is still open."""
+    if not claims or not grant or str(claims.get('e','')).lower()!=str(grant.get('e','')).lower(): return False
+    now=now or time.time()
+    for sid in list(sessions):
+        try: s=sessions[sid]
+        except KeyError: continue
+        if s.get('joi_grant') and hmac.compare_digest(str(s['joi_grant']),str(grant.get('g',''))):
+            return s.get('expires',0)>now and str(s.get('user',{}).get('email','')).lower()==str(grant['e']).lower()
+    return False
 def shine_admin(user):
     return 'platform' if user.get('canManageRoles') is True else 'company' if user.get('isAdmin') is True else ''
 def safe_return(raw, fallback='/app/chats'):
@@ -626,14 +649,14 @@ class Zimbra:
         self.url=url.rstrip('/')+'/service/soap/'
         self.origin=url.rstrip('/')
         self.opener=urllib.request.build_opener(NoRedirect())
-    def call(self, request, token=None):
+    def call(self, request, token=None, timeout=25):
         envelope=node(SOAP,'Envelope'); header=ET.SubElement(envelope,'{'+SOAP+'}Header')
         context=ET.SubElement(header,'{urn:zimbra}context')
         if token: ET.SubElement(context,'{urn:zimbra}authToken').text=token
         body=ET.SubElement(envelope,'{'+SOAP+'}Body'); body.append(request)
         req=urllib.request.Request(self.url, ET.tostring(envelope), {'Content-Type':'application/soap+xml; charset=utf-8'})
         try:
-            with self.opener.open(req, timeout=25) as response:
+            with self.opener.open(req, timeout=timeout) as response:
                 raw=response.read(8*1024*1024+1)
         except urllib.error.HTTPError as e:
             raw=e.read(65536)
@@ -1761,7 +1784,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if self.path=='/api/shine/directory': return self.reply(200,self.shine_directory())
                 if self.path.startswith('/api/public/update-file?'):
                     return self.update_file(None,urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get('id',[''])[0])
-                _,s=self.session()
+                sid,s=self.session()
                 if self.path=='/api/session':
                     capabilities=self.server.zimbra.capabilities(s['token'])
                     brand=self.brand_for(self.domain(s))  # the company's own name and logo follow its people everywhere
@@ -1792,7 +1815,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if self.path=='/api/labels': return self.reply(200,self.server.zimbra.labels(s['token']))
                 if self.path=='/api/filters': return self.reply(200,self.server.zimbra.filters(s['token']))
                 if self.path=='/api/supervisors': return self.reply(200,self.supervisors(s))
-                if self.path=='/api/joi': return self.reply(200,self.joi(s))
+                if self.path=='/api/joi': return self.reply(200,self.joi(s,sid))
                 if self.path=='/api/avatars': return self.reply(200,{'avatars':self.avatar_versions()})
                 if self.path.startswith('/api/bimi?'):
                     domain=urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get('domain',[''])[0].strip().lower()
@@ -2101,12 +2124,27 @@ class Handler(SimpleHTTPRequestHandler):
         out=self.shine_post('/dejoiy/people',{'emails':emails})
         if out is None: return {'enabled':False,'people':{}}
         return {'enabled':True,'people':out.get('people',{})}
-    def joi(self, session):
-        """Where Joi's chat lives, and (for DEJOIY's own people) a token so she may use internal memory."""
+    def joi(self, session, sid=None):
+        """Where Joi's chat lives, (for DEJOIY's own people) a token so she may use internal memory,
+        and the grant that lets her read this person's own mailbox while they talk to her."""
         srv=self.server; url=getattr(srv,'joi_url','https://joi-ai.dejoiy.com')
         internal=self.domain(session) in getattr(srv,'joi_internal',[])
         secret=getattr(srv,'joi_secret','')
-        return {'url':url,'api':getattr(srv,'joi_api',url),'token':joi_app_token(secret) if secret and internal else ''}
+        grant=self.joi_grant(sid,session) if sid and secret else ''
+        return {'url':url,'api':getattr(srv,'joi_api',url),'token':joi_app_token(secret) if secret and internal else '',
+            'grant':grant,'mailbox':srv.app_origin+'/api/joi/mailbox' if grant else ''}
+    def joi_grant(self, sid, session):
+        """A 12-hour grant for Joi naming this mailbox and this sign-in; signing out here ends it."""
+        key=getattr(self.server,'joi_grant_key','')
+        if not key: return ''
+        with LOCK:
+            current=SESSIONS.get(sid)
+            if current is None: return ''
+            if not current.get('joi_grant'):
+                current['joi_grant']=secrets.token_urlsafe(18); SESSIONS[sid]=current
+            gid=current['joi_grant']
+        email=session['user']['email'].lower()
+        return joi_signed(key,{'app':'mail','k':'grant','e':email,'g':gid,'exp':int((time.time()+min(JOI_GRANT_SECONDS,max(60,session.get('expires',0)-time.time())))*1000)})
     def supervisors(self, session):
         """Supervisors at the other companies on Dejoiy (team leads up to admins and IT) this mailbox may write to.
         Shine decides: admins switch it on or off per company or per person."""
@@ -2178,15 +2216,20 @@ class Handler(SimpleHTTPRequestHandler):
         # Joi's "Sign in with Dejoiy Mail": signed in here -> back to Joi with a 5-minute token proving this mailbox.
         srv=self.server
         if not getattr(srv,'joi_secret',''): return self.send_error(503,'Joi is not connected')
-        try: _,s=self.session()
+        try: sid,s=self.session()
         except APIError: return self.redirect('/?next=joi')
-        t=joi_signed(srv.joi_secret,{'app':'mail','k':'login','e':s['user']['email'].lower(),'n':s['user'].get('name',''),'exp':int((time.time()+300)*1000),'d':secrets.token_urlsafe(9)})
+        # 'g' is the mailbox grant (see joi_grant): Joi keeps it and sends it with POST /api/joi/mailbox
+        t=joi_signed(srv.joi_secret,{'app':'mail','k':'login','e':s['user']['email'].lower(),'n':s['user'].get('name',''),'exp':int((time.time()+300)*1000),'d':secrets.token_urlsafe(9),'g':self.joi_grant(sid,s)})
         return self.redirect(srv.joi_url+'/?dmail='+urllib.parse.quote(t,safe=''))
     def joi_mailbox(self, data):
         """Joi's server reading one mailbox for its owner, who signed in to Joi with Dejoiy Mail.
-        Joi signs each request (1 minute) with the mail-app secret; the newest mail comes back as text fields."""
+        Joi signs each request (1 minute) with the mail-app secret AND sends the grant this server gave
+        that person (signed with a key Joi does not have), so she can only read the mailbox of someone
+        who opened her from here and is still signed in. Read-only: the newest mail as text fields."""
         c=joi_read(getattr(self.server,'joi_secret',''),data.get('token'),'mailbox',120)
         if not c or not EMAIL.fullmatch(str(c.get('e',''))): raise APIError('Not allowed',403)
+        g=joi_read(getattr(self.server,'joi_grant_key',''),data.get('grant'),'grant',JOI_GRANT_SECONDS+60)
+        if not joi_grant_ok(c,g,SESSIONS): raise APIError('Ask the person to open Joi from Dejoiy Mail again.',403)
         result=self.server.zimbra.messages(self.delegated(c['e'].lower()))
         def short(m,size): return {'date':m.get('date'),'from':m.get('from'),'to':m.get('to'),'subject':m.get('subject'),'read':m.get('read'),
             'hasAttachment':m.get('hasAttachment'),'text':plain(str(m.get('body','')))[:size]}
@@ -2610,6 +2653,7 @@ def serve():
     server.joi_url=(os.environ.get('JOI_URL') or 'https://joi-ai.dejoiy.com').rstrip('/')
     server.joi_api=(os.environ.get('JOI_API_URL') or server.joi_url).rstrip('/')
     server.joi_secret=os.environ.get('JOI_APP_SECRET','')
+    server.joi_grant_key=joi_grant_key(str(Path(os.environ['SESSION_DB']).parent) if os.environ.get('SESSION_DB') else None)
     server.joi_internal=[d.strip().lower() for d in (os.environ.get('JOI_INTERNAL_DOMAINS') or 'dejoiy.com,mail.dejoiy.com').split(',') if d.strip()]
     server.shine_site=(os.environ.get('SHINE_SITE') or 'https://convex-site.shine.dejoiy.com').rstrip('/')
     state_dir=Path(os.environ['SESSION_DB']).parent if os.environ.get('SESSION_DB') else None
