@@ -94,6 +94,12 @@ const Live={enabled:!!window.DEJOIY_LIVE,csrf:'',more:false,avatars:{},
     return new Promise(resolve=>{
       const layer=document.createElement('div'); layer.className='lg-root';
       layer.innerHTML=loginMarkup(admin,config.configured);
+      // a company's own sign-in address: its name, line and colour (text set with textContent, colour checked)
+      if(config.brand){ const b=config.brand, h1=layer.querySelector('form h1'), sub=layer.querySelector('.lg-sub'), em=layer.querySelector('input[name=email]');
+        if(b.name){ h1.textContent='Sign in to '+b.name; document.title=b.name+' Mail'; }
+        sub.textContent=b.tagline||('with your '+b.domain+' mailbox');
+        if(em) em.placeholder='you@'+b.domain;
+        if(/^#[0-9a-f]{6}$/.test(b.colour||'')) layer.style.setProperty('--lg-pink',b.colour); }
       Themes.apply();
       document.body.appendChild(layer); if(window.DmSplash)DmSplash.hide(); if(window.DejoiyAccent)DejoiyAccent.recolour(layer);
       const form=layer.querySelector('form'),email=form.elements.email,pass=form.elements.password,btn=form.querySelector('.lg-btn'),

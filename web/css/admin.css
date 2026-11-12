@@ -213,3 +213,6 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--pop)!imp
 .adm-bar>span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.adm-bar small{color:var(--ink-3);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .adm-bar-track{height:10px;border-radius:999px;background:var(--surface-2);overflow:hidden}.adm-bar-track i{display:block;height:100%;border-radius:999px;background:var(--accent)}
 @media(max-width:900px){.adm-two{grid-template-columns:1fr}.adm-bar{grid-template-columns:minmax(70px,110px) minmax(0,1fr);row-gap:2px}.adm-bar small{grid-column:1/-1;text-align:left}}
+
+.adm-dialog-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:14px}
+.adm-form input[type=color]{width:56px;height:40px;padding:2px;cursor:pointer}

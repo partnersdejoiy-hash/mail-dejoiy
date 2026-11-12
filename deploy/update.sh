@@ -43,6 +43,13 @@ else
   curl -fsS -o /dev/null -w "https://$ADMIN_HOST -> %{http_code}\n" "https://$ADMIN_HOST/"
 fi
 
+echo "== Companies' own sign-in addresses"
+# the app writes the verified list next to its session database; a root job gives each one a certificate
+DB=$(grep '^SESSION_DB=' /etc/dmail/adapter.env | tail -1 | cut -d= -f2- || true)
+HOSTS_FILE="$(dirname "${DB:-/var/lib/dmail/sessions.sqlite}")/custom-hosts.txt"
+echo "*/10 * * * * root CUSTOM_HOSTS_FILE=$HOSTS_FILE bash $APP/deploy/custom-hosts.sh >> /var/log/dmail-custom-hosts.log 2>&1" > /etc/cron.d/dmail-custom-hosts
+CUSTOM_HOSTS_FILE="$HOSTS_FILE" bash "$APP/deploy/custom-hosts.sh" || true
+
 echo "== Public check"
 curl -fsS -o /dev/null -w "https://mail.dejoiy.com/home -> %{http_code}\n" https://mail.dejoiy.com/home
 echo "Done. Open https://mail.dejoiy.com/home and press Ctrl+F5."

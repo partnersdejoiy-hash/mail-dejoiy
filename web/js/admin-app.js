@@ -308,11 +308,12 @@ function domains(main, d){
     <div class="adm-card adm-flush"><table class="adm-table"><thead><tr><th>Domain</th><th>Mailboxes</th><th>Status</th><th></th></tr></thead><tbody>
     ${d.domains.map((x,i)=>`<tr><td><b>${esc(x.domain)}</b></td><td>${d.users.filter(u=>u.email.endsWith("@"+x.domain)).length}</td>
       <td>${d.scope?`<span class="adm-pill ${x.status==="active"?"good":"warn"}">${esc(x.status)}</span>`:`<select data-dstatus="${i}" aria-label="Status for ${esc(x.domain)}">${["active","locked","maintenance","suspended"].map(s=>`<option ${s===x.status?"selected":""}>${s}</option>`).join("")}</select>`}</td>
-      <td class="adm-right"><button class="adm-btn ghost sm" data-dns="${esc(x.domain)}">DNS setup</button>${d.scope?"":` <button class="adm-btn ghost sm" data-ddel="${i}" aria-label="Delete ${esc(x.domain)}">Delete</button>`}</td></tr>`).join("")}
+      <td class="adm-right"><button class="adm-btn ghost sm" data-dns="${esc(x.domain)}">DNS setup</button> <button class="adm-btn ghost sm" data-host="${esc(x.domain)}">Sign-in address</button>${d.scope?"":` <button class="adm-btn ghost sm" data-ddel="${i}" aria-label="Delete ${esc(x.domain)}">Delete</button>`}</td></tr>`).join("")}
     </tbody></table></div>
     <div class="adm-card"><h2>DNS checklist</h2><p class="adm-muted">Adding a domain here does not change public DNS. At your DNS provider, point <b>MX</b> to this server and publish <b>SPF</b>, <b>DKIM</b> and <b>DMARC</b> records so mail is delivered and trusted.</p></div>`;
   main.querySelectorAll("[data-dstatus]").forEach(s=>s.addEventListener("change",async()=>{const x=d.domains[+s.dataset.dstatus];s.disabled=true;try{await act({op:"domain_status",id:x.id,status:s.value});x.status=s.value;toast("Domain status updated.");}catch(e){s.value=x.status;toast(e.message);}finally{s.disabled=false;}}));
   main.querySelectorAll("[data-dns]").forEach(b=>b.addEventListener("click",()=>dnsSetup(b.dataset.dns)));
+  main.querySelectorAll("[data-host]").forEach(b=>b.addEventListener("click",()=>loginHost(b.dataset.host)));
   main.querySelectorAll("[data-ddel]").forEach(b=>b.addEventListener("click",()=>deleteDomain(d,d.domains[+b.dataset.ddel])));
   if(!d.scope) $("d-add").addEventListener("click",()=>dialog({title:"Add domain",body:`<label>Domain name<input id="nd-name" placeholder="example.com" autocomplete="off"></label><p role="alert" class="adm-error"></p>`,
     actions:[{label:"Cancel"},{label:"Add domain",primary:true,fn:async()=>{await act({op:"create_domain",domain:$("nd-name").value});await reload("Domain added. Configure its DNS next.");}}]}));
@@ -333,6 +334,35 @@ function deleteDomain(d, x){
     actions:[{label:"Cancel"},{label:"Delete domain",danger:true,fn:async()=>{
       if($("dd-confirm").value.trim().toLowerCase()!==x.domain.toLowerCase()) throw new Error("Type the domain name exactly to confirm.");
       await act({op:"delete_domain",id:x.id,confirm:$("dd-confirm").value.trim()}); await reload(x.domain+" deleted.");}}]});
+}
+
+/* A company's own sign-in address (mail.theircompany.com) and how its sign-in page looks. */
+async function loginHost(domain){
+  const root=dialog({title:"Sign-in address · "+domain, wide:true, body:`<p class="adm-muted">Loading…</p>`});
+  const body=root.querySelector(".adm-dialog-body");
+  const draw=(out,note)=>{
+    const b=out.brand||{}, suggested="mail."+domain;
+    body.innerHTML=`${note?`<p class="${note.bad?"adm-error":"adm-muted"}" role="status">${esc(note.text)}</p>`:""}
+      <p>Let your team sign in at your own address instead of ${esc(out.target)}. Only ${esc(domain)} mailboxes can sign in there.</p>
+      <div class="adm-form">
+        <label>Your address<input id="lh-host" value="${esc(out.host||suggested)}" placeholder="${esc(suggested)}" autocapitalize="off" spellcheck="false"></label>
+        <label>Company name on the sign-in page<input id="lh-name" maxlength="60" value="${esc(b.name||"")}" placeholder="Your company"></label>
+        <label>One line under it<input id="lh-tag" maxlength="120" value="${esc(b.tagline||"")}" placeholder="Mail for the whole team"></label>
+        <label>Button colour<input id="lh-colour" type="color" value="${esc(b.colour||"#ff4fa3")}"></label>
+      </div>
+      <div class="adm-dns-row ${out.pointing?"ok":""}"><div class="adm-dns-head"><b>Step 1 · DNS</b><span class="adm-pill ${out.pointing?"good":"warn"}">${out.host?(out.pointing?"Pointing here":"Not pointing here"):"Not set up"}</span></div>
+        <dl><dt>Type</dt><dd><code>CNAME</code></dd><dt>Host</dt><dd><code id="lh-label">${esc((out.host||suggested).split(".")[0])}</code></dd><dt>Value</dt><dd><code>${esc(out.target)}</code></dd></dl>
+        <p class="adm-muted">Add this where ${esc(domain)}'s DNS is managed, wait a few minutes, then press Save.</p></div>
+      <div class="adm-dns-row"><div class="adm-dns-head"><b>Step 2 · Secure connection</b></div>
+        <p class="adm-muted">After you save, the padlock (HTTPS certificate) is set up by itself within about 10 minutes. Until then the address may show a warning; nothing else changes for your team.</p></div>
+      <div class="adm-dialog-actions">${out.host?`<button class="adm-btn ghost" id="lh-remove">Remove address</button>`:""}<button class="adm-btn primary" id="lh-save">Save</button></div>`;
+    $("lh-host").addEventListener("input",e=>{ $("lh-label").textContent=e.target.value.trim().split(".")[0]||"mail"; });
+    $("lh-save").addEventListener("click",async()=>{ const btn=$("lh-save"); btn.disabled=true;
+      try{ draw(await act({op:"login_host_set",domain,host:$("lh-host").value,name:$("lh-name").value,tagline:$("lh-tag").value,colour:$("lh-colour").value}),{text:"Saved. Your address will be ready in about 10 minutes."}); }
+      catch(e){ btn.disabled=false; const old=body.querySelector("[role=status]"); if(old) old.remove(); body.insertAdjacentHTML("afterbegin",`<p class="adm-error" role="status">${esc(e.message)}</p>`); } });
+    const rm=$("lh-remove"); if(rm) rm.addEventListener("click",async()=>{ try{ draw(await act({op:"login_host_remove",domain}),{text:"Removed. Your team signs in at "+out.target+" again."}); }catch(e){ draw(out,{text:e.message,bad:true}); } });
+  };
+  try{ draw(await act({op:"login_host_get",domain})); }catch(e){ body.innerHTML=`<p class="adm-error">${esc(e.message)}</p>`; }
 }
 
 async function dnsSetup(domain){

@@ -232,7 +232,7 @@ SIGNUP_TTL = 7*24*3600
 
 def dns_lookup(name, kind='TXT'):
     """Public DNS answers via DNS-over-HTTPS, so checks match what the internet sees."""
-    code={'TXT':16,'MX':15}[kind]
+    code={'TXT':16,'MX':15,'A':1,'CNAME':5}[kind]
     for url in ('https://cloudflare-dns.com/dns-query','https://dns.google/resolve'):
         try:
             request=urllib.request.Request(url+'?'+urllib.parse.urlencode({'name':name,'type':kind}),headers={'Accept':'application/dns-json'})
@@ -244,6 +244,31 @@ def dns_lookup(name, kind='TXT'):
     raise APIError('DNS could not be checked right now. Try again in a minute.',502)
 
 def txt_records(domain): return dns_lookup(domain,'TXT')
+
+# ---------- a company's own sign-in address (mail.theircompany.com) ----------
+LOGIN_HOST=re.compile(r'(?=.{4,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.){2,}[a-z]{2,63}')
+def clean_login_host(raw, mail_host, own_domain):
+    """A sign-in address a company may use: a subdomain of its OWN mail domain (mail.acme.in for acme.in),
+    never an IP, never ours. Tying it to their domain means nobody can claim someone else's name."""
+    host=str(raw or '').strip().lower().rstrip('.')
+    if host.startswith(('http://','https://')) or '/' in host: raise APIError('Enter only the address, like mail.yourcompany.com.')
+    if not LOGIN_HOST.fullmatch(host): raise APIError('Enter a subdomain, like mail.yourcompany.com.')
+    base='.'.join(str(mail_host).lower().split('.')[-2:])
+    if host==str(mail_host).lower() or host.endswith('.'+base) or host==base: raise APIError('That address belongs to Dejoiy. Use a subdomain of your own domain.')
+    if not host.endswith('.'+own_domain.lower()): raise APIError(f'Use a subdomain of {own_domain}, like mail.{own_domain}.')
+    return host
+def clean_brand(data):
+    """What a company may change on its sign-in page: its name, one colour and one line of text. Text only, no HTML."""
+    text=lambda v,n: re.sub(r'[\x00-\x1f<>]','',str(v or '')).strip()[:n]
+    colour=str(data.get('colour') or '').strip().lower()
+    if colour and not re.fullmatch(r'#[0-9a-f]{6}',colour): raise APIError('Pick the colour as #rrggbb, like #1f5ce0.')
+    return {'name':text(data.get('name'),60),'tagline':text(data.get('tagline'),120),'colour':colour}
+def host_points_here(host, mail_host, lookup=None):
+    """True when the address reaches this mail server: a CNAME to it, or the same A records."""
+    lookup=lookup or dns_lookup
+    if str(mail_host).lower() in lookup(host,'CNAME'): return True
+    ours=set(lookup(mail_host,'A')); theirs=set(lookup(host,'A'))
+    return bool(theirs) and theirs<=ours
 
 # Outgoing mail to Gmail and other outside domains is relayed through Amazon SES, so SES may send for every domain.
 SPF_INCLUDES=[x for x in os.environ.get('SPF_INCLUDES','amazonses.com').replace(',',' ').split() if re.fullmatch(r'[a-z0-9.-]+',x)]
@@ -1528,7 +1553,9 @@ class Handler(SimpleHTTPRequestHandler):
             raw=b'window.DEJOIY_LIVE=true;'; self.send_response(200); self.send_header('Content-Type','text/javascript'); self.send_header('Cache-Control','no-store'); self.end_headers(); self.wfile.write(raw); return
         if self.path.startswith('/api/'):
             try:
-                if self.path=='/api/config': return self.reply(200,{'mode':'live','configured':bool(self.server.zimbra)})
+                if self.path=='/api/config':
+                    custom=self.custom_host()
+                    return self.reply(200,{'mode':'live','configured':bool(self.server.zimbra),**({'brand':{**custom['brand'],'domain':custom['domain']}} if custom else {})})
                 # Dejoiy Updates are public news, shown on the home and admin landing pages too. Company boxes never are.
                 if self.path=='/api/public/updates':
                     posts=[p for p in dejoiy_posts(self.server.updates.get('dejoiy')) if p.get('audience','both')!='internal']
@@ -1644,6 +1671,45 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_response(200); self.send_header('Content-Type',mime); self.send_header('Content-Length',str(len(raw)))
         self.send_header('Cache-Control',cache); self.send_header('Content-Security-Policy',"default-src 'none'; sandbox")
         self.end_headers(); self.wfile.write(raw)
+    def login_hosts(self):
+        store=getattr(self.server,'hosts',None)
+        return store.get('all') if store else {}
+    def custom_host(self):
+        """The company whose own sign-in address this request came in on, or None."""
+        host=(self.headers.get('Host') or '').split(':')[0].lower()
+        entry=self.login_hosts().get(host)
+        return {**entry,'host':host} if isinstance(entry,dict) else None
+    def login_host_action(self, session, data):
+        """Admin console: see, set or remove a domain's own sign-in address and its sign-in page look."""
+        client,token,scope=self.admin_session(session)
+        perms=client.actor_perms(token,session['user']['email'],scope)
+        if scope and perms is not None and 'roles.manage' not in perms: raise APIError('Your role does not allow this. Ask an admin for "'+PERMISSIONS['roles.manage']+'".',403)
+        domain=str(data.get('domain','')).strip().lower()
+        if not DOMAIN_NAME.fullmatch(domain) or (scope and domain!=scope): raise APIError('You can only change your own domain.',403)
+        lookup=node(ADMIN,'GetDomainRequest'); lookup.append(node(ADMIN,'domain',{'by':'name'},domain)); client.call(lookup,token)  # the domain exists and this admin may see it
+        store=self.server.hosts; mail_host=self.server.mail_host
+        with LOCK:
+            hosts=store.get('all'); current=next((h for h,e in hosts.items() if e.get('domain')==domain),None)
+            op=data.get('op')
+            if op=='login_host_set':
+                host=clean_login_host(data.get('host'),mail_host,domain)
+                if hosts.get(host,{}).get('domain',domain)!=domain: raise APIError('That address is already used by another company.',409)
+                if len(hosts)>=200 and host not in hosts: raise APIError('No more sign-in addresses can be added right now. Contact Dejoiy.',503)
+                if not host_points_here(host,mail_host): raise APIError(f'{host} does not point to {mail_host} yet. Add a CNAME record: {host.split(".")[0]} -> {mail_host}, wait a few minutes and try again.',409)
+                if current and current!=host: hosts.pop(current,None)
+                hosts[host]={'domain':domain,'brand':clean_brand(data)}; current=host
+            elif op=='login_host_remove':
+                if current: hosts.pop(current,None)
+                current=None
+            if op in ('login_host_set','login_host_remove'):
+                store.put('all',hosts)
+                target=getattr(self.server,'hosts_file',None)
+                if target:  # the list the server's certificate job reads (deploy/custom-hosts.sh)
+                    try: Path(target).write_text(''.join(h+'\n' for h in sorted(hosts)))
+                    except OSError: pass
+        entry=hosts.get(current) if current else None
+        return {'domain':domain,'host':current or '','brand':(entry or {}).get('brand',{'name':'','tagline':'','colour':''}),'target':mail_host,
+            'pointing':bool(current) and host_points_here(current,mail_host)}
     def domain(self, session):
         email=session['user']['email'].lower()
         return email.rsplit('@',1)[1] if '@' in email else ''
@@ -2115,7 +2181,8 @@ class Handler(SimpleHTTPRequestHandler):
                 if self.path=='/api/shine/avatar': return self.reply(200,self.shine_avatar(data))
                 return self.reply(200,self.shine_calendar(data) if self.path=='/api/shine/calendar' else self.shine_login(data))
             origin=self.headers.get('Origin')
-            if origin not in (self.server.app_origin,getattr(self.server,'admin_origin',None)) or not origin: raise APIError('Invalid request origin',403)
+            custom=self.custom_host()  # a company's own verified sign-in address counts as this site, for itself only
+            if not origin or origin not in (self.server.app_origin,getattr(self.server,'admin_origin',None),'https://'+custom['host'] if custom else None): raise APIError('Invalid request origin',403)
             if self.headers.get('Content-Type','').split(';')[0]!='application/json': raise APIError('JSON required',415)
             length=int(self.headers.get('Content-Length','0'))
             if not 0<length<=MAX_REQUEST_BYTES: raise APIError('Request too large or empty',413)
@@ -2141,6 +2208,9 @@ class Handler(SimpleHTTPRequestHandler):
             if self.path=='/api/login':
                 email=str(data.get('email','')).strip(); password=str(data.get('password',''))
                 if not email or len(email)>320 or not password or len(password)>4096: raise APIError('Enter an email and password')
+                if custom:  # on a company's own address only that company signs in; "priya" means priya@theirdomain
+                    if '@' not in email: email=email+'@'+custom['domain']
+                    if not email.lower().endswith('@'+custom['domain']): raise APIError('This sign-in page is for '+custom['domain']+' mailboxes. Others sign in at '+self.server.app_origin.split('//')[1]+'.',403)
                 return self.start_session(email,password)
             sid,s=self.session()
             if not secrets.compare_digest(self.headers.get('X-CSRF-Token',''),s['csrf']): raise APIError('Invalid request token',403)
@@ -2168,6 +2238,8 @@ class Handler(SimpleHTTPRequestHandler):
                     s.pop('admin_token',None); s.pop('admin_expires',None)
                     SESSIONS[sid]=s
                 return self.reply(200,{'ok':True})
+            if self.path=='/api/admin/action' and data.get('op') in ('login_host_get','login_host_set','login_host_remove'):
+                return self.reply(200,self.login_host_action(s,data))
             if self.path=='/api/admin/action':
                 client,token,scope=self.admin_session(s)
                 provisioner=getattr(self.server,'provisioner',None)
@@ -2240,6 +2312,8 @@ def serve():
     server.appearance=AppearanceStore(os.environ.get('APPEARANCE_DB') or (str(Path(os.environ['SESSION_DB']).with_name('appearance.sqlite')) if os.environ.get('SESSION_DB') else None))
     url=os.environ.get('ZIMBRA_URL'); server.zimbra=Zimbra(url) if url else None
     server.update_files=AppearanceStore((str(Path(os.environ['SESSION_DB']).with_name('update-files.sqlite')) if os.environ.get('SESSION_DB') else None),'files')
+    server.hosts=AppearanceStore((str(Path(os.environ['SESSION_DB']).with_name('login-hosts.sqlite')) if os.environ.get('SESSION_DB') else None),'hosts')
+    server.hosts_file=os.environ.get('CUSTOM_HOSTS_FILE') or (str(Path(os.environ['SESSION_DB']).with_name('custom-hosts.txt')) if os.environ.get('SESSION_DB') else None)
     server.booking=AppearanceStore((str(Path(os.environ['SESSION_DB']).with_name('booking.sqlite')) if os.environ.get('SESSION_DB') else None),'booking')
     server.updates=AppearanceStore((str(Path(os.environ['SESSION_DB']).with_name('updates.sqlite')) if os.environ.get('SESSION_DB') else None),'updates')
     server.ui_settings=AppearanceStore((str(Path(os.environ['SESSION_DB']).with_name('settings.sqlite')) if os.environ.get('SESSION_DB') else None),'ui_settings')
