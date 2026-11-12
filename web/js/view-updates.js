@@ -43,6 +43,10 @@ const load = ()=> window.Live?.enabled ? Live.request("updates") : Promise.resol
 const send = data => window.Live?.enabled ? Live.request("updates", data) : Promise.resolve(demo.post(data));
 const readFile = file => new Promise((ok,fail)=>{ const r=new FileReader(); r.onload=()=>ok(String(r.result).split(",")[1]||""); r.onerror=()=>fail(new Error("Couldn't read "+file.name)); r.readAsDataURL(file); });
 
+/* The Home page shows the same posts as a strip of cards. */
+window.Updates = { load, KINDS, cover(post){ const f=(post.files||[]).find(f=>f.image);
+  return f ? fileUrl(f) : /^\/assets\/updates\/[a-z0-9-]+\.svg$/.test(post.art||"") ? post.art : post.photo ? "/api/public/photo/"+encodeURIComponent(post.photo.id) : ""; } };
+
 Views.updates = function(el, box){
   const route = box==="dejoiy" ? "news" : "company";
   let view = null, filter = "all", picked = [], kind = "news", audience = "both", composing = false;

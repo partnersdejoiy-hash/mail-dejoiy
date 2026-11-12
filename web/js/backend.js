@@ -133,7 +133,7 @@ const Live={enabled:!!window.DEJOIY_LIVE,csrf:'',more:false,avatars:{},
     });
   },
   install(){
-    App.NAV=App.NAV.filter(([route])=>['mail:inbox','calendar','news','company','contacts','admin','settings'].includes(route) && (route!=='admin'||Store.state.user?.isAdmin===true));
+    App.NAV=App.NAV.filter(([route])=>['today','mail:inbox','calendar','news','company','contacts','admin','settings'].includes(route) && (route!=='admin'||Store.state.user?.isAdmin===true));
     const local={}; for(const name of ['setRead','toggleStar','toggleImportant','moveTo','deleteForever','addLabel'])local[name]=Mail[name].bind(Mail);
     let queue=Promise.resolve();
     const mutate=(data,apply)=>{const job=queue.then(async()=>{await this.request('action',data);apply();App.refreshNav();if(App.route==='mail')App.render();});queue=job.catch(()=>{});return job;};
@@ -153,7 +153,7 @@ const Live={enabled:!!window.DEJOIY_LIVE,csrf:'',more:false,avatars:{},
     App.render=function(){
       if(this.route==='admin'&&Store.state.user?.isAdmin===true){location.assign(ADMIN_URL);return;}
       if(this.route==='admin'&&Store.state.user?.isAdmin!==true){document.getElementById('view').innerHTML='<div class="empty-note"><h1>Administrator access required</h1><p>This mailbox does not have administration permissions.</p><a href="#/mail:inbox">Return to your inbox</a></div>';this.refreshNav();return;}
-      if(['chat','today'].includes(this.route)){
+      if(this.route==='chat'){
         document.getElementById('view').innerHTML='<div class="empty-note">This feature is not connected to your business mailbox yet. <a href="#/mail:inbox">Open Mail</a></div>';this.refreshNav();return;
       }original();
     };

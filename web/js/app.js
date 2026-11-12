@@ -102,7 +102,7 @@ const App = {
 
   /* ---------------- navigation chrome ---------------- */
   NAV: [
-    ["today","🏠","Today"],["mail:inbox","📥","Inbox"],["calendar","📅","Calendar"],
+    ["today","🏠","Home"],["mail:inbox","📥","Inbox"],["calendar","📅","Calendar"],
     ["news","📣","Dejoiy Updates"],["company","🏢","Company"],
     ["contacts","👥","Contacts"],["notes","📝","Notes"],["chat","💬","Chat"],
     ["admin","🛡️","Admin"],["settings","⚙️","Settings"]
@@ -124,7 +124,7 @@ const App = {
       this.ui.activeTab=null; this.ui.quickFilter="all"; this.ui.sel.clear(); this.go(b.dataset.nav); document.body.classList.remove("nav-open");
     }));
     const bn = document.getElementById("bottomnav");
-    const items = Live.enabled ? [["mail:inbox","inbox","Inbox"],["shine","chat","Chat"],["calendar","calendar","Calendar"],["contacts","contacts","Contacts"],["settings","settings","Settings"]] : [["today","home","Today"],["mail:inbox","inbox","Mail"],["calendar","calendar","Calendar"],["chat","chat","Chat"]];
+    const items = Live.enabled ? [["mail:inbox","inbox","Inbox"],["shine","chat","Chat"],["calendar","calendar","Calendar"],["contacts","contacts","Contacts"],["settings","settings","Settings"]] : [["today","home","Home"],["mail:inbox","inbox","Mail"],["calendar","calendar","Calendar"],["chat","chat","Chat"]];
     bn.innerHTML = items.map(([r,ico,label])=>{
       const active = this.route===(r.includes(":")?r.split(":")[0]:r) && (!r.includes(":") || this.ui.folder===r.split(":")[1]);
       if(r==="shine") return `<button data-shine class="b-shine"><span class="b-ico">${Icons.get(ico)}</span>${label}<i data-shine-badge hidden></i></button>`;
