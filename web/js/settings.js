@@ -75,7 +75,7 @@ const Settings = {
   updateBadge(count){
     if(count===undefined){ try{ count = Mail.counts().unread; }catch(_){ return; } }
     const on = this.ui.unreadBadge!==false;
-    document.title = on && count ? `(${count}) Dejoiy Mail` : "Dejoiy Mail";
+    const app = window.DM_BRAND || "Dejoiy Mail"; document.title = on && count ? `(${count}) ${app}` : app;
     try{
       if(on && count && navigator.setAppBadge) navigator.setAppBadge(count).catch(()=>{});
       else if(navigator.clearAppBadge) navigator.clearAppBadge().catch(()=>{});

@@ -219,3 +219,5 @@ html[data-mail-layout="list"] .code-chip{grid-column:2/4;grid-row:2}
 html[data-scenic="true"] .home-card,html[data-scenic="true"] .home-mail{background:color-mix(in srgb,var(--surface) 88%,transparent);backdrop-filter:blur(10px)}
 @media(max-width:680px){.home{gap:22px}.home-unread{width:100%;justify-content:space-between}.home-strip{grid-auto-columns:78%}.home-arrows{display:none}}
 @media(prefers-reduced-motion:reduce){.home-card{transition:none}}
+
+.brand-name.is-text{font-weight:800;font-size:20px;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}

@@ -68,6 +68,10 @@ const Live={enabled:!!window.DEJOIY_LIVE,csrf:'',more:false,avatars:{},
     Store.save=()=>{try{localStorage.setItem('dejoiy-live-prefs',JSON.stringify(Store.state.prefs));}catch(_){}}; Store.reset=()=>location.reload();
     let session;
     try{session=await this.request('session');}catch(_){session=await this.login();}
+    // on a company's own sign-in address the app carries the company's name: the tab title and the name at the top left
+    this.request('config').then(c=>{ const name=c.brand?.name; if(!name) return; window.DM_BRAND=name+' Mail'; document.title=window.DM_BRAND;
+      const el=document.querySelector('#brand-home .brand-name'); if(el){ el.textContent=window.DM_BRAND; el.classList.add('is-text'); }
+      document.getElementById('brand-home')?.setAttribute('aria-label',window.DM_BRAND+' home'); }).catch(()=>{});
     this.csrf=session.csrf; Store.state.user=session.user;
     const onAdminSite=String(location.hostname||'').startsWith('admin-');
     if(new URLSearchParams(location.search).get('next')==='joi'){location.replace('/joi/sso');return new Promise(()=>{});}
