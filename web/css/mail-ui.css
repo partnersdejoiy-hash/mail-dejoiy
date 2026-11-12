@@ -155,3 +155,25 @@ html[data-photo-theme="true"] #view{box-shadow:0 10px 35px #0002}
 @media(max-width:680px){.joi-btn{padding:2px;margin-right:6px;height:34px}.joi-btn span{display:none}}
 /* a group mention chip in To/Cc/Bcc (@all, @allS) */
 .chip.group{background:#ff4fa3;color:#121212;font-weight:700}
+
+/* "to me ▾" details, like Gmail: From / To / Date, each address tappable */
+button.tm-to{background:none;border:0;padding:0;font:inherit;font-size:12px;color:var(--ink-3);cursor:pointer;text-align:left;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+button.tm-to:hover,button.tm-to:focus-visible{color:var(--ink)}
+.tm-caret{display:inline-block;transition:transform .15s}button.tm-to[aria-expanded="true"] .tm-caret{transform:rotate(180deg)}
+.tm-details{margin:8px 0 14px;padding:12px 14px;border-radius:12px;background:var(--surface-2);font-size:12px;display:grid;gap:8px}
+.tm-details[hidden]{display:none}
+.thread-message:not(.open) .tm-details{display:none}
+.tm-drow{display:grid;grid-template-columns:64px minmax(0,1fr);gap:10px;align-items:start;color:var(--ink-2)}
+.tm-drow>span{color:var(--ink-3);padding-top:2px}
+.tm-drow>div{display:flex;flex-wrap:wrap;gap:4px 10px;min-width:0}
+.tm-person{background:none;border:0;padding:2px 0;font:inherit;color:var(--ink);cursor:pointer;text-align:left;max-width:100%;overflow-wrap:anywhere;min-height:24px}
+.tm-person span{color:var(--ink-2)}.tm-person:hover span,.tm-person:focus-visible span{text-decoration:underline}
+/* sign-in codes: a chip in the list, a card on top of the open mail */
+.code-chip{margin-top:6px;padding:6px 12px;border:0;border-radius:999px;background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent);font:600 12px/1.2 inherit;cursor:pointer;justify-self:start;width:max-content;max-width:100%}
+.code-chip:hover{background:color-mix(in srgb,var(--accent) 26%,transparent)}
+html[data-mail-layout="list"] .code-chip{grid-column:2/4;grid-row:2}
+.code-card{display:grid;gap:10px;justify-items:start;margin:4px 0 18px;padding:16px 18px;border-radius:14px;background:var(--surface-2)}
+.code-card>span{font-size:12px;color:var(--ink-2)}
+.code-card>b{font:600 30px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.18em;font-variant-numeric:tabular-nums;color:var(--ink);user-select:all}
+.code-card>small{font-size:11px;color:var(--ink-3)}
+@media(max-width:680px){html[data-mail-layout] .code-chip{display:inline-block;min-height:32px}.tm-person{min-height:32px}.tm-drow>span{padding-top:8px}}

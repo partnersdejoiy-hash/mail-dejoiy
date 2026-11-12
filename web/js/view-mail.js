@@ -113,6 +113,7 @@ Views.mail = function(el, folder){
             <span class="m-date">${fmtDate(e.date)}</span>${hover?`<span class="m-hover"><button data-hact="archive" title="Archive" aria-label="Archive">${Icons.get("archive")}</button><button data-hact="trash" title="Delete" aria-label="Delete">${Icons.get("trash")}</button><button data-hact="read" title="${e.read?'Mark as unread':'Mark as read'}" aria-label="${e.read?'Mark as unread':'Mark as read'}">${Icons.get("unread")}</button></span>`:""}</div>
           <div class="m-subj">${esc(e.subject)}</div>
           <div class="m-snip">${esc(strip(e.latest.body)).slice(0,90)}</div>
+          ${(c=>c?`<button class="code-chip" data-code="${c}" aria-label="Copy code ${c}">Copy code: ${c}</button>`:"")(codeOf(e.latest))}
           ${(e.labels||[]).length?`<span class="m-labels">${e.labels.map(chip).join(" ")}</span>`:""}
         </div>
       </div>`;}).join("") + (pages>1||(window.Live&&Live.enabled&&Live.more&&ui.page===pages-1)?`<div class="list-pager"><button class="btn sm" id="pg-prev" ${ui.page?"":"disabled"}>${Icons.get("back")} Newer</button><span>${ui.page*Settings.pageSize()+1}–${ui.page*Settings.pageSize()+items.length} of ${all.length}${window.Live&&Live.enabled&&Live.more?"+":""}</span><button class="btn sm" id="pg-next" ${ui.page<pages-1||(window.Live&&Live.enabled&&Live.more)?"":"disabled"}>Older ${Icons.get("forward")}</button></div>`:"")
@@ -139,6 +140,7 @@ Views.mail = function(el, folder){
       cb.checked ? ui.sel.add(cb.dataset.check) : ui.sel.delete(cb.dataset.check);
       cb.closest(".msg-row").classList.toggle("selected",cb.checked);updateSelection();
     }));
+    listEl.querySelectorAll("[data-code]").forEach(b=> b.addEventListener("click", ev=>{ ev.stopPropagation(); copyText(b.dataset.code, "Code copied."); }));
     listEl.querySelectorAll("[data-star]").forEach(st=> st.addEventListener("click", async ev=>{
       ev.stopPropagation(); const thread=Mail.getThread(st.dataset.star);const target=!(thread?.starred);await Promise.all((thread?.ids||[st.dataset.star]).map(id=>{const message=Mail.get(id);if(Boolean(message?.starred)!==target)return Mail.toggleStar(id);}));renderList();App.refreshNav();
     }));
@@ -295,17 +297,24 @@ Views.mail = function(el, folder){
   function chip(l){ return `<span class="lbl" data-tone="${labelTone(l)}">${esc(l)}</span>`; }
   const me = ()=> (Store.state.user.email||"").toLowerCase();
   const recipients = m=> [...(m.to||[]),...(m.cc||[])].map(a=>a.toLowerCase()===me()?"me":a).join(", ") || "undisclosed recipients";
+  /* Gmail's "to me ▾": who it's from, everyone it went to, and when. Each address opens a small menu. */
+  const person = (email, name)=>`<button class="tm-person" data-person="${esc(email)}" data-pname="${esc(name||"")}">${name&&name!==email?`<b>${esc(name)}</b> `:""}<span>${esc(email)}</span></button>`;
+  const detailsHtml = m=>{ const row=(label,html)=>html?`<div class="tm-drow"><span>${label}</span><div>${html}</div></div>`:"";
+    return row("From", person(m.from.email, m.from.name)) + row("Reply to", m.replyTo&&m.replyTo!==m.from.email?person(m.replyTo):"")
+      + row("To", (m.to||[]).map(a=>person(a)).join("")) + row("Cc", (m.cc||[]).map(a=>person(a)).join(""))
+      + row("Date", esc(new Date(m.date).toLocaleString([], {day:"numeric",month:"short",year:"numeric",hour:"numeric",minute:"2-digit"}))); };
   const messageHtml = (m, open)=>`<article class="thread-message ${open?"open":""}" data-mid="${esc(m.id)}">
       <div class="tm-head" role="button" tabindex="0" aria-expanded="${open}">
         ${Profile.avatar(m.from.email, m.from.name, "r-avatar")}
         <div class="tm-who"><div class="tm-line"><b>${esc(m.from.name||m.from.email)}</b>${Profile.isJoi(m.from.email)?` <span class="ai-badge" title="Joi is an AI. It can make mistakes.">AI</span>`:""} <span class="tm-email">&lt;${esc(m.from.email)}&gt;</span></div>
           <div class="tm-ps" data-ps="${esc(String(m.from.email||"").toLowerCase())}" hidden></div>
-          <div class="tm-to">to ${esc(recipients(m))}</div>
+          <button class="tm-to" data-details aria-expanded="false" title="Show details">to ${esc(recipients(m))} <span class="tm-caret" aria-hidden="true">▾</span></button>
           <div class="tm-snip">${esc(strip(m.body)).slice(0,160)}</div></div>
         <div class="tm-side">${m.hasAttachment?Icons.get("paperclip"):""}<span class="tm-date">${fmtDate(m.date)}</span>
           <button class="icon-btn sm tm-act" data-mreply="${esc(m.id)}" title="Reply" aria-label="Reply">${Icons.get("reply")}</button>
           <button class="icon-btn sm tm-act" data-mmore="${esc(m.id)}" title="More" aria-label="More options">${Icons.get("more")}</button></div>
       </div>
+      <div class="tm-details" hidden>${detailsHtml(m)}</div>
       <div class="tm-content">
         ${Profile.isJoi(m.from.email)?`<p class="ai-note"><span aria-hidden="true">&#129302;</span> Joi is an AI. It can make mistakes.</p>`:""}
         ${(m.labels||[]).length?`<div class="thread-labels">${m.labels.map(chip).join(" ")}</div>`:""}
@@ -342,6 +351,7 @@ Views.mail = function(el, folder){
     readerEl.innerHTML = `<div class="mail-card" data-tone="${t}">
       ${t?`<span class="mc-tag">${toneName(t)}</span>`:""}
       <div class="r-subject">${esc(e.subject)}${thread?.count>1?` <span class="thread-count">${thread.count} messages</span>`:""}</div>
+      ${(c=>c?`<div class="code-card"><span>Code requested</span><b>${c}</b><button class="btn" data-code="${c}">Copy code</button><small>Found in this email. Never share a code with anyone who asks for it.</small></div>`:"")(codeOf(e))}
       <div class="thread-messages">${messages.map((m,i)=>{
         if(fold.length && i===1) return `<button class="thread-fold" id="thread-fold"><span>${fold.length}</span> older messages</button>`;
         if(fold.includes(m)) return "";
@@ -362,6 +372,13 @@ Views.mail = function(el, folder){
       head.addEventListener("click", ev=>{ if(!ev.target.closest("button")) toggle(); });
       head.addEventListener("keydown", ev=>{ if(ev.target===head&&(ev.key==="Enter"||ev.key===" ")){ ev.preventDefault(); toggle(); } });
     });
+    readerEl.querySelectorAll("[data-code]").forEach(b=> b.addEventListener("click", ()=> copyText(b.dataset.code, "Code copied.")));
+    readerEl.querySelectorAll("[data-details]").forEach(b=> b.addEventListener("click", ev=>{ ev.stopPropagation();
+      const box=b.closest(".thread-message").querySelector(".tm-details"); box.hidden=!box.hidden; b.setAttribute("aria-expanded",String(!box.hidden)); }));
+    readerEl.querySelectorAll("[data-person]").forEach(b=> b.addEventListener("click", ev=>{ ev.stopPropagation(); const a=b.dataset.person;
+      App.menu(b,[{label:"Copy address",fn:()=>copyText(a,"Address copied.")},
+        {label:"Emails with "+(b.dataset.pname||a.split("@")[0]),fn:()=>App.go("search:"+encodeURIComponent(a))},
+        {label:"Write to them",fn:()=>{ App.go("compose:new"); setTimeout(()=>{ const t=document.getElementById("c-to"); if(t) t.value=a; },120); }}]); }));
     readerEl.querySelectorAll("[data-mreply]").forEach(b=> b.addEventListener("click", ()=> App.go("compose:reply:"+b.dataset.mreply)));
     readerEl.querySelectorAll("[data-mmore]").forEach(b=> b.addEventListener("click", ev=>{ ev.stopPropagation(); const mid=b.dataset.mmore;
       App.menu(b,[{label:"↩ Reply",fn:()=>App.go("compose:reply:"+mid)},{label:"↩↩ Reply all",fn:()=>App.go("compose:replyall:"+mid)},{label:"↪ Forward",fn:()=>App.go("compose:forward:"+mid)}]); }));
@@ -431,6 +448,23 @@ function foldQuote(body){
   button.title="Show trimmed content"; button.setAttribute("aria-label","Show trimmed content"); button.setAttribute("aria-expanded","false"); button.textContent="•••";
   parts[0].before(button); parts.forEach(p=>p.classList.add("quoted-hidden"));
   button.addEventListener("click", ()=>{ const show=button.getAttribute("aria-expanded")!=="true"; button.setAttribute("aria-expanded",String(show)); parts.forEach(p=>p.classList.toggle("quoted-hidden",!show)); });
+}
+
+async function copyText(text, done){
+  try{ await navigator.clipboard.writeText(text); App.toast(done); }
+  catch(_){ App.toast("Couldn't copy. The code is "+text); }
+}
+/* A sign-in or verification code in a mail someone sent you ("Your code is 244839"), like Gmail's
+   "Copy code". Needs a code word near a 4-8 digit number; years, amounts and phone numbers don't count. */
+const CODE_WORD=/\b(code|otp|passcode|password|verification|verify|one[- ]time|pin)\b/gi;
+const CODE_NUM=/(?<![\d.,:\/#$₹€£+-])(\d{3}[ -]\d{3}|\d{4,8})(?!\d|[.,:\/-]\d|\s?(?:am|pm|gb|mb|kb|%|inr|usd|rs)\b)/gi;
+function codeOf(m){
+  if(!m || m.folder==="sent" || m.folder==="drafts") return "";
+  const pick=text=>{ CODE_WORD.lastIndex=0; let w;
+    while((w=CODE_WORD.exec(text))){ const after=text.slice(w.index, w.index+140); CODE_NUM.lastIndex=0; let n;
+      while((n=CODE_NUM.exec(after))){ const c=n[1].replace(/[ -]/g,""); if(!/^(19|20)\d\d$/.test(c)) return c; } }
+    return ""; };
+  return pick(m.subject||"") || pick(strip(m.body).slice(0,1500));
 }
 
 function strip(h){ const d=new DOMParser().parseFromString((h||"").replace(/<br\s*\/?>|<\/(p|div|li|tr|h[1-6])>/gi,"$& "),"text/html"); d.querySelectorAll("blockquote").forEach(q=>{ const intro=q.previousElementSibling; if(intro&&/wrote:\s*$/i.test(intro.textContent||"")) intro.remove(); q.remove(); }); return (d.body.textContent||"").replace(/\s+/g," ").trim(); }
