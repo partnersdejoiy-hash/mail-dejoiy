@@ -143,7 +143,7 @@ const Mail = {
     const me = (Store.state.user.email||"").toLowerCase(), not=list=>a=>!list.some(x=>x.toLowerCase()===a.toLowerCase());
     // Replying to your own message goes back to the people you wrote to, as in Gmail.
     const mine = (e.from.email||"").toLowerCase()===me;
-    const to = mine ? (e.to||[]) : [e.from.email];
+    const to = mine ? (e.to||[]) : [e.replyTo || e.from.email]; // the sender's Reply-To wins, as in every mail app
     const cc = all ? (mine ? (e.cc||[]) : (e.cc||[]).concat(e.to||[])).filter(a=>a.toLowerCase()!==me).filter(not(to)) : [];
     return { to: to.join(", "), cc:[...new Set(cc)].join(", "), inReplyTo:e.messageId||"", origId:String(e.id), replyType:"r",
       subject: (/^re:/i.test(e.subject)?e.subject:"Re: "+e.subject),
