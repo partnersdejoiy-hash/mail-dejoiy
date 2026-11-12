@@ -108,6 +108,11 @@ const unavailable = what => `<div class="adm-card adm-muted">${esc(what)} is not
 
 function overview(main, d){
   const used=d.users.reduce((n,u)=>n+(u.used||0),0), stopped=(d.services||[]).filter(s=>!s.running);
+  // Zoho-style summary: who is active, who went quiet, who never signed in, who is switched off
+  const seen=u=>{ const m=/^(\d{4})(\d\d)(\d\d)/.exec(u.lastLogin||""); return m?Date.UTC(+m[1],m[2]-1,+m[3]):0; }, month=Date.now()-30*864e5;
+  const on=d.users.filter(u=>u.status==="active");
+  const people=[["Active",on.filter(u=>seen(u)>=month).length,"good"],["Quiet",on.filter(u=>seen(u)&&seen(u)<month).length,"warn"],["Never signed in",on.filter(u=>!seen(u)).length,"mute"],["Switched off",d.users.length-on.length,"bad"]];
+  const top=[...d.users].sort((a,b)=>(b.used||0)-(a.used||0)).slice(0,8), biggest=Math.max(1,...top.map(u=>u.used||0));
   main.innerHTML=head("Overview",d.scope?`Your company mail on ${d.scope}.`:"Your organisation at a glance.",`<button class="adm-btn ghost" id="ov-refresh">${icon("refresh")} Refresh</button>`)+`
     <div class="adm-stats">
       <a class="adm-card adm-stat" href="#/users"><b>${d.users.length}</b><span>Mailboxes</span></a>
@@ -118,22 +123,50 @@ function overview(main, d){
     <div class="adm-card"><div class="adm-card-head"><h2>Server health</h2>${d.services?`<span class="adm-pill ${stopped.length?"bad":"good"}">${stopped.length?stopped.length+" stopped":"All running"}</span>`:""}</div>
       ${d.scope?`<p class="adm-muted">Dejoiy monitors the mail servers for you around the clock.</p>`:d.services?`<div class="adm-services">${d.services.map(s=>`<div class="adm-service ${s.running?"up":"down"}"><i aria-hidden="true"></i><span>${esc(s.service)}</span><small>${s.running?"Running":"Stopped"}</small></div>`).join("")}</div>`:`<p class="adm-muted">Server health is available to full administrators.</p>`}
     </div>
-    <div class="adm-card"><div class="adm-card-head"><h2>Largest mailboxes</h2><a href="#/users">All mailboxes →</a></div>
-      <table class="adm-table"><thead><tr><th>Mailbox</th><th>Used</th><th>Limit</th></tr></thead><tbody>
-      ${[...d.users].sort((a,b)=>(b.used||0)-(a.used||0)).slice(0,5).map(u=>`<tr><td><b>${esc(u.name)}</b><small>${esc(u.email)}</small></td><td>${mb(u.used)}</td><td>${u.limit?mb(u.limit):"Unlimited"}</td></tr>`).join("")}
-      </tbody></table></div>`;
+    <div class="adm-two">
+      <div class="adm-card"><div class="adm-card-head"><h2>People</h2><a href="#/users">All mailboxes →</a></div>
+        <div class="adm-seg" role="img" aria-label="${people.map(p=>p[1]+" "+p[0]).join(", ")}">${people.filter(p=>p[1]).map(p=>`<i class="${p[2]}" style="flex:${p[1]}"></i>`).join("")}</div>
+        <ul class="adm-legend">${people.map(p=>`<li><i class="${p[2]}"></i><span>${p[0]}</span><b>${p[1]}</b></li>`).join("")}</ul>
+        <p class="adm-muted">Quiet = no sign-in for 30 days. A mailbox nobody uses still counts on your plan.</p></div>
+      <div class="adm-card"><div class="adm-card-head"><h2>Mail security</h2><a href="#/domains">Domains →</a></div>
+        <div id="ov-dns"><p class="adm-muted">Checking each domain's public DNS…</p></div></div>
+    </div>
+    <div class="adm-card"><div class="adm-card-head"><h2>Storage by mailbox</h2><a href="#/users">All mailboxes →</a></div>
+      <div class="adm-bars">${top.map(u=>`<div class="adm-bar"><span title="${esc(u.email)}">${esc(u.name)}</span>
+        <div class="adm-bar-track" role="img" aria-label="${esc(u.name)} uses ${mb(u.used||0)}${u.limit?" of "+mb(u.limit):""}"><i class="${u.limit&&(u.used||0)/u.limit>0.9?"full":""}" style="width:${Math.max(1,Math.round((u.used||0)/(u.limit||biggest)*100))}%"></i></div>
+        <small>${mb(u.used||0)}${u.limit?" of "+mb(u.limit):""}</small></div>`).join("")||`<p class="adm-muted">No mailboxes yet.</p>`}</div></div>`;
   $("ov-refresh").addEventListener("click",()=>reload("Refreshed."));
+  // Mail security: how many domains have each DNS record live (MX to receive, SPF/DKIM/DMARC to be trusted)
+  (async()=>{ const box=$("ov-dns"), domains=d.domains.slice(0,12), tally={};
+    for(const x of domains){ try{ const out=await act({op:"dns_records",domain:x.domain});
+      for(const r of out.records){ const k=tally[r.kind]=tally[r.kind]||{ok:0,all:0,missing:[]}; k.all++; if(r.ok) k.ok++; else k.missing.push(x.domain); } }catch(_){ /* not allowed or lookup failed: left out */ } }
+    if(!$("ov-dns")) return;
+    const kinds=Object.entries(tally);
+    box.innerHTML=kinds.length?kinds.map(([kind,k])=>`<div class="adm-bar"><span>${esc(kind)}</span>
+      <div class="adm-bar-track" role="img" aria-label="${esc(kind)} live on ${k.ok} of ${k.all} domains"><i class="${k.ok===k.all?"good":"warn"}" style="width:${Math.max(2,Math.round(k.ok/k.all*100))}%"></i></div>
+      <small>${k.ok}/${k.all}${k.missing.length?` · fix ${esc(k.missing[0])}${k.missing.length>1?" +"+(k.missing.length-1):""}`:""}</small></div>`).join("")
+      +(d.domains.length>12?`<p class="adm-muted">First 12 domains checked.</p>`:"")
+      :`<p class="adm-muted">DNS couldn't be checked right now. Open Domains → DNS setup for each domain.</p>`; })();
 }
 
+/* The mailbox list as a spreadsheet file. Cells starting with = + - @ get a quote so Excel never runs them as formulas. */
+function exportUsers(d){
+  const cell=v=>{ let t=String(v??""); if(/^[=+\-@]/.test(t)) t="'"+t; return '"'+t.replace(/"/g,'""')+'"'; };
+  const rows=[["Name","Email","Status","Department","Title","Role","Used (MB)","Limit (MB)","Last sign-in","Aliases"],
+    ...d.users.map(u=>[u.name,u.email,u.status,u.department||"",u.title||"",u.role,u.used==null?"":Math.round(u.used/1048576),u.limit?Math.round(u.limit/1048576):"",when(u.lastLogin),(u.aliases||[]).join(" ")])];
+  const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob(["\ufeff"+rows.map(r=>r.map(cell).join(",")).join("\r\n")],{type:"text/csv"}));
+  a.download="mailboxes-"+new Date().toISOString().slice(0,10)+".csv"; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
 function users(main, d){
   const plans=d.plans||[], planName=id=>{const n=(id&&plans.find(p=>p.id===id)?.name)||"default";return n.charAt(0).toUpperCase()+n.slice(1);};
-  main.innerHTML=head("Mailboxes",`${d.users.length} mailboxes`,`<input type="search" id="u-search" placeholder="Search name or email" aria-label="Search mailboxes">${can("mailboxes.manage")?'<button class="adm-btn primary" id="u-add">+ New mailbox</button>':""}`)+`
+  main.innerHTML=head("Mailboxes",`${d.users.length} mailboxes`,`<input type="search" id="u-search" placeholder="Search name or email" aria-label="Search mailboxes"><button class="adm-btn ghost" id="u-export">Export CSV</button>${can("mailboxes.manage")?'<button class="adm-btn primary" id="u-add">+ New mailbox</button>':""}`)+`
     <div class="adm-card adm-flush"><table class="adm-table" id="u-table"><thead><tr><th>Mailbox</th><th>Status</th><th>Department</th><th>Role</th><th>Plan</th><th>Storage</th><th>Last sign-in</th><th></th></tr></thead><tbody>
     ${d.users.map((u,i)=>`<tr data-q="${esc((u.name+" "+u.email+" "+(u.department||"")+" "+(u.title||"")).toLowerCase())}"><td><b>${esc(u.name)}</b><small>${esc(u.email)}</small></td>
       <td><span class="adm-pill ${u.status==="active"?"good":"warn"}">${esc(u.status)}</span></td><td>${esc(u.department||"—")}</td><td>${esc(u.title||u.role)}${u.title?`<small>${esc(u.role)}</small>`:""}</td><td>${esc(planName(u.cosId))}</td>
       <td>${mb(u.used)}${u.limit?` <small>of ${mb(u.limit)}</small>`:""}</td><td><small>${esc(when(u.lastLogin))}</small></td>
       <td><button class="adm-btn ghost sm" data-edit="${i}">Manage</button></td></tr>`).join("")}
     </tbody></table></div>`;
+  $("u-export").addEventListener("click",()=>exportUsers(d));
   $("u-search").addEventListener("input",e=>{const q=e.target.value.trim().toLowerCase();main.querySelectorAll("#u-table tbody tr").forEach(r=>r.hidden=!r.dataset.q.includes(q));});
   $("u-add")?.addEventListener("click",()=>dialog({title:"New mailbox",body:`
     <label>Display name<input id="nu-name" maxlength="200" required></label>
