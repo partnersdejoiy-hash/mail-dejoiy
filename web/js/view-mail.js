@@ -12,7 +12,7 @@ Views.mail = function(el, folder){
   if(folder && folder!==ui.folder) ui.page = 0;
   ui.folder = folder || ui.folder || "inbox";
   // the address bar follows the folder, so a reload opens the same folder (Drafts stays Drafts)
-  if(location.hash!=="#/mail:"+ui.folder) history.replaceState(null, "", "#/mail:"+ui.folder);
+  if(location.hash!=="#/mail:"+ui.folder) history.replaceState(history.state, "", "#/mail:"+ui.folder);
   ui.sel = ui.sel || new Set();
   ui.tabs = ui.tabs || [];
   const list = Mail.list(ui.folder);
@@ -368,7 +368,7 @@ Views.mail = function(el, folder){
     readerEl.querySelectorAll("[data-treply]").forEach(b=> b.addEventListener("click", ()=> App.go("compose:"+b.dataset.treply+":"+e.id)));
 
     const b = id2 => barEl.querySelector("#"+id2);
-    const back = b("r-back"); if(back) back.addEventListener("click", ()=>{ if(history.state&&history.state.dmailReader) history.back(); else closeReader(); });
+    const back = b("r-back"); if(back) back.addEventListener("click", ()=>{ closeReader(); if(history.state&&history.state.dmailReader) history.back(); });
     const multi=[...(e.to||[]),...(e.cc||[])].length>1, defaultReply=Settings.ui.defaultReply==="replyall"&&multi?"replyall":"reply";
     b("r-reply").addEventListener("click", ()=> App.go("compose:"+defaultReply+":"+e.id));
     b("r-replyall").addEventListener("click", ()=> App.go("compose:replyall:"+e.id));

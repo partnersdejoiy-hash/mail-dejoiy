@@ -70,6 +70,7 @@ const Live={enabled:!!window.DEJOIY_LIVE,csrf:'',more:false,avatars:{},
     try{session=await this.request('session');}catch(_){session=await this.login();}
     this.csrf=session.csrf; Store.state.user=session.user;
     const onAdminSite=String(location.hostname||'').startsWith('admin-');
+    if(new URLSearchParams(location.search).get('next')==='joi'){location.replace('/joi/sso');return new Promise(()=>{});}
     if(new URLSearchParams(location.search).get('next')==='shine'){location.replace('/shine/sso?return='+encodeURIComponent(new URLSearchParams(location.search).get('return')||'/app/chats'));return new Promise(()=>{});}
     if(new URLSearchParams(location.search).get('next')==='admin'||onAdminSite){ if(session.user.isAdmin===true){location.replace(ADMIN_URL);return new Promise(()=>{});} if(onAdminSite){location.replace(location.protocol+'//'+location.host.replace(/^admin-/,'')+'/');return new Promise(()=>{});} history.replaceState(null,'','/'); }
     await this.loadAppearance();

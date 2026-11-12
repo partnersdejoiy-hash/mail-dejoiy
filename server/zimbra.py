@@ -99,6 +99,20 @@ def joi_app_token(secret, app='mail', minutes=12*60, now=None):
     DEJOIY's internal memory inside Dejoiy Mail. Same format as Joi's own signAppToken."""
     body=b64u(json.dumps({'app':app,'exp':int(((now or time.time())+minutes*60)*1000)},separators=(',',':')).encode())
     return body+'.'+b64u(hmac.new(secret.encode(),body.encode(),hashlib.sha256).digest())
+def joi_signed(secret, claims):
+    body=b64u(json.dumps(claims,separators=(',',':')).encode())
+    return body+'.'+b64u(hmac.new(secret.encode(),body.encode(),hashlib.sha256).digest())
+def joi_read(secret, token, kind, max_seconds):
+    """Claims of a token Joi (or this server) signed with the shared mail-app secret, or None.
+    kind keeps a login token from being used as a mailbox token and the other way round."""
+    if not secret or not isinstance(token,str) or token.count('.')!=1: return None
+    body,mac=token.split('.')
+    if not hmac.compare_digest(mac,b64u(hmac.new(secret.encode(),body.encode(),hashlib.sha256).digest())): return None
+    try: c=json.loads(base64.urlsafe_b64decode(body+'='*(-len(body)%4)))
+    except Exception: return None
+    now=time.time()*1000
+    if not isinstance(c,dict) or c.get('app')!='mail' or c.get('k')!=kind or not isinstance(c.get('exp'),(int,float)) or not now<c['exp']<now+max_seconds*1000: return None
+    return c
 def shine_admin(user):
     return 'platform' if user.get('canManageRoles') is True else 'company' if user.get('isAdmin') is True else ''
 def safe_return(raw, fallback='/app/chats'):
@@ -1614,6 +1628,7 @@ class Handler(SimpleHTTPRequestHandler):
             self.path=path+'.html'
         if re.fullmatch(r'/book/[a-z0-9-]{3,40}',path): self.path='/booking.html'
         if path=='/shine/sso': return self.shine_sso()
+        if path=='/joi/sso': return self.joi_sso()
         if path=='/admin/':
             return self.redirect('/admin')
         if path=='/signup':
@@ -1843,6 +1858,25 @@ class Handler(SimpleHTTPRequestHandler):
         except APIError: return self.redirect('/?next=shine&return='+urllib.parse.quote(back,safe=''))
         t=shine_token(self.server.shine_secret,s['user']['email'],s['user'].get('name',''),shine_admin(s['user']),self.shine_photo(s['user']['email']))
         return self.redirect(self.server.shine_origin+'/auth/dejoiy#t='+urllib.parse.quote(t,safe='')+'&next='+urllib.parse.quote(back,safe=''))
+    def joi_sso(self):
+        # Joi's "Sign in with Dejoiy Mail": signed in here -> back to Joi with a 5-minute token proving this mailbox.
+        srv=self.server
+        if not getattr(srv,'joi_secret',''): return self.send_error(503,'Joi is not connected')
+        try: _,s=self.session()
+        except APIError: return self.redirect('/?next=joi')
+        t=joi_signed(srv.joi_secret,{'app':'mail','k':'login','e':s['user']['email'].lower(),'n':s['user'].get('name',''),'exp':int((time.time()+300)*1000),'d':secrets.token_urlsafe(9)})
+        return self.redirect(srv.joi_url+'/?dmail='+urllib.parse.quote(t,safe=''))
+    def joi_mailbox(self, data):
+        """Joi's server reading one mailbox for its owner, who signed in to Joi with Dejoiy Mail.
+        Joi signs each request (1 minute) with the mail-app secret; the newest mail comes back as text fields."""
+        c=joi_read(getattr(self.server,'joi_secret',''),data.get('token'),'mailbox',120)
+        if not c or not EMAIL.fullmatch(str(c.get('e',''))): raise APIError('Not allowed',403)
+        result=self.server.zimbra.messages(self.delegated(c['e'].lower()))
+        def short(m,size): return {'date':m.get('date'),'from':m.get('from'),'to':m.get('to'),'subject':m.get('subject'),'read':m.get('read'),
+            'hasAttachment':m.get('hasAttachment'),'text':plain(str(m.get('body','')))[:size]}
+        mails=result.get('emails',[])
+        inbox=[m for m in mails if m.get('folder')=='inbox']; sent=[m for m in mails if m.get('folder')=='sent']
+        return {'inbox':[short(m,1500 if i<3 else 200) for i,m in enumerate(inbox[:20])],'unread':sum(1 for m in inbox if not m.get('read')),'sent':[short(m,200) for m in sent[:5]]}
     def redirect(self, location):
         self.send_response(302); self.send_header('Location',location); self.send_header('Cache-Control','no-store'); self.end_headers()
     def account(self, session):
@@ -2066,6 +2100,12 @@ class Handler(SimpleHTTPRequestHandler):
     def do_POST(self):
         try:
             # Shine's server asking for calendar work: no browser, so no Origin; the shared secret instead.
+            if self.path=='/api/joi/mailbox':
+                length=int(self.headers.get('Content-Length','0'))
+                if not 0<length<=MAX_REQUEST_BYTES: raise APIError('Request too large or empty',413)
+                data=json.loads(self.rfile.read(length))
+                if not isinstance(data,dict): raise APIError('JSON object required')
+                return self.reply(200,self.joi_mailbox(data))
             if self.path in ('/api/shine/calendar','/api/shine/login','/api/shine/avatar'):
                 self.shine_allowed()
                 length=int(self.headers.get('Content-Length','0'))
