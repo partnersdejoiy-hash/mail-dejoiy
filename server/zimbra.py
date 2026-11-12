@@ -906,6 +906,9 @@ class Zimbra:
             elif kind=='emails':
                 addresses=[a.strip() for a in str(value).split(',') if a.strip()] if isinstance(value,str) else None
                 if addresses is None or len(addresses)>5 or any(len(a)>254 or not EMAIL.fullmatch(a) for a in addresses): raise APIError(label+' must be valid email addresses (up to five).')
+                # the company's mailbox policy can forbid forwarding: checked here, not only hidden in the page
+                if key=='forwardTo' and addresses and not self.account_info(token)['features']['forwarding']:
+                    raise APIError('Your administrator has turned off forwarding for this mailbox.',403)
                 values[name]=','.join(addresses)
             elif kind=='date':
                 if value=='': values[name]=''
@@ -1185,7 +1188,41 @@ DEFAULT_ROLES=[{'name':'Member','access':'User','perms':[]},{'name':'Team lead',
 OP_PERMISSIONS={**{op:'mailboxes.manage' for op in ('create_user','set_name','status','password','quota','forward','add_alias','remove_alias','set_plan')},
     'delete_user':'mailboxes.delete','dns_records':'domain.view',
     **{op:'teams.manage' for op in ('create_department','set_department','create_list','delete_list','add_member','remove_member','list_members')},
-    **{op:'roles.manage' for op in ('role','set_title','save_roles','company_settings')}}
+    **{op:'roles.manage' for op in ('role','set_title','save_roles','company_settings','policies_get','policies_save','policy_assign')}}
+# ---------- mailbox policies a company sets for itself ----------
+# Each rule is a real mail-server setting on the mailbox, so the server itself enforces it: (lowest, highest, standard value).
+POLICY_NUMBERS={'passwordMinLength':(PASSWORD_MIN,64,PASSWORD_MIN),'passwordMaxAgeDays':(0,365,0),'passwordHistory':(0,24,0),
+    'lockoutAfter':(0,20,10),'lockoutMinutes':(5,1440,30),'sessionHours':(1,720,48),'trashDays':(7,365,30),'spamDays':(7,365,30)}
+POLICY_SWITCHES={'forwarding':True,'imap':True,'pop':False}
+POLICY_MARK='dejoiyPolicy:'
+def standard_policy(): return {'name':'Standard','rules':{**{k:v[2] for k,v in POLICY_NUMBERS.items()},**POLICY_SWITCHES}}
+def clean_policy(raw):
+    """One named policy with every rule present and inside its allowed range (never weaker than Dejoiy's own floor)."""
+    if not isinstance(raw,dict): raise APIError('Invalid policy.')
+    name=re.sub(r'[\x00-\x1f<>:]','',str(raw.get('name',''))).strip()
+    if not 1<=len(name)<=40: raise APIError('Policy names must be 1 to 40 characters.')
+    given=raw.get('rules') if isinstance(raw.get('rules'),dict) else {}; rules={}
+    for key,(low,high,default) in POLICY_NUMBERS.items():
+        value=given.get(key,default)
+        if isinstance(value,bool) or not isinstance(value,int) or not low<=value<=high: raise APIError(f'"{name}": {key} must be a whole number from {low} to {high}.')
+        rules[key]=value
+    if 0<rules['lockoutAfter']<3: raise APIError(f'"{name}": lock a mailbox after at least 3 wrong passwords, or 0 to never lock.')
+    for key,default in POLICY_SWITCHES.items():
+        value=given.get(key,default)
+        if not isinstance(value,bool): raise APIError(f'"{name}": {key} must be on or off.')
+        rules[key]=value
+    return {'name':name,'rules':rules}
+def policy_attrs(policy):
+    """The mail-server settings a policy turns into, plus the policy's name on the mailbox."""
+    r=policy['rules']; flag=lambda on:'TRUE' if on else 'FALSE'
+    out=[('zimbraNotes',POLICY_MARK+policy['name']),('zimbraPasswordMinLength',r['passwordMinLength']),('zimbraPasswordMaxAge',r['passwordMaxAgeDays']),
+        ('zimbraPasswordEnforceHistory',r['passwordHistory']),('zimbraPasswordLockoutEnabled',flag(r['lockoutAfter']>0)),
+        ('zimbraPasswordLockoutMaxFailures',max(r['lockoutAfter'],1)),('zimbraPasswordLockoutDuration',f"{r['lockoutMinutes']}m"),('zimbraPasswordLockoutFailureLifetime','1h'),
+        ('zimbraAuthTokenLifetime',f"{r['sessionHours']}h"),('zimbraMailTrashLifetime',f"{r['trashDays']}d"),('zimbraMailSpamLifetime',f"{r['spamDays']}d"),
+        ('zimbraFeatureMailForwardingEnabled',flag(r['forwarding'])),('zimbraImapEnabled',flag(r['imap'])),('zimbraPop3Enabled',flag(r['pop']))]
+    if not r['forwarding']: out.append(('zimbraPrefMailForwardingAddress',''))  # switching forwarding off also stops mail already being forwarded
+    return [(k,str(v)) for k,v in out]
+
 def read_org(notes):
     """Company roles and the company box name live on the domain itself (its notes), so they stay with the mail server."""
     try: data=json.loads(notes or '')
@@ -1199,11 +1236,17 @@ def read_org(notes):
         perms=role.get('perms') if isinstance(role.get('perms'),list) else (sorted(PERMISSIONS) if access=='Domain admin' else [])
         roles.append({'name':role['name'],'access':access,'perms':sorted({p for p in perms if p in PERMISSIONS and (access=='Domain admin' or p not in CONSOLE_PERMISSIONS)})})
     box=data.get('companyBox') if isinstance(data.get('companyBox'),str) else ''
-    return {'roles':roles or [dict(r,perms=list(r['perms'])) for r in DEFAULT_ROLES],'boxName':box}
+    policies=[]
+    for raw in data.get('mailPolicies') or []:
+        try: policies.append(clean_policy(raw))
+        except APIError: continue
+    policies=policies or [standard_policy()]
+    default=data.get('defaultPolicy') if any(p['name']==data.get('defaultPolicy') for p in policies) else policies[0]['name']
+    return {'roles':roles or [dict(r,perms=list(r['perms'])) for r in DEFAULT_ROLES],'boxName':box,'policies':policies,'defaultPolicy':default}
 def read_roles(notes): return read_org(notes)['roles']
 def write_org(notes, **changes):
     current=read_org(notes); current.update(changes)
-    return json.dumps({'dejoiyRoles':current['roles'],'companyBox':current['boxName']},separators=(',',':'))
+    return json.dumps({'dejoiyRoles':current['roles'],'companyBox':current['boxName'],'mailPolicies':current['policies'],'defaultPolicy':current['defaultPolicy']},separators=(',',':'))
 def role_perms(roles, title, is_admin):
     """A person's permissions: their role's, or everything for a company admin without a role (the owner)."""
     role=next((r for r in roles if title and r['name'].lower()==title.lower()),None)
@@ -1265,7 +1308,7 @@ class Admin(Zimbra):
             a=attributes(element)
             account.update({'cosId':a.get('zimbraCOSId',''),'forward':a.get('zimbraPrefMailForwardingAddress',''),
                 'keepCopy':a.get('zimbraPrefMailLocalDeliveryDisabled')!='TRUE','lastLogin':a.get('zimbraLastLogonTimestamp',''),
-                'created':a.get('zimbraCreateTimestamp',''),'used':usage.get(account['id'],(None,None))[0],'limit':usage.get(account['id'],(None,None))[1]})
+                'policy':(a.get('zimbraNotes') or '')[len(POLICY_MARK):] if (a.get('zimbraNotes') or '').startswith(POLICY_MARK) else '','created':a.get('zimbraCreateTimestamp',''),'used':usage.get(account['id'],(None,None))[0],'limit':usage.get(account['id'],(None,None))[1]})
         def plans():
             return [{'id':c.get('id'),'name':c.get('name'),**cos_fields(attributes(c))} for c in self.call(node(ADMIN,'GetAllCosRequest'),token).findall('{'+ADMIN+'}cos')]
         def lists():
@@ -1331,6 +1374,53 @@ class Admin(Zimbra):
             problem=password_problem(value,str(data.get('email','')))
             if problem: raise APIError(problem)
             return value
+        def company(domain):
+            lookup=node(ADMIN,'GetDomainRequest'); lookup.append(node(ADMIN,'domain',{'by':'name'},domain))
+            found=self.call(lookup,token).find('{'+ADMIN+'}domain')
+            if found is None: raise APIError('Domain not found.',404)
+            return found,read_org(attr(found,'zimbraNotes'))
+        def apply_policy(ident, policy):
+            r=node(ADMIN,'ModifyAccountRequest'); r.append(node(ADMIN,'id',text=ident))
+            for attr_name,value in policy_attrs(policy): r.append(node(ADMIN,'a',{'n':attr_name},value))
+            self.call(r,privileged())
+        def domain_accounts(domain):
+            request=node(ADMIN,'GetAllAccountsRequest'); request.append(node(ADMIN,'domain',{'by':'name'},domain))
+            out=[]
+            for account in self.call(request,token).findall('{'+ADMIN+'}account'):
+                a={x.get('n'):x.text or '' for x in account.findall('{'+ADMIN+'}a')}
+                if a.get('zimbraIsSystemResource')!='TRUE': out.append((account.get('id'),(a.get('zimbraNotes') or '')[len(POLICY_MARK):] if (a.get('zimbraNotes') or '').startswith(POLICY_MARK) else ''))
+            return out
+        if op in ('policies_get','policies_save'):
+            domain=str(data.get('domain','')).strip().lower()
+            if not DOMAIN_NAME.fullmatch(domain) or (scope and domain!=scope): raise APIError('You can only change your own company.',403)
+            found,org=company(domain)
+            if op=='policies_save':
+                raw=data.get('policies')
+                if not isinstance(raw,list) or not 1<=len(raw)<=20: raise APIError('Keep between 1 and 20 policies.')
+                policies=[clean_policy(x) for x in raw]
+                if len({p['name'].lower() for p in policies})!=len(policies): raise APIError('Two policies have the same name.')
+                default=str(data.get('default',''))
+                if not any(p['name']==default for p in policies): raise APIError('Choose which policy new mailboxes get.')
+                r=node(ADMIN,'ModifyDomainRequest'); r.append(node(ADMIN,'id',text=found.get('id')))
+                r.append(node(ADMIN,'a',{'n':'zimbraNotes'},write_org(attr(found,'zimbraNotes'),policies=policies,defaultPolicy=default)))
+                self.call(r,privileged())
+                # every mailbox gets its policy's rules again: its own if it still exists, otherwise the default
+                by_name={p['name']:p for p in policies}; applied=0; failed=0
+                for ident,current in domain_accounts(domain):
+                    try: apply_policy(ident,by_name.get(current) or by_name[default]); applied+=1
+                    except APIError: failed+=1
+                return {'ok':True,'policies':policies,'default':default,'applied':applied,'failed':failed}
+            return {'policies':org['policies'],'default':org['defaultPolicy'],'limits':{k:[v[0],v[1]] for k,v in POLICY_NUMBERS.items()}}
+        if op=='policy_assign':
+            ident=str(data.get('id',''))
+            if not re.fullmatch(r'[a-fA-F0-9-]{36}',ident): raise APIError('Invalid mailbox selection.')
+            lookup=node(ADMIN,'GetAccountRequest'); lookup.append(node(ADMIN,'account',{'by':'id'},ident))
+            account=self.call(lookup,token).find('{'+ADMIN+'}account')
+            if account is None: raise APIError('Mailbox not found.',404)
+            email=own(account.get('name',''))
+            policy=next((p for p in company(email.split('@')[1])[1]['policies'] if p['name']==data.get('policy')),None)
+            if not policy: raise APIError('That policy no longer exists.',404)
+            apply_policy(ident,policy); return {'ok':True,'policy':policy['name']}
         if op=='create_user':
             email=str(data.get('email','')).strip().lower()
             if not re.fullmatch(r'[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+',email) or len(email)>320:
@@ -1342,6 +1432,11 @@ class Admin(Zimbra):
             name=str(data.get('name','')).strip()
             if not name or len(name)>200: raise APIError('Enter a display name of up to 200 characters.')
             r.append(node(ADMIN,'a',{'n':'displayName'},name))
+            try:  # a new mailbox starts on its company's default policy
+                org=company(email.split('@')[1])[1]
+                for attr_name,value in policy_attrs(next(p for p in org['policies'] if p['name']==org['defaultPolicy'])):
+                    if attr_name!='zimbraPrefMailForwardingAddress': r.append(node(ADMIN,'a',{'n':attr_name},value))
+            except APIError: pass
             if not scope: r.append(node(ADMIN,'a',{'n':'zimbraIsAdminAccount'},'TRUE' if role=='Admin' else 'FALSE'))
             if role=='Domain admin':
                 created=self.call(r,token).find('{'+ADMIN+'}account')
@@ -1414,6 +1509,7 @@ class Admin(Zimbra):
                     targets=[t.strip().lower() for t in str(data.get('forward','')).split(',') if t.strip()]
                     if len(targets)>10 or any(len(t)>320 or not EMAIL.fullmatch(t) for t in targets): raise APIError('Enter up to 10 valid forwarding addresses, separated by commas.')
                     if not isinstance(data.get('keepCopy',True),bool): raise APIError('Invalid copy setting.')
+                    if targets and attr(account,'zimbraFeatureMailForwardingEnabled')=='FALSE': raise APIError("This mailbox's policy does not allow forwarding. Change its policy first.",403)
                     r.append(node(ADMIN,'a',{'n':'zimbraPrefMailForwardingAddress'},','.join(targets)))
                     r.append(node(ADMIN,'a',{'n':'zimbraPrefMailLocalDeliveryDisabled'},'FALSE' if data.get('keepCopy',True) or not targets else 'TRUE'))
                 else:
@@ -2311,7 +2407,7 @@ class Handler(SimpleHTTPRequestHandler):
                 perms=client.actor_perms(token,s['user']['email'],scope)
                 out=client.action(token,data,s['user']['email'],scope,provisioner.token if provisioner else None,perms)
                 # what changed and for whom (never the new password or any content); look-ups are not logged
-                if data.get('op') not in ('dns_records','list_members'):
+                if data.get('op') not in ('dns_records','list_members','policies_get'):
                     self.log('admin:'+str(data.get('op'))[:40],s['user']['email'],data.get('email') or data.get('alias') or data.get('domain') or data.get('id') or data.get('name') or '')
                 return self.reply(200,out)
             if self.path=='/api/send':

@@ -12,7 +12,7 @@ const when = stamp => { const m=/^(\d{4})(\d\d)(\d\d)(\d\d)(\d\d)(\d\d)/.exec(st
 
 const SECTIONS = [
   ["overview","home","Overview"],["users","contacts","Mailboxes"],["org","tag","Teams & roles"],["domains","shield","Domains"],
-  ["lists","mail","Mailing lists"],["reports","refresh","Reports"],["plans","tag","Plans"],["settings","settings","Settings"]
+  ["lists","mail","Mailing lists"],["policies","shield","Policies"],["reports","refresh","Reports"],["shine","chat","Chat & meetings"],["plans","tag","Plans"],["settings","settings","Settings"]
 ];
 
 const state = { csrf:"", user:null, data:null, section:(location.hash.slice(2)||"overview") };
@@ -72,7 +72,7 @@ async function load(){
   renderNav(); renderSection();
 }
 function renderSection(){
-  const main=$("adm-main"), fn=({overview,users,org,domains,lists,reports,plans,settings})[state.section]||overview;
+  const main=$("adm-main"), fn=({overview,users,org,domains,lists,policies,reports,shine,plans,settings})[state.section]||overview;
   fn(main, state.data); main.focus({preventScroll:true});
 }
 const reload = async msg => { if(msg) toast(msg); await load(); };
@@ -157,12 +157,80 @@ function exportUsers(d){
   const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob(["\ufeff"+rows.map(r=>r.map(cell).join(",")).join("\r\n")],{type:"text/csv"}));
   a.download="mailboxes-"+new Date().toISOString().slice(0,10)+".csv"; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
 }
+/* Policies: the rules a company sets for its own mailboxes. Every rule is a setting on the mail server, which enforces it. */
+const RULES=[
+  ["passwordMinLength","Shortest password","characters","number"],["passwordMaxAgeDays","Change password every","days (0 = never)","number"],
+  ["passwordHistory","Can't reuse the last","passwords (0 = allowed)","number"],["lockoutAfter","Lock the mailbox after","wrong passwords (0 = never)","number"],
+  ["lockoutMinutes","Stay locked for","minutes","number"],["sessionHours","Sign out automatically after","hours","number"],
+  ["trashDays","Empty Trash after","days","number"],["spamDays","Empty Spam after","days","number"],
+  ["forwarding","Forwarding mail to another address","","switch"],["imap","Other mail apps (IMAP: Outlook, phone mail)","","switch"],["pop","Downloading mail with POP","","switch"]];
+const ruleLine=(p)=>{ const r=p.rules; return [`${r.passwordMinLength}+ character passwords`,r.passwordMaxAgeDays?`changed every ${r.passwordMaxAgeDays} days`:"",
+  r.lockoutAfter?`locks after ${r.lockoutAfter} wrong tries`:"never locks",`signs out after ${r.sessionHours} h`,r.forwarding?"forwarding allowed":"no forwarding",r.imap?"mail apps allowed":"web only"].filter(Boolean).join(" · "); };
+async function policies(main, d){
+  const domains=d.domains.map(x=>x.domain); let domain=d.scope||state.policyDomain||domains[0];
+  if(!domain){ main.innerHTML=head("Policies","Add a domain first.",""); return; }
+  main.innerHTML=head("Policies","Rules for your mailboxes: passwords, lock-out, sign-out, forwarding and mail apps.",
+    (d.scope||domains.length<2?"":`<select id="po-domain" aria-label="Company domain">${domains.map(x=>`<option ${x===domain?"selected":""}>${esc(x)}</option>`).join("")}</select>`)+`<button class="adm-btn primary" id="po-add">+ New policy</button>`)+`<div id="po-body"><p class="adm-muted">Loading…</p></div>`;
+  const pick=$("po-domain"); if(pick) pick.addEventListener("change",()=>{ state.policyDomain=pick.value; policies(main,d); });
+  let out; try{ out=await act({op:"policies_get",domain}); }catch(e){ if($("po-body")) $("po-body").innerHTML=`<p class="adm-error">${esc(e.message)}</p>`; return; }
+  if(!$("po-body")) return;
+  let list=out.policies, def=out.default; const limits=out.limits;
+  const people=d.users.filter(u=>u.email.toLowerCase().endsWith("@"+domain));
+  const save=async(next,nextDefault,done)=>{ const r=await act({op:"policies_save",domain,policies:next,default:nextDefault});
+    list=r.policies; def=r.default; toast(`${done} Applied to ${r.applied} mailbox${r.applied===1?"":"es"}${r.failed?`; ${r.failed} could not be updated`:""}.`); await load(); };
+  const edit=(i)=>{ const isNew=i<0, p=isNew?{name:"",rules:{...list.find(x=>x.name===def).rules}}:list[i];
+    const root=dialog({title:isNew?"New policy":"Edit policy · "+p.name, wide:true, body:`<div class="adm-form">
+      <label>Policy name<input id="pe-name" maxlength="40" value="${esc(p.name)}" placeholder="e.g. Managers, Interns, Strict"></label>
+      ${RULES.map(([k,label,unit,kind])=>kind==="number"
+        ?`<label class="adm-rule"><span>${label}</span><span><input type="number" id="pe-${k}" min="${limits[k][0]}" max="${limits[k][1]}" value="${p.rules[k]}" inputmode="numeric"> <small>${unit} · ${limits[k][0]} to ${limits[k][1]}</small></span></label>`
+        :`<label class="adm-rule adm-check"><span>${label}</span><input type="checkbox" id="pe-${k}" ${p.rules[k]?"checked":""}></label>`).join("")}
+      <p class="adm-muted">Turning forwarding off also stops mail that is already being forwarded. A shorter sign-out time applies from each person's next sign-in.</p></div>`,
+      actions:[{label:"Cancel"},{label:isNew?"Create policy":"Save and apply",primary:true,fn:async()=>{
+        const rules={}; for(const [k,,,kind] of RULES) rules[k]=kind==="number"?parseInt($("pe-"+k).value,10):$("pe-"+k).checked;
+        const item={name:$("pe-name").value.trim(),rules}, next=isNew?[...list,item]:list.map((x,j)=>j===i?item:x);
+        await save(next, !isNew&&def===p.name?item.name:def, isNew?"Policy created.":"Policy saved.");
+      }}]}); void root; };
+  const draw=()=>{ $("po-body").innerHTML=`
+    <div class="adm-policies">${list.map((p,i)=>{ const n=people.filter(u=>(u.policy||def)===p.name).length; return `<div class="adm-card adm-policy">
+      <div class="adm-card-head"><h2>${esc(p.name)}</h2>${p.name===def?`<span class="adm-pill good">New mailboxes get this</span>`:""}</div>
+      <p>${esc(ruleLine(p))}</p><p class="adm-muted">${n} mailbox${n===1?"":"es"}</p>
+      <div class="adm-dialog-actions">${p.name===def?"":`<button class="adm-btn ghost sm" data-default="${i}">Make default</button>`}${list.length>1&&p.name!==def?`<button class="adm-btn ghost sm" data-del="${i}">Delete</button>`:""}<button class="adm-btn sm" data-edit-policy="${i}">Edit</button></div></div>`; }).join("")}</div>
+    <div class="adm-card adm-flush"><div class="adm-card-head adm-pad"><h2>Who follows which policy</h2></div>
+      ${people.length?`<table class="adm-table"><thead><tr><th>Mailbox</th><th>Policy</th></tr></thead><tbody>${people.map(u=>`<tr><td><b>${esc(u.name)}</b><small>${esc(u.email)}</small></td>
+        <td><select data-assign="${esc(u.id)}" aria-label="Policy for ${esc(u.email)}">${u.policy?"":`<option value="" selected>Not set yet (${esc(def)})</option>`}${list.map(p=>`<option ${u.policy===p.name?"selected":""}>${esc(p.name)}</option>`).join("")}</select></td></tr>`).join("")}</tbody></table>`
+        :`<p class="adm-muted adm-pad">No mailboxes on ${esc(domain)} yet.</p>`}</div>`;
+    $("po-body").querySelectorAll("[data-edit-policy]").forEach(b=>b.addEventListener("click",()=>edit(+b.dataset.editPolicy)));
+    $("po-body").querySelectorAll("[data-default]").forEach(b=>b.addEventListener("click",async()=>{ try{ await save(list,list[+b.dataset.default].name,"Default changed."); }catch(e){ toast(e.message); } }));
+    $("po-body").querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",()=>{ const p=list[+b.dataset.del];
+      dialog({title:"Delete "+p.name+"?",body:`<p>Mailboxes on <b>${esc(p.name)}</b> move to <b>${esc(def)}</b> right away.</p>`,actions:[{label:"Cancel"},{label:"Delete policy",danger:true,fn:()=>save(list.filter(x=>x!==p),def,"Policy deleted.")}]}); }));
+    $("po-body").querySelectorAll("[data-assign]").forEach(sel=>sel.addEventListener("change",async()=>{ if(!sel.value) return;
+      try{ await act({op:"policy_assign",id:sel.dataset.assign,policy:sel.value}); const u=d.users.find(u=>u.id===sel.dataset.assign); if(u) u.policy=sel.value; toast("Policy applied."); draw(); }
+      catch(e){ toast(e.message); draw(); } }));
+  };
+  $("po-add").addEventListener("click",()=>edit(-1));
+  draw();
+}
+
+/* Chat & meetings: Shine's own admin console, signed in as you, inside this one. */
+async function shine(main){
+  main.innerHTML=head("Chat & meetings","Shine's admin console: people, channels, meetings and its audit log.",`<a class="adm-btn ghost" id="sh-open" target="_blank" rel="noopener" hidden>Open in a new tab</a>`)+`<div id="sh-body"><p class="adm-muted">Opening Shine…</p></div>`;
+  let s; try{ s=await api("shine"); }catch(e){ if($("sh-body")) $("sh-body").innerHTML=`<p class="adm-error">${esc(e.message)}</p>`; return; }
+  if(!$("sh-body")) return;
+  if(!s.enabled||!/^https:\/\//.test(s.origin||"")){ $("sh-body").innerHTML=`<div class="adm-card"><p>${esc(s.error||"Shine isn't connected to this mail server yet.")}</p></div>`; return; }
+  // the sign-in token is one-use and short-lived: one for the frame, a fresh one when "new tab" is pressed
+  const url=(t,embed)=>`${s.origin}/auth/dejoiy${embed?"?embed=1":""}#t=${encodeURIComponent(t)}&next=${encodeURIComponent("/app/admin"+(embed?"?embed=1":""))}`;
+  const open=$("sh-open"); open.hidden=false; open.href=s.origin+"/app/admin";
+  open.addEventListener("click",async e=>{ e.preventDefault(); const w=window.open("about:blank","_blank"); try{ const f=await api("shine"); w.location=url(f.token,false); }catch(_){ w.location=s.origin+"/app/admin"; } });
+  $("sh-body").innerHTML=`<iframe class="adm-shine" title="Shine admin console" src="${esc(url(s.token,true))}" allow="clipboard-write"></iframe>
+    <p class="adm-muted">If this stays empty, use "Open in a new tab".</p>`;
+}
+
 /* Reports: email numbers for the last 14 days, sign-ins (failed ones flagged) and who changed what. */
 const OPS={create_user:"Created mailbox",delete_user:"Deleted mailbox",password:"Reset password",status:"Changed status",quota:"Changed storage limit",forward:"Changed forwarding",
   add_alias:"Added alias",remove_alias:"Removed alias",set_name:"Renamed",set_plan:"Changed plan",role:"Changed role",set_title:"Changed title",save_roles:"Edited roles",
   company_settings:"Changed company settings",create_domain:"Added domain",delete_domain:"Removed domain",domain_status:"Changed domain status",create_list:"Created list",
   delete_list:"Deleted list",add_member:"Added list member",remove_member:"Removed list member",create_department:"Created department",set_department:"Changed department",
-  login_host_set:"Set sign-in address",login_host_remove:"Removed sign-in address",plan_update:"Edited plan",settings_update:"Changed server settings"};
+  policies_save:"Changed mailbox policies",policy_assign:"Changed a mailbox's policy",login_host_set:"Set sign-in address",login_host_remove:"Removed sign-in address",plan_update:"Edited plan",settings_update:"Changed server settings"};
 async function reports(main, d){
   main.innerHTML=head("Reports",d.scope?`Email and sign-in activity on ${d.scope}.`:"Email and sign-in activity across all domains.",`<button class="adm-btn ghost" id="rp-refresh">${icon("refresh")} Refresh</button>`)+`<div id="rp-body"><p class="adm-muted">Loading…</p></div>`;
   $("rp-refresh").addEventListener("click",()=>reports(main,d));
