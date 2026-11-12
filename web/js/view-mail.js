@@ -104,7 +104,7 @@ Views.mail = function(el, folder){
       previousGroup=group;
       return `${grouped?`<div class="message-group">${esc(group)}</div>`:''}
       <div class="msg-row ${e.read?"":"unread"} ${ui.activeTab===e.latest.id||ui.sel.has(e.id)?"selected":""}" data-tone="${toneOf(e)}" data-id="${e.id}" data-latest-id="${e.latest.id}" role="button" tabindex="0">
-        ${Profile.avatar(e.latest.from?.email, e.latest.from?.name, "m-avatar")}
+        ${Profile.avatar(e.latest.from?.email, e.latest.from?.name, "m-avatar", e.latest.verified)}
         <input type="checkbox" class="m-check" data-check="${e.id}" ${ui.sel.has(e.id)?"checked":""} aria-label="Select message">
         <button class="star ${e.starred?"on":""}" data-star="${e.id}" aria-label="${e.starred?'Unstar message':'Star message'}" aria-pressed="${!!e.starred}">${Icons.get("star")}</button>
         <div class="m-main">
@@ -140,6 +140,7 @@ Views.mail = function(el, folder){
       cb.checked ? ui.sel.add(cb.dataset.check) : ui.sel.delete(cb.dataset.check);
       cb.closest(".msg-row").classList.toggle("selected",cb.checked);updateSelection();
     }));
+    Profile.brandLogos(listEl);
     listEl.querySelectorAll("[data-code]").forEach(b=> b.addEventListener("click", ev=>{ ev.stopPropagation(); copyText(b.dataset.code, "Code copied."); }));
     listEl.querySelectorAll("[data-star]").forEach(st=> st.addEventListener("click", async ev=>{
       ev.stopPropagation(); const thread=Mail.getThread(st.dataset.star);const target=!(thread?.starred);await Promise.all((thread?.ids||[st.dataset.star]).map(id=>{const message=Mail.get(id);if(Boolean(message?.starred)!==target)return Mail.toggleStar(id);}));renderList();App.refreshNav();
@@ -305,7 +306,7 @@ Views.mail = function(el, folder){
       + row("Date", esc(new Date(m.date).toLocaleString([], {day:"numeric",month:"short",year:"numeric",hour:"numeric",minute:"2-digit"}))); };
   const messageHtml = (m, open)=>`<article class="thread-message ${open?"open":""}" data-mid="${esc(m.id)}">
       <div class="tm-head" role="button" tabindex="0" aria-expanded="${open}">
-        ${Profile.avatar(m.from.email, m.from.name, "r-avatar")}
+        ${Profile.avatar(m.from.email, m.from.name, "r-avatar", m.verified)}
         <div class="tm-who"><div class="tm-line"><b>${esc(m.from.name||m.from.email)}</b>${Profile.isJoi(m.from.email)?` <span class="ai-badge" title="Joi is an AI. It can make mistakes.">AI</span>`:""} <span class="tm-email">&lt;${esc(m.from.email)}&gt;</span>${(u=>u?` <button class="tm-unsub" data-unsub="${esc(u)}">Unsubscribe</button>`:"")(unsubLink(m))}</div>
           <div class="tm-ps" data-ps="${esc(String(m.from.email||"").toLowerCase())}" hidden></div>
           <button class="tm-to" data-details aria-expanded="false" title="Show details">to ${esc(recipients(m))} <span class="tm-caret" aria-hidden="true">▾</span></button>
@@ -363,6 +364,7 @@ Views.mail = function(el, folder){
         <button class="btn" data-treply="forward">${Icons.get("forward")} Forward</button>
       </div></div>`;
     readerEl.querySelectorAll(".r-body").forEach(foldQuote);
+    Profile.brandLogos(readerEl);
     readerEl.scrollTop = 0;
     const foldBtn=readerEl.querySelector("#thread-fold");
     if(foldBtn) foldBtn.addEventListener("click", ()=>{ ui.unfolded=true; renderReader(); });

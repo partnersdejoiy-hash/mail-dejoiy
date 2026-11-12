@@ -8,6 +8,7 @@ import time
 import threading
 import sqlite3
 import ipaddress
+import socket
 import base64
 import hashlib
 import hmac
@@ -286,6 +287,49 @@ def dns_lookup(name, kind='TXT'):
 
 def txt_records(domain): return dns_lookup(domain,'TXT')
 
+# ---------- sender logos (BIMI): the brand logo a domain publishes for its own mail ----------
+def verified_sender(results, sender, authserv):
+    """The sender's domain when OUR mail server checked the message and DMARC passed for that very domain, else ''.
+    Only Authentication-Results stamped by our own server count (a sender can write anything into its own headers)."""
+    domain=sender.rsplit('@',1)[-1].lower() if '@' in sender else ''
+    if not domain: return ''
+    for value in results:
+        text=re.sub(r'\s+',' ',str(value or '')).strip().lower()
+        if text.split(';',1)[0].strip().split(' ')[0]!=str(authserv).lower(): continue
+        if not re.search(r'(^|[;\s])dmarc=pass\b',text): continue
+        named=re.search(r'header\.from=([a-z0-9.-]+)',text)
+        if named is None or named.group(1)==domain: return domain
+    return ''
+BIMI_UNSAFE=re.compile(rb'<\s*(script|foreignobject|iframe|image|use|a)\b|\bon[a-z]+\s*=|(xlink:)?href\s*=|javascript:|<!entity|<!doctype',re.I)
+def bimi_record(domain, lookup=None):
+    """The logo link a domain publishes (default._bimi TXT, v=BIMI1; l=https://…svg), only when its DMARC policy
+    is enforced (p=quarantine or p=reject), as the BIMI standard requires. '' when there is none."""
+    lookup=lookup or dns_lookup
+    policy=next((t for t in lookup('_dmarc.'+domain) if t.lower().startswith('v=dmarc1')),'')
+    if not re.search(r'\bp\s*=\s*(quarantine|reject)\b',policy,re.I): return ''
+    record=next((t for t in lookup('default._bimi.'+domain) if t.lower().startswith('v=bimi1')),'')
+    link=re.search(r'\bl\s*=\s*(https://[^\s;"<>]{4,300})',record,re.I)
+    return link.group(1) if link else ''
+def public_host(host):
+    """True when every address of this host is on the public internet (never fetch from inside our own network)."""
+    try: found={info[4][0] for info in socket.getaddrinfo(host,443,type=socket.SOCK_STREAM)}
+    except OSError: return False
+    return bool(found) and all(ipaddress.ip_address(a.split('%')[0]).is_global for a in found)
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs): return None
+def fetch_bimi_logo(url, limit=131072):
+    """The SVG behind a BIMI link, or None. Public https only, no redirects, small, and nothing active inside it."""
+    parsed=urllib.parse.urlsplit(url)
+    if parsed.scheme!='https' or not parsed.hostname or parsed.port not in (None,443) or parsed.username or not public_host(parsed.hostname): return None
+    try:
+        with urllib.request.build_opener(NoRedirect).open(urllib.request.Request(url,headers={'User-Agent':'DejoiyMail-BIMI/1.0','Accept':'image/svg+xml'}),timeout=6) as response:
+            raw=response.read(limit+1)
+    except (OSError,ValueError): return None
+    return raw if clean_bimi_svg(raw,limit) else None
+def clean_bimi_svg(raw, limit=131072):
+    """A BIMI logo is a plain picture: an <svg> with no scripts, links, embedded pages or outside references."""
+    return 0<len(raw)<=limit and b'<svg' in raw[:2048].lower() and not BIMI_UNSAFE.search(raw)
+
 # ---------- a company's own sign-in address (mail.theircompany.com) ----------
 LOGIN_HOST=re.compile(r'(?=.{4,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.){2,}[a-z]{2,63}')
 def clean_login_host(raw, mail_host, own_domain):
@@ -321,7 +365,7 @@ def merged_spf(existing, mail_host):
         if want not in terms: terms.append(want)
     return ' '.join(['v=spf1',*terms,ending])
 
-def domain_records(domain, mail_host, dkim_dir):
+def domain_records(domain, mail_host, dkim_dir, bimi_logo=''):
     """The DNS records a hosted domain needs, each with its public status: ok, missing or conflict."""
     dkim=None
     if dkim_dir:
@@ -348,8 +392,18 @@ def domain_records(domain, mail_host, dkim_dir):
             purpose='Signs every message so it cannot be forged'))
     else: records.append({'kind':'DKIM','type':'TXT','host':'','value':'','ok':False,'status':'pending','found':[],'note':'','pending':True,'purpose':'Signs every message so it cannot be forged'})
     dmarc=[t for t in dns_lookup('_dmarc.'+domain) if t.startswith('v=DMARC1')]
+    enforced=len(dmarc)==1 and bool(re.search(r'\bp\s*=\s*(quarantine|reject)\b',dmarc[0],re.I))
     records.append(record('DMARC','TXT','_dmarc',f'v=DMARC1; p=quarantine; rua=mailto:postmaster@{domain}',len(dmarc)==1,dmarc,
-        'Only one DMARC record is allowed. Delete the extra ones.' if len(dmarc)>1 else '',purpose='Tells Gmail and Outlook what to do with forged mail'))
+        'Only one DMARC record is allowed. Delete the extra ones.' if len(dmarc)>1 else '',
+        purpose='Tells Gmail and Outlook what to do with forged mail'))
+    # p=none still delivers mail, so it stays "ok"; the note is advice, not a fault
+    if len(dmarc)==1 and not enforced: records[-1]['note']='Your DMARC record only watches (p=none), so forged mail still gets through and your logo cannot show. Change it to the value shown.'
+    if bimi_logo:
+        live=[t for t in dns_lookup('default._bimi.'+domain) if t.lower().startswith('v=bimi1')]
+        value=f'v=BIMI1; l={bimi_logo};'
+        records.append(record('BIMI','TXT','default._bimi',value,enforced and any(bimi_logo in t for t in live),live,
+            '' if enforced or not live else 'The logo only shows once DMARC above is p=quarantine or p=reject.',
+            purpose='Shows your logo beside your mail in Yahoo, Apple Mail, Dejoiy Mail and others (Gmail also needs a paid mark certificate)'))
     return records
 
 def signup_records(pending, mail_host, dkim_dir):
@@ -648,7 +702,8 @@ class Zimbra:
         r.append(node(MAIL,'query',text='is:anywhere'))
         out=self.call(r,token); more=out.get('more')=='1'
         for summary in out.findall('{'+MAIL+'}m'):
-            req=node(MAIL,'GetMsgRequest'); req.append(node(MAIL,'m',{'id':summary.get('id'),'read':'0','html':'1','neuter':'1'}))
+            req=node(MAIL,'GetMsgRequest'); wanted=node(MAIL,'m',{'id':summary.get('id'),'read':'0','html':'1','neuter':'1'}); wanted.append(node(MAIL,'header',{'n':'Authentication-Results'}))
+            req.append(wanted)
             response=self.call(req,token); m=response.find('{'+MAIL+'}m')
             if m is None: continue
             addresses=m.findall('{'+MAIL+'}e'); sender=next((e for e in addresses if e.get('t')=='f'),None)
@@ -663,7 +718,8 @@ class Zimbra:
             display=safe_html(rich,images) if rich is not None else html.escape(value).replace('\n','<br>')
             flags=m.get('f',''); attachments=[{'name':p.get('filename'),'size':p.get('s',''),'mid':m.get('id'),'part':p.get('part')} for p in m.iter('{'+MAIL+'}mp') if p.get('filename')]
             subject=m.find('{'+MAIL+'}su')
-            result.append({'id':m.get('id'),'conversationId':m.get('cid') or m.get('id'),'messageId':m.get('mid') or '', 'inReplyTo':m.get('irt') or '', 'from':{'name':sender.get('p') or sender.get('a','') if sender is not None else '', 'email':sender.get('a','') if sender is not None else ''},'to':[e.get('a','') for e in addresses if e.get('t')=='t'],'cc':[e.get('a','') for e in addresses if e.get('t')=='c'],'replyTo':next((e.get('a','') for e in addresses if e.get('t')=='r'),''),'subject':subject.text or '' if subject is not None else '', 'body':display,'folder':reverse.get(m.get('l'),'other'),'read':'u' not in flags,'starred':'f' in flags,'important':'+' in flags or '!' in flags,'date':int(m.get('d','0')),'labels':[label for label in m.get('tn','').split(',') if label],'hasAttachment':bool(attachments),'attachments':attachments})
+            result.append({'id':m.get('id'),'conversationId':m.get('cid') or m.get('id'),'messageId':m.get('mid') or '', 'inReplyTo':m.get('irt') or '', 'from':{'name':sender.get('p') or sender.get('a','') if sender is not None else '', 'email':sender.get('a','') if sender is not None else ''},'to':[e.get('a','') for e in addresses if e.get('t')=='t'],'cc':[e.get('a','') for e in addresses if e.get('t')=='c'],'replyTo':next((e.get('a','') for e in addresses if e.get('t')=='r'),''),
+                'verified':verified_sender([h.text for h in m.findall('{'+MAIL+'}header') if (h.get('n') or '').lower()=='authentication-results'],sender.get('a','') if sender is not None else '',getattr(self,'authserv','') or getattr(self,'mail_host','')),'subject':subject.text or '' if subject is not None else '', 'body':display,'folder':reverse.get(m.get('l'),'other'),'read':'u' not in flags,'starred':'f' in flags,'important':'+' in flags or '!' in flags,'date':int(m.get('d','0')),'labels':[label for label in m.get('tn','').split(',') if label],'hasAttachment':bool(attachments),'attachments':attachments})
         return {'emails':result,'more':more,'limit':50,'offset':offset,'nextOffset':offset+len(out.findall('{'+MAIL+'}m'))}
     def write_message(self, token, data, draft=False, sender=''):
         request=node(MAIL,'SaveDraftRequest' if draft else 'SendMsgRequest')
@@ -1520,7 +1576,9 @@ class Admin(Zimbra):
             domain=str(data.get('domain','')).strip().lower()
             if not DOMAIN_NAME.fullmatch(domain) or (scope and domain!=scope): raise APIError('You can only check your own domain.',403)
             lookup=node(ADMIN,'GetDomainRequest'); lookup.append(node(ADMIN,'domain',{'by':'name'},domain)); self.call(lookup,token)
-            return {'domain':domain,'records':domain_records(domain,self.mail_host,self.dkim_dir)}
+            # Dejoiy's own domains publish the Dejoiy logo; other companies get this once they can upload their own SVG logo
+            logo=getattr(self,'app_url','')+'/assets/brand/bimi-dejoiy.svg' if getattr(self,'app_url','') and (domain=='dejoiy.com' or domain.endswith('.dejoiy.com')) else ''
+            return {'domain':domain,'records':domain_records(domain,self.mail_host,self.dkim_dir,logo)}
         elif op=='delete_domain':
             # Platform admins only (checked above). Zimbra refuses a domain that still has mailboxes or lists.
             ident=str(data.get('id',''))
@@ -1736,6 +1794,11 @@ class Handler(SimpleHTTPRequestHandler):
                 if self.path=='/api/supervisors': return self.reply(200,self.supervisors(s))
                 if self.path=='/api/joi': return self.reply(200,self.joi(s))
                 if self.path=='/api/avatars': return self.reply(200,{'avatars':self.avatar_versions()})
+                if self.path.startswith('/api/bimi?'):
+                    domain=urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get('domain',[''])[0].strip().lower()
+                    if not DOMAIN_NAME.fullmatch(domain) or len(domain)>253: return self.send_error(404)
+                    logo=self.bimi_logo(domain)
+                    return self.image(logo,'image/svg+xml','private, max-age=86400') if logo else self.send_error(404)
                 if self.path.startswith('/api/avatar?'):
                     email=urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get('email',[''])[0].strip().lower()
                     found=(self.server.avatars.get(email) or self.import_shine_photo(email)) if EMAIL.fullmatch(email) else None
@@ -1809,6 +1872,16 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_response(200); self.send_header('Content-Type',mime); self.send_header('Content-Length',str(len(raw)))
         self.send_header('Cache-Control',cache); self.send_header('Content-Security-Policy',"default-src 'none'; sandbox")
         self.end_headers(); self.wfile.write(raw)
+    def bimi_logo(self, domain):
+        """A sender domain's published logo, remembered for a day (and "has none" for six hours)."""
+        cache=self.server.__dict__.setdefault('bimi_cache',{}); now=time.time(); hit=cache.get(domain)
+        if hit and hit[0]>now: return hit[1]
+        try: link=bimi_record(domain); logo=fetch_bimi_logo(link) if link else None
+        except APIError: return hit[1] if hit else None   # DNS trouble: keep what we had, try again next time
+        with LOCK:
+            if len(cache)>=2000: cache.clear()
+            cache[domain]=(now+(86400 if logo else 21600),logo)
+        return logo
     def client_ip(self):
         ip=self.client_address[0]
         try:
@@ -2543,10 +2616,13 @@ def serve():
     server.avatars=AvatarStore(str(state_dir/'avatars.sqlite') if state_dir else None)
     server.media=MediaStore(str(state_dir/'media') if state_dir else None)
     if server.zimbra: server.zimbra.media_prefix=server.app_origin+'/media/'; server.zimbra.app_url=server.app_origin
+    # whose Authentication-Results stamp we trust on incoming mail: our own mail server's name (AUTH_SERVER_ID if it stamps under another)
+    if server.zimbra: server.zimbra.authserv=os.environ.get('AUTH_SERVER_ID') or os.environ.get('MAIL_HOST') or urllib.parse.urlsplit(origin).hostname
     admin_url=os.environ.get('ZIMBRA_ADMIN_URL'); server.admin=Admin(admin_url) if admin_url else None
     state=Path(os.environ['SESSION_DB']).parent if os.environ.get('SESSION_DB') else None
     if server.admin:
         server.admin.mail_host=os.environ.get('MAIL_HOST') or urllib.parse.urlsplit(origin).hostname
+        server.admin.app_url=server.app_origin
         server.admin.dkim_dir=os.environ.get('DKIM_DIR') or (str(state/'dkim') if state else None)
     server.signups=SignupStore(str(state/'signups.sqlite') if state else None)
     server.reserved_domains={d.strip().lower() for d in os.environ.get('RESERVED_DOMAINS','dejoiy.com').split(',') if d.strip()}

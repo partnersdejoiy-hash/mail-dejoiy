@@ -226,3 +226,5 @@ html[data-scenic="true"] .home-card,html[data-scenic="true"] .home-mail{backgrou
 .brand-mark[data-logo-applied] img{object-fit:contain;border-radius:10px}
 .brand-by{display:inline-flex;align-items:center;flex:none;opacity:.85}.brand-by img{display:block}
 .lg-company-logo{display:block;width:56px;height:56px;object-fit:contain;border-radius:12px;margin:0 0 14px;background:#fff}
+
+.is-brand img{object-fit:contain;background:#fff}
