@@ -228,3 +228,8 @@ html[data-scenic="true"] .home-card,html[data-scenic="true"] .home-mail{backgrou
 .lg-company-logo{display:block;width:56px;height:56px;object-fit:contain;border-radius:12px;margin:0 0 14px;background:#fff}
 
 .is-brand img{object-fit:contain;background:#fff}
+
+/* a mail that brings its own design is shown on a white sheet: its colours were chosen for one */
+.r-body .mail-html{background:#fff;color:#121212;color-scheme:light;border-radius:12px;padding:16px;max-width:100%;overflow-x:auto}
+.r-body .mail-html a{color:#0b57d0}
+.r-body .mail-html table{max-width:100%}

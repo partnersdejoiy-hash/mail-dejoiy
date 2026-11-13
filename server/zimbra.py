@@ -607,23 +607,53 @@ class Text(HTMLParser):
 def plain(value):
     p=Text(); p.feed(value); return ''.join(p.parts)
 
+# A designed mail (newsletter, receipt, Joi's letters) is only readable with its own layout, so received mail keeps a
+# small allowlist of inline styles and table attributes. Nothing that loads, runs or leaves its box: no url(), no
+# positioning, no negative offsets. Everything else is dropped as before.
+STYLE_PROPS={'color','background','background-color','font','font-size','font-weight','font-style','font-family','text-align','text-decoration',
+    'text-transform','line-height','letter-spacing','white-space','word-break','vertical-align','padding','margin','border','border-radius',
+    'border-collapse','border-spacing','width','max-width','min-width','height','max-height','min-height','display','overflow','opacity','box-sizing','table-layout'}
+STYLE_SIDES=re.compile(r'(?:padding|margin|border)-(?:top|right|bottom|left)(?:-(?:color|width|style|radius))?|border-(?:color|width|style|(?:top|bottom)-(?:left|right)-radius)')
+STYLE_VALUE=re.compile(r'[a-z0-9#%.,()\'" +/!-]{1,200}')
+STYLE_BAD=re.compile(r'url\s*\(|expression|javascript|(?:^|[\s(,])-\s*[\d.]')
+DISPLAYS={'none','block','inline','inline-block','table','table-row','table-cell'}
+TABLE_ATTRS={'width':r'\d{1,4}%?','height':r'\d{1,4}%?','align':'left|center|right','valign':'top|middle|bottom','bgcolor':r'#[0-9a-f]{3,8}|[a-z]{3,20}',
+    'cellpadding':r'\d{1,2}','cellspacing':r'\d{1,2}','border':r'\d','colspan':r'\d{1,2}','rowspan':r'\d{1,2}'}
+def safe_style(value):
+    """The allowed part of an inline style, or '' when nothing in it is allowed."""
+    kept=[]
+    for part in str(value or '')[:2000].split(';'):
+        name,_,val=part.partition(':'); name=name.strip().lower(); val=' '.join(val.lower().split())
+        if not val or not (name in STYLE_PROPS or STYLE_SIDES.fullmatch(name)): continue
+        if not STYLE_VALUE.fullmatch(val) or STYLE_BAD.search(val): continue
+        if name=='display' and val not in DISPLAYS: continue
+        kept.append(name+':'+val)
+    return ';'.join(kept)
 class SafeHTML(HTMLParser):
     tags={'p','div','span','br','b','strong','i','em','u','s','strike','ul','ol','li','blockquote','pre','code','h1','h2','h3','a','table','tbody','thead','tr','td','th'}
-    def __init__(self, images=None):
-        super().__init__(); self.parts=[]; self.skip=0; self.stack=[]; self.images=images
+    styled_tags={'h4','h5','h6','hr','center','small','sup','sub','font'}
+    def __init__(self, images=None, styled=False):
+        super().__init__(); self.parts=[]; self.skip=0; self.stack=[]; self.images=images; self.styled=styled; self.designed=False
     def handle_starttag(self, tag, attrs):
         if tag in ('script','style','iframe','object','svg','math','head'):
             self.skip+=1; return
         if self.skip: return
         if tag=='img': return self.image(dict(attrs))
-        if tag not in self.tags: return
+        if tag not in self.tags and not (self.styled and tag in self.styled_tags): return
         safe=''
+        if self.styled:
+            given=dict(attrs); style=safe_style(given.get('style'))
+            if style: safe+=' style="'+html.escape(style,quote=True)+'"'; self.designed=True
+            if tag in ('table','tr','td','th'):
+                for name,rule in TABLE_ATTRS.items():
+                    value=(given.get(name) or '').strip().lower()
+                    if value and re.fullmatch(rule,value): safe+=f' {name}="{value}"'
         if tag=='a':
             href=dict(attrs).get('href','').strip()
             if re.match(r'^(?:https?://|mailto:)',href,re.I):
-                safe=' href="'+html.escape(href,quote=True)+'" target="_blank" rel="noopener noreferrer"'
+                safe+=' href="'+html.escape(href,quote=True)+'" target="_blank" rel="noopener noreferrer"'
         self.parts.append('<'+tag+safe+'>')
-        if tag!='br': self.stack.append(tag)
+        if tag not in ('br','hr'): self.stack.append(tag)
     def handle_endtag(self, tag):
         if tag in ('script','style','iframe','object','svg','math','head'):
             self.skip=max(0,self.skip-1); return
@@ -699,9 +729,12 @@ def joi_template(inner, app_url):
         f'<p style="margin:12px 0 0;font:400 12px/1.5 {font};color:#5b5560">&#129302; Joi is an AI. It can make mistakes.</p></td></tr>'
         f'</table></div>')
 
-def safe_html(value, images=None):
-    parser=SafeHTML(images); parser.feed(value); parser.close()
-    return ''.join(parser.parts)+''.join('</'+t+'>' for t in reversed(parser.stack))
+def safe_html(value, images=None, styled=False):
+    """Mail HTML made safe to show. styled=True (received mail only) also keeps the allowlisted layout; a mail that
+    brings its own design is put on a white sheet (class mail-html), because its colours assume one."""
+    parser=SafeHTML(images,styled); parser.feed(value); parser.close()
+    out=''.join(parser.parts)+''.join('</'+t+'>' for t in reversed(parser.stack))
+    return '<div class="mail-html">'+out+'</div>' if parser.designed else out
 
 def web_image(src):
     """Images a sender deliberately put in their own message: plain https links only."""
@@ -813,7 +846,7 @@ class Zimbra:
             value=next((v for t,v in bodies if t=='text/plain'),None)
             if value is None: value=plain(next((v for t,v in bodies if t=='text/html'),''))
             rich=next((v for t,v in bodies if t=='text/html'),None)
-            display=safe_html(rich,images) if rich is not None else html.escape(value).replace('\n','<br>')
+            display=safe_html(rich,images,styled=True) if rich is not None else html.escape(value).replace('\n','<br>')
             flags=m.get('f',''); attachments=[{'name':p.get('filename'),'size':p.get('s',''),'mid':m.get('id'),'part':p.get('part')} for p in m.iter('{'+MAIL+'}mp') if p.get('filename')]
             subject=m.find('{'+MAIL+'}su')
             result.append({'id':m.get('id'),'conversationId':m.get('cid') or m.get('id'),'messageId':m.get('mid') or '', 'inReplyTo':m.get('irt') or '', 'from':{'name':sender.get('p') or sender.get('a','') if sender is not None else '', 'email':sender.get('a','') if sender is not None else ''},'to':[e.get('a','') for e in addresses if e.get('t')=='t'],'cc':[e.get('a','') for e in addresses if e.get('t')=='c'],'replyTo':next((e.get('a','') for e in addresses if e.get('t')=='r'),''),
