@@ -44,8 +44,8 @@ const RESOURCE_FIELDS = [["displayName","Name","text"],["description","Descripti
   ["zimbraCalResAutoDeclineIfBusy","Decline when already booked","bool"],["zimbraCalResAutoDeclineRecurring","Decline repeating meetings","bool"],
   ["zimbraCalResMaxNumConflictsAllowed","Clashes allowed in a repeating meeting","int"],["zimbraHideInGal","Hide from the company directory","bool"]];
 const GLOBAL_GROUPS = [
-  ["Messages",[["zimbraMtaMaxMessageSize","Largest message (MB)","mb","1 to 100"],["zimbraFileUploadMaxSize","Largest upload (MB)","mb","1 to 100"],
-    ["zimbraAttachmentsBlocked","Block all attachments","bool"],["zimbraAttachmentsViewInHtmlOnly","Open attachments as web pages only","bool"],
+  // the message and upload size limits are set in the Settings card above, in one place only
+  ["Messages",[["zimbraAttachmentsBlocked","Block all attachments","bool"],["zimbraAttachmentsViewInHtmlOnly","Open attachments as web pages only","bool"],
     ["zimbraMtaBlockedExtensionWarnRecipient","Tell the recipient when an attachment is blocked","bool"]]],
   ["Delivery",[["zimbraMtaRelayHost","Send outgoing mail through (relay)","text","host:port, empty = send directly"],
     ["zimbraMtaTlsAuthOnly","Only allow sign-in over encrypted connections","bool"],["zimbraSmtpSendAddOriginatingIP","Add the sender's IP to sent mail","bool"],
@@ -359,14 +359,29 @@ async function zimlets(main, d, h){
     try{ await h.act({op:"z_zimlet_status",name:b.dataset.z,enabled:b.dataset.on==="1"}); h.toast("Saved."); zimlets(main,d,h); }catch(x){ h.toast(x.message); b.disabled=false; } }));
 }
 
-async function certs(main, d, h){
-  loading(h,main,"Certificates","Reading the server's certificates…");
-  const r=await h.act({op:"z_certs"});
+async function certs(main, d, h, rest, tries=0, refresh=false){
+  if(!tries) loading(h,main,"Certificates","Reading the server's certificates. This takes about ten seconds.");
+  const title="Certificates", sub="The secure-connection certificates the mail server uses. They renew automatically.";
+  let r;
+  try{ r=await h.act({op:"z_certs",refresh}); }
+  catch(e){ main.innerHTML=h.head(title,sub)+`<div class="adm-card adm-error">${h.esc(e.message||"The certificates could not be read.")} <button class="adm-btn ghost sm" id="ct-again">Try again</button></div>`;
+    h.$("ct-again").addEventListener("click",()=>certs(main,d,h,rest)); return; }
+  if(r.pending && !r.certs.length){
+    // the server is still reading them in the background; ask again (about 2 minutes at most)
+    if(tries>=5){ main.innerHTML=h.head(title,sub)+`<div class="adm-card adm-error">The mail server is taking too long to report its certificates. <button class="adm-btn ghost sm" id="ct-again">Try again</button></div>`;
+      h.$("ct-again").addEventListener("click",()=>certs(main,d,h,rest)); return; }
+    main.querySelector(".adm-card").textContent="Still reading the certificates…";
+    setTimeout(()=>{ if(document.body.contains(main)&&location.pathname.endsWith("/certificates")) certs(main,d,h,rest,tries+1); },3000); return;
+  }
   const left=s=>{ const t=Date.parse(s); return isNaN(t)?"":Math.round((t-Date.now())/864e5); };
-  main.innerHTML=h.head("Certificates","The secure-connection certificates the mail server uses. They renew automatically.")+
+  main.innerHTML=h.head(title,sub)+
+    `<p class="adm-muted">${r.checkedAt?"Checked "+new Date(r.checkedAt).toLocaleString([],{dateStyle:"medium",timeStyle:"short"}):""}${r.pending?" · checking again…":""}
+      <button class="adm-btn ghost sm" id="ct-refresh"${r.pending?" disabled":""}>Check now</button></p>`+
+    (r.error?`<div class="adm-card adm-error">${h.esc(r.error)}</div>`:"")+
     (r.certs.map(c=>{const days=left(c.notAfter);return `<div class="adm-card"><div class="adm-card-head"><h2>${h.esc(c.type)}</h2>${days!==""?pill(days+" days left",days>14):""}</div>
       <dl class="adm-facts"><dt>Issued to</dt><dd>${h.esc(c.subject)}</dd><dt>Issued by</dt><dd>${h.esc(c.issuer)}</dd><dt>Valid from</dt><dd>${h.esc(c.notBefore)}</dd>
       <dt>Valid until</dt><dd>${h.esc(c.notAfter)}</dd><dt>Also covers</dt><dd>${h.esc(c.altNames||"—")}</dd></dl></div>`;}).join("")||`<div class="adm-card">${empty(h,"No certificates reported.")}</div>`);
+  h.$("ct-refresh").addEventListener("click",()=>{ loading(h,main,title,"Reading the server's certificates again…"); certs(main,d,h,rest,1,true); });
 }
 
 async function retention(main, d, h){

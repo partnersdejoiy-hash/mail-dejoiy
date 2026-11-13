@@ -289,6 +289,18 @@ class MediaStore:
         path=self.dir/name
         return path.read_bytes() if path.is_file() else None
 
+def shown_mb(raw):
+    """A size limit stored in bytes, as the whole MB the Settings card shows (10240000 -> 10)."""
+    try: return round(int(raw or 0)/1048576)
+    except ValueError: return 0
+
+
+def size_limit_changes(current, wanted):
+    """The size limits to write: only those whose shown MB was changed, so saving the Settings card
+    never rewrites a limit nobody touched (a stored 10240000 shows as 10 and stays 10240000)."""
+    return [(name, str(mb*1048576)) for name, mb in wanted.items() if mb != shown_mb(current.get(name))]
+
+
 ADMIN_ASSETS = {'/admin.html','/js/admin-app.js','/js/admin-console.js','/css/admin.css'}
 # the console's own pages: /admin/monitor/mail-queues, /admin/manage/accounts/<id>, /admin/search ...
 ADMIN_PAGE = re.compile(r'/admin/[a-z0-9-]+(?:/[a-zA-Z0-9.-]{1,253}){0,3}')
@@ -1402,7 +1414,7 @@ class Admin(Zimbra):
         def settings():
             config=self.call(node(ADMIN,'GetAllConfigRequest'),token)
             a=attributes(config)
-            return {'maxMessageMB':round(int(a.get('zimbraMtaMaxMessageSize') or 0)/1048576),'uploadMaxMB':round(int(a.get('zimbraFileUploadMaxSize') or 0)/1048576),
+            return {'maxMessageMB':shown_mb(a.get('zimbraMtaMaxMessageSize')),'uploadMaxMB':shown_mb(a.get('zimbraFileUploadMaxSize')),
                 'blockedExtensions':sorted({v.text for v in config.findall('{'+ADMIN+'}a') if v.get('n')=='zimbraMtaBlockedExtension' and v.text})}
         every=optional(lists)
         return {'users':accounts,'domains':[{'id':d.get('id'),'domain':d.get('name'),
@@ -1668,8 +1680,8 @@ class Admin(Zimbra):
             extensions=data.get('blockedExtensions')
             if not isinstance(extensions,list) or len(extensions)>200 or any(not isinstance(x,str) or not re.fullmatch(r'[a-z0-9]{1,12}',x) for x in extensions): raise APIError('Blocked file types must be short extensions like exe or js.')
             r=node(ADMIN,'ModifyConfigRequest')
-            r.append(node(ADMIN,'a',{'n':'zimbraMtaMaxMessageSize'},str(size*1048576)))
-            r.append(node(ADMIN,'a',{'n':'zimbraFileUploadMaxSize'},str(upload*1048576)))
+            current={a.get('n'):a.text or '' for a in self.call(node(ADMIN,'GetAllConfigRequest'),token).findall('{'+ADMIN+'}a')}
+            for name,value in size_limit_changes(current,{'zimbraMtaMaxMessageSize':size,'zimbraFileUploadMaxSize':upload}): r.append(node(ADMIN,'a',{'n':name},value))
             for x in sorted(set(extensions)) or ['']: r.append(node(ADMIN,'a',{'n':'zimbraMtaBlockedExtension'},x))
         elif op=='create_department':
             # A department is a team list (sales@…) marked as a department; its members are its people.

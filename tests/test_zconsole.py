@@ -124,3 +124,70 @@ class Checks(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class LiveFixes(unittest.TestCase):
+    """The three things the live read-only test found."""
+    def setUp(self):
+        c.CERTS.update(certs=None, at=0.0, worker=None, error=None)
+
+    def test_slow_certificates_do_not_hold_the_request(self):
+        import threading, time
+        gate = threading.Event()
+        class Slow(Fake):
+            def call(self, r, token=None, timeout=None):
+                if r.tag.endswith('GetCertRequest'):
+                    self.calls.append(('GetCertRequest', '', timeout)); gate.wait(5)
+                    out = ET.Element(A+'GetCertResponse'); ET.SubElement(out, A+'cert', {'type': r.get('type')}); return out
+                return super().call(r, token, timeout)
+        Slow.calls_lock = threading.Lock()
+        f = Slow(); con = c.Console(f, 't', 'root@kaali.in', None, None, z.APIError)
+        old = c.CERT_WAIT; c.CERT_WAIT = 0.2
+        try:
+            t = time.time(); first = con.run({'op': 'z_certs'})
+            self.assertLess(time.time()-t, 2)
+            self.assertTrue(first['pending']); self.assertEqual(first['certs'], [])
+            con.run({'op': 'z_certs'})  # a second visit while it is still reading starts no second read
+            self.assertEqual([x[0] for x in f.calls].count('GetCertRequest'), len(c.CERT_TYPES))
+            gate.set(); c.CERTS['worker'].join(2)
+            done = con.run({'op': 'z_certs'})
+            self.assertFalse(done['pending']); self.assertEqual([x['type'] for x in done['certs']], list(c.CERT_TYPES))
+            self.assertEqual([x[0] for x in f.calls].count('GetCertRequest'), len(c.CERT_TYPES))  # served from the shared copy
+            self.assertEqual({x[2] for x in f.calls if x[0] == 'GetCertRequest'}, {c.CERT_TIMEOUT})
+        finally:
+            c.CERT_WAIT = old; gate.set()
+
+    def test_failed_certificate_read_is_a_plain_error(self):
+        class Down(Fake):
+            def call(self, r, token=None, timeout=None):
+                if r.tag.endswith('GetCertRequest'): raise z.APIError('Mail server is unavailable. Try again later.', 502)
+                return super().call(r, token, timeout)
+        con = c.Console(Down(), 't', 'root@kaali.in', None, None, z.APIError)
+        with self.assertRaisesRegex(z.APIError, 'unavailable'): con.run({'op': 'z_certs'})
+
+    def test_size_limits_are_set_in_one_place(self):
+        self.assertNotIn('zimbraMtaMaxMessageSize', c.CONFIG_ATTRS)
+        self.assertNotIn('zimbraFileUploadMaxSize', c.CONFIG_ATTRS)
+        f, con = console(scope=None, actor='root@kaali.in', global_admin=lambda: None)
+        with self.assertRaises(z.APIError): con.run({'op': 'z_config_update', 'settings': {'zimbraMtaMaxMessageSize': 9}})
+        self.assertEqual(z.shown_mb('10240000'), 10)
+        # saving the card with the value it showed leaves the stored limit alone; a real change is written
+        self.assertEqual(z.size_limit_changes({'zimbraMtaMaxMessageSize': '10240000'}, {'zimbraMtaMaxMessageSize': 10}), [])
+        self.assertEqual(z.size_limit_changes({'zimbraMtaMaxMessageSize': '10240000'}, {'zimbraMtaMaxMessageSize': 25}), [('zimbraMtaMaxMessageSize', str(25*1048576))])
+
+    def test_search_count_matches_the_rows(self):
+        class Dir(Fake):
+            def call(self, r, token=None, timeout=None):
+                if not r.tag.endswith('SearchDirectoryRequest'): return super().call(r, token, timeout)
+                self.calls.append(('SearchDirectoryRequest', r.get('query'), timeout))
+                out = ET.Element(A+'SearchDirectoryResponse', {'searchTotal': '3', 'more': '0'})
+                for n in ('a@kaali.in', 'b@kaali.in'): ET.SubElement(out, A+'account', {'id': n, 'name': n})
+                sysbox = ET.SubElement(out, A+'account', {'id': 's', 'name': 'spam@kaali.in'})
+                ET.SubElement(sysbox, A+'a', {'n': 'zimbraIsSystemResource'}).text = 'TRUE'
+                return out
+        f = Dir(); con = c.Console(f, 't', 'root@kaali.in', None, None, z.APIError)
+        out = con.run({'op': 'z_search', 'text': '', 'types': ['accounts']})
+        self.assertIn('(!(zimbraIsSystemResource=TRUE))', f.calls[-1][1])
+        self.assertEqual(out['total'], len(out['results']))
+        out = con.run({'op': 'z_search', 'text': 'a', 'types': ['accounts'], 'status': 'active'})
+        self.assertTrue(f.calls[-1][1].startswith('(&(|(mail=*a*)'))

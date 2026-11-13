@@ -13,6 +13,8 @@ This module does not import zimbra.py (that runs as __main__); the caller passes
 """
 import re
 import secrets
+import threading
+import time
 import xml.etree.ElementTree as ET
 
 ADMIN = 'urn:zimbraAdmin'
@@ -86,7 +88,8 @@ RESOURCE_ATTRS = {'displayName': T(200), 'description': T(500), 'zimbraCalResCap
     'zimbraCalResAutoAcceptDecline': B, 'zimbraCalResAutoDeclineIfBusy': B, 'zimbraCalResAutoDeclineRecurring': B,
     'zimbraCalResMaxNumConflictsAllowed': I(0, 100), 'zimbraHideInGal': B}
 CONFIG_ATTRS = {
-    'zimbraMtaMaxMessageSize': MB(1, 100), 'zimbraFileUploadMaxSize': MB(1, 100), 'zimbraAttachmentsBlocked': B,
+    # the message and upload size limits live in one place only: the Settings card (op settings_update)
+    'zimbraAttachmentsBlocked': B,
     'zimbraAttachmentsViewInHtmlOnly': B, 'zimbraMtaBlockedExtensionWarnRecipient': B, 'zimbraMtaRelayHost': T(260),
     'zimbraMtaTlsAuthOnly': B, 'zimbraImapCleartextLoginEnabled': B, 'zimbraPop3CleartextLoginEnabled': B,
     'zimbraSpamKillPercent': I(1, 100), 'zimbraSpamTagPercent': I(1, 100), 'zimbraSpamSubjectTag': T(30),
@@ -179,6 +182,12 @@ def changes(allowed, given, Error):
 
 def ldap_escape(value):
     return ''.join('\\%02x' % ord(c) if c in '\\*()\x00' else c for c in value)
+
+
+# certificates are server-wide and change every few weeks: one shared copy, one read at a time
+CERTS = {'lock': threading.Lock(), 'certs': None, 'at': 0.0, 'worker': None, 'error': None}
+CERT_TTL, CERT_WAIT, CERT_TIMEOUT = 3600, 20, 90
+CERT_TYPES = ('mailboxd', 'mta', 'proxy', 'ldap')
 
 
 class Console:
@@ -480,21 +489,24 @@ class Console:
             t = ldap_escape(text)
             parts.append(f'(|(mail=*{t}*)(cn=*{t}*)(sn=*{t}*)(givenName=*{t}*)(displayName=*{t}*)(zimbraMailAlias=*{t}*)(zimbraDomainName=*{t}*)(uid=*{t}*))')
         if status: parts.append(f'(zimbraAccountStatus={status})')
-        query = '(&'+''.join(parts)+')' if len(parts) > 1 else (parts[0] if parts else '')
+        # the mail server's own system mailboxes (spam training, quarantine, directory sync) are never
+        # listed, so leave them out of the search itself: the count then matches the rows shown
+        parts.append('(!(zimbraIsSystemResource=TRUE))')
+        query = '(&'+''.join(parts)+')'
         r = node('SearchDirectoryRequest', {'query': query, 'limit': '50', 'offset': str(offset), 'types': ','.join(types),
             'sortBy': 'name', 'sortAscending': '1', 'countOnly': '0',
             'attrs': 'displayName,zimbraAccountStatus,zimbraLastLogonTimestamp,zimbraMailQuota,zimbraCalResType,zimbraIsSystemResource,zimbraAliasTargetId,zimbraDomainStatus'})
         if domain: r.set('domain', domain)
-        out = self.call(r); rows = []
+        out = self.call(r); rows = []; dropped = 0
         for e in out:
             kind = e.tag.split('}')[1]
-            if kind not in SEARCH_TYPES.values(): continue
             a = attrs_of(e)
-            if a.get('zimbraIsSystemResource') == 'TRUE': continue
+            if kind not in SEARCH_TYPES.values() or a.get('zimbraIsSystemResource') == 'TRUE':
+                dropped += 1; continue
             rows.append({'kind': kind, 'id': e.get('id'), 'name': e.get('name'), 'displayName': a.get('displayName', ''),
                 'status': a.get('zimbraAccountStatus') or a.get('zimbraDomainStatus') or '', 'lastLogin': a.get('zimbraLastLogonTimestamp', ''),
                 'target': e.get('targetName') or '', 'type': a.get('zimbraCalResType', '')})
-        return {'results': rows, 'total': int(out.get('searchTotal', len(rows))), 'more': out.get('more') in ('1', 'true')}
+        return {'results': rows, 'total': max(len(rows)+offset, int(out.get('searchTotal', len(rows)))-dropped), 'more': out.get('more') in ('1', 'true')}
 
     # ----- Configure: classes of service -----
     def z_cos(self, data):
@@ -604,15 +616,46 @@ class Console:
         return {'ok': True}
 
     def z_certs(self, data):
-        sid = next((s.get('id') for s in self.call(node('GetAllServersRequest')).findall(A+'server')), None)
-        if not sid: raise self.Error('Server not found.', 404)
-        out = self.call(node('GetCertRequest', {'type': 'all', 'option': 'self', 'server': sid}), timeout=120)
-        certs = []
-        for c in out.iter(A+'cert'):
-            certs.append({'type': c.get('type'), 'subject': c.findtext(A+'subject') or '', 'issuer': c.findtext(A+'issuer') or '',
-                'notBefore': c.findtext(A+'notBefore') or '', 'notAfter': c.findtext(A+'notAfter') or '',
-                'altNames': c.findtext(A+'SubjectAltName') or ''})
-        return {'certs': certs}
+        """The certificates, read at most once an hour. The mail server reads each one over its own
+        remote-management link (about 8 s), so the read runs in one background
+        thread at a time and a request waits at most CERT_WAIT seconds; the page asks again."""
+        with CERTS['lock']:
+            fresh = CERTS['certs'] is not None and time.time()-CERTS['at'] < CERT_TTL and data.get('refresh') is not True
+            start = not fresh and not (CERTS['worker'] and CERTS['worker'].is_alive())
+        if start:
+            sid = next((s.get('id') for s in self.call(node('GetAllServersRequest')).findall(A+'server')), None)
+            if not sid: raise self.Error('Server not found.', 404)
+        with CERTS['lock']:
+            if start and not (CERTS['worker'] and CERTS['worker'].is_alive()):
+                CERTS['error'] = None
+                CERTS['worker'] = threading.Thread(target=self._read_certs, args=(sid,), daemon=True, name='console-certs')
+                CERTS['worker'].start()
+            worker = CERTS['worker']
+        if not fresh and worker: worker.join(CERT_WAIT)
+        with CERTS['lock']:
+            busy = bool(CERTS['worker'] and CERTS['worker'].is_alive())
+            if CERTS['error'] and not busy and CERTS['certs'] is None: raise self.Error(CERTS['error'], 502)
+            return {'certs': CERTS['certs'] or [], 'checkedAt': int(CERTS['at']*1000) if CERTS['certs'] is not None else None,
+                    'pending': busy, 'error': CERTS['error'] if not busy else None}
+
+    def _read_certs(self, sid):
+        # one call per kind, side by side: about 8 s in all instead of 26 s for type=all
+        found, errors = {}, []
+        def one(kind):
+            try:
+                out = self.call(node('GetCertRequest', {'type': kind, 'option': 'self', 'server': sid}), timeout=CERT_TIMEOUT)
+                found[kind] = [{'type': c.get('type'), 'subject': c.findtext(A+'subject') or '', 'issuer': c.findtext(A+'issuer') or '',
+                    'notBefore': c.findtext(A+'notBefore') or '', 'notAfter': c.findtext(A+'notAfter') or '',
+                    'altNames': c.findtext(A+'SubjectAltName') or ''} for c in out.iter(A+'cert')]
+            except Exception as e:  # shown on the page; the request that started this read may be long gone
+                errors.append(str(e) if isinstance(e, self.Error) and str(e) else 'The mail server did not return its certificates.')
+        readers = [threading.Thread(target=one, args=(k,), daemon=True) for k in CERT_TYPES]
+        for t in readers: t.start()
+        for t in readers: t.join(CERT_TIMEOUT+5)
+        certs = [c for k in CERT_TYPES for c in found.get(k, [])]
+        with CERTS['lock']:
+            if found: CERTS.update(certs=certs, at=time.time())
+            CERTS['error'] = (errors[0] if not found else 'Some certificates could not be read: '+errors[0]) if errors else None
 
     def z_retention(self, data):
         out = self.call(node('GetSystemRetentionPolicyRequest'))
