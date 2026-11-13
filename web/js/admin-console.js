@@ -570,6 +570,38 @@ async function apiTokens(main, d, h, rest, picked){
   draw(r);
 }
 
+async function automations(main, d, h, rest, picked){
+  const title="Automations";
+  const domains=d.scope?[d.scope]:(d.domains||[]).map(x=>x.domain);
+  const domain=d.scope||picked||domains[0]||"";
+  loading(h,main,title);
+  let r;
+  try{ r=await h.act({op:"automations_get",domain}); }
+  catch(e){ main.innerHTML=h.head(title)+`<div class="adm-card adm-error">${h.esc(e.message)}</div>`; return; }
+  const when=t=>t?new Date(t*1000).toLocaleString([],{dateStyle:"medium",timeStyle:"short"}):"";
+  const draw=out=>{
+    r=out; const a=r.important_to_shine;
+    const last=!a.last?`<span class="adm-muted">Nothing posted yet</span>`:`${pill(a.last.ok?"Posted":"Failed",a.last.ok)} <small>${h.esc(when(a.last.at))}${a.last.error?" · "+h.esc(a.last.error):""}</small>`;
+    main.innerHTML=h.head(title,"Ready-made automations that run inside Dejoiy Mail. Switch each one on or off.")+
+      (d.scope?"":`<div class="adm-card"><label>Company <select id="au-domain">${domains.map(x=>`<option${x===domain?" selected":""}>${h.esc(x)}</option>`).join("")}</select></label></div>`)+
+      `<div class="adm-card"><div class="adm-card-head"><h2>Important mail to Shine</h2>${pill(a.on?"On":"Off",a.on)}</div>
+        <p class="adm-muted">When mail from these senders arrives in any mailbox of ${h.esc(domain)}, a message goes to a Shine channel saying who sent it and to which mailbox. Never the mail's text.
+          It is checked about once a minute. It posts as the admin who saves it${a.by?` (now ${h.esc(a.by)})`:""}, who must be a member of that channel.</p>
+        <form id="au-imp" class="adm-wh-form">
+          <label><input type="checkbox" name="on"${a.on?" checked":""}> Switched on</label>
+          <label>Senders <small>addresses or @domain, one per line (up to 50)</small><textarea name="senders" rows="4" placeholder="ceo@bigclient.com&#10;@bank.com">${h.esc(a.senders.join("\n"))}</textarea></label>
+          <label>Shine channel<input name="channel" maxlength="100" placeholder="urgent" value="${h.esc(a.channel)}"></label>
+          <label><input type="checkbox" name="subject"${a.subject?" checked":""}> Also show the subject</label>
+          <div><button class="adm-btn primary">Save</button></div></form>
+        <p>Last result: ${last}</p></div>`;
+    h.$("au-domain")?.addEventListener("change",e=>automations(main,d,h,rest,e.target.value));
+    h.$("au-imp").addEventListener("submit",async e=>{ e.preventDefault(); const f=e.target, btn=f.querySelector("button"); btn.disabled=true;
+      try{ draw(await h.act({op:"automation_save",domain,kind:"important_to_shine",settings:{on:f.elements.on.checked,senders:f.elements.senders.value,channel:f.elements.channel.value.trim(),subject:f.elements.subject.checked}})); h.toast("Saved."); }
+      catch(x){ h.toast(x.message); btn.disabled=false; } });
+  };
+  draw(r);
+}
+
 window.AdminPages = { servers, statistics, queues, sessions, usersDetail, listsDetail, resources, domainsDetail, cos, cosDetail:cos,
-  globalSettings, rights, zimlets, certs, retention, webhooks, apiTokens, bulkImport, mailboxTools, caches, search };
+  globalSettings, rights, zimlets, certs, retention, webhooks, apiTokens, automations, bulkImport, mailboxTools, caches, search };
 })();

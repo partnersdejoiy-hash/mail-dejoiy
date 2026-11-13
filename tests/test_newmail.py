@@ -60,7 +60,7 @@ class ZimbraSide(unittest.TestCase):
             def call(self, request, token):
                 asked.append((request.find('{%s}query' % z.MAIL).text, request.get('limit'), token))
                 return ET.fromstring(f'<SearchResponse xmlns="{z.MAIL}"><m id="257" d="1794600000000"><e t="t" a="asha@acme.com"/><e t="f" a="pay@shop.in"/><su>Secret subject</su></m><m id="9" d="bad"/></SearchResponse>')
-        self.assertEqual(z.inbox_heads(Fake(), 'tok'), [{'id': '257', 'date': 1794600000000, 'from': 'pay@shop.in'}])
+        self.assertEqual(z.inbox_heads(Fake(), 'tok'), [{'id': '257', 'date': 1794600000000, 'from': 'pay@shop.in', 'subject': 'Secret subject'}])
         self.assertEqual(asked, [('in:inbox', '20', 'tok')])
 
 

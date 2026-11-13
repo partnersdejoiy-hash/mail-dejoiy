@@ -22,7 +22,7 @@ const TREE = [
   ["Configure",[["configure/cos","tag","Class of service","cos",P],["configure/global-settings","settings","Global settings","globalSettings",P],
     ["configure/policies","shield","Mailbox policies","policies"],["configure/admins","shield","Admins & rights","rights",P],
     ["configure/zimlets","layoutlist","Add-ons","zimlets",P],["configure/certificates","check","Certificates","certs",P],
-    ["configure/retention","archive","Retention","retention",P],["configure/webhooks","refresh","Webhooks","webhooks"],["configure/api-tokens","shield","API tokens","apiTokens"]]],
+    ["configure/retention","archive","Retention","retention",P],["configure/webhooks","refresh","Webhooks","webhooks"],["configure/api-tokens","shield","API tokens","apiTokens"],["configure/automations","refresh","Automations","automations"]]],
   ["Tools",[["tools/bulk-import","compose","Bulk import","bulkImport"],["tools/mailbox","inbox","Mailbox tools","mailboxTools"],
     ["tools/caches","refresh","Server caches","caches",P]]],
   ["Search",[["search","search","Search directory","search"]]]

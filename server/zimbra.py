@@ -25,6 +25,7 @@ import dcalendar
 import zconsole
 from webhooks import Webhooks, WebhookError
 from newmail import NewMailWatcher
+from automations import Automations, AutomationError
 from apitokens import ApiTokens, TokenError, SCOPES as API_SCOPES
 from html.parser import HTMLParser
 
@@ -219,7 +220,7 @@ class AuditLog:
                 'active':len(set().union(*[v['active'] for v in series.values()]))},
             'topSenders':top(senders),'failedSignins':top(failed),
             'signins':[event(r) for r in rows if r[1] in ('signin','signin_failed')][:60],
-            'audit':[event(r) for r in rows if r[1].startswith(('admin','api:'))][:100]}
+            'audit':[event(r) for r in rows if r[1].startswith(('admin','api:','automation:'))][:100]}
 
 IMAGE_MAGIC = {'png':lambda b:b.startswith(b'\x89PNG\r\n\x1a\n'),'jpeg':lambda b:b.startswith(b'\xff\xd8\xff'),
     'gif':lambda b:b[:6] in (b'GIF87a',b'GIF89a'),'webp':lambda b:b[:4]==b'RIFF' and b[8:12]==b'WEBP'}
@@ -292,6 +293,7 @@ class MediaStore:
         path=self.dir/name
         return path.read_bytes() if path.is_file() else None
 
+AUTOMATION_OPS=('automations_get','automation_save')
 WEBHOOK_OPS=('webhooks_get','webhook_add','webhook_remove','webhook_set_active','webhook_test')
 APITOKEN_OPS=('apitokens_get','apitoken_add','apitoken_revoke')
 # the automation API: (method, path) -> the token permission it needs
@@ -508,14 +510,30 @@ def delegated_token(provisioner, email):
     if not token: raise APIError('Booking is unavailable right now.',502)
     DELEGATED[email]=(token,time.time()+3600); return token
 def inbox_heads(zimbra, token):
-    """The newest inbox mail as headers only (id, date in ms, sender): what the new-mail watcher compares."""
+    """The newest inbox mail as headers only (id, date in ms, sender, subject): what the new-mail watcher compares.
+    Webhook notes never carry the subject; only an automation whose admin switched it on shows it."""
     r=node(MAIL,'SearchRequest',{'types':'message','limit':'20','sortBy':'dateDesc'}); r.append(node(MAIL,'query',text='in:inbox'))
     out=[]
     for m in zimbra.call(r,token).findall('{'+MAIL+'}m'):
         sender=next((e.get('a','') for e in m.findall('{'+MAIL+'}e') if e.get('t')=='f'),'')
-        try: out.append({'id':m.get('id'),'date':int(m.get('d') or 0),'from':sender})
+        su=m.find('{'+MAIL+'}su')
+        try: out.append({'id':m.get('id'),'date':int(m.get('d') or 0),'from':sender,'subject':(su.text or '') if su is not None else ''})
         except ValueError: pass
     return out
+def shine_admin_call(site, secret, payload, timeout=15):
+    """Shine's admin endpoint (shared secret); its own refusals come back as readable errors."""
+    if not secret: raise APIError("Shine isn't connected to this mail server yet.",503)
+    request=urllib.request.Request(site+'/dejoiy/admin',data=json.dumps(payload).encode(),method='POST',
+        headers={'Content-Type':'application/json','Authorization':'Bearer '+secret})
+    try:
+        with urllib.request.urlopen(request,timeout=timeout) as response: return json.loads(response.read())
+    except urllib.error.HTTPError as error:
+        if error.code==400:
+            try: raise APIError(str(json.loads(error.read()).get('error') or "Shine couldn't do that.")[:200])
+            except ValueError: pass
+        if error.code==404: raise APIError('Shine needs its latest update before it can be managed from here.',502)
+        raise APIError('Shine is not reachable right now.',502)
+    except (urllib.error.URLError,TimeoutError,ValueError): raise APIError('Shine is not reachable right now.',502)
 def domain_mailboxes(provisioner, domain):
     """Every person's address in one domain (system mailboxes left out)."""
     r=node(ADMIN,'GetAllAccountsRequest'); r.append(node(ADMIN,'domain',{'by':'name'},domain))
@@ -2155,18 +2173,7 @@ class Handler(SimpleHTTPRequestHandler):
         except (urllib.error.URLError,TimeoutError,ValueError): raise APIError('Shine is not reachable right now.',502)
     def shine_admin_post(self, payload):
         """Shine's admin endpoint; its own refusals ("can't switch off the super admin") come back as readable errors."""
-        if not self.server.shine_secret: raise APIError("Shine isn't connected to this mail server yet.",503)
-        request=urllib.request.Request(self.server.shine_site+'/dejoiy/admin',data=json.dumps(payload).encode(),method='POST',
-            headers={'Content-Type':'application/json','Authorization':'Bearer '+self.server.shine_secret})
-        try:
-            with urllib.request.urlopen(request,timeout=15) as response: return json.loads(response.read())
-        except urllib.error.HTTPError as error:
-            if error.code==400:
-                try: raise APIError(str(json.loads(error.read()).get('error') or "Shine couldn't do that.")[:200])
-                except ValueError: pass
-            if error.code==404: raise APIError('Shine needs its latest update before it can be managed from here.',502)
-            raise APIError('Shine is not reachable right now.',502)
-        except (urllib.error.URLError,TimeoutError,ValueError): raise APIError('Shine is not reachable right now.',502)
+        return shine_admin_call(self.server.shine_site,self.server.shine_secret,payload)
     def presence(self, session, data):
         """Your Active/Away dot and written status, kept in Shine so both apps show the same thing.
         A heartbeat sends idle; the status menu sends choice and/or text."""
@@ -2542,6 +2549,24 @@ class Handler(SimpleHTTPRequestHandler):
         if data['op']!='apitokens_get':   # never the token itself: its name and id only
             self.log('admin:'+data['op'],s['user']['email'],domain+' '+str(payload.get('name') or out.get('revoked') or '')[:60]+' '+str(out.get('id') or payload.get('id') or ''))
         return out
+    def automation_action(self, s, data):
+        """A company's ready-made automations (see automations.py). Same permission as webhooks."""
+        autos=getattr(self.server,'automations',None)
+        if not autos: raise APIError('Automations are not switched on for this server.',503)
+        client,token,scope=self.admin_session(s)
+        perms=client.actor_perms(token,s['user']['email'],scope)
+        if scope and perms is not None and 'roles.manage' not in perms:
+            raise APIError('Your role does not allow this. Ask an admin for "'+PERMISSIONS['roles.manage']+'".',403)
+        domain=webhook_domain(scope,data.get('domain'))
+        if not scope:
+            lookup=node(ADMIN,'GetDomainRequest'); lookup.append(node(ADMIN,'domain',{'by':'name'},domain))
+            if client.call(lookup,token).find('{'+ADMIN+'}domain') is None: raise APIError('Domain not found.',404)
+        try: out=autos.action(data['op'],{'kind':data.get('kind'),'settings':data.get('settings')},domain,s['user']['email'])
+        except AutomationError as e: raise APIError(str(e))
+        if data['op']!='automations_get':
+            on=(out.get(str(data.get('kind'))) or {}).get('on')
+            self.log('admin:automation_save',s['user']['email'],domain+' '+str(data.get('kind'))[:40]+(' on' if on else ' off'))
+        return out
     def api_v1(self, method):
         """The automation API: Authorization: Bearer <API token>, only ever the token's own company domain.
         Any missing, wrong, expired or revoked token gets the same bare 401."""
@@ -2766,6 +2791,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.reply(200,out)
             if self.path=='/api/admin/action' and data.get('op') in WEBHOOK_OPS:
                 return self.reply(200,self.webhook_action(s,data))
+            if self.path=='/api/admin/action' and data.get('op') in AUTOMATION_OPS:
+                return self.reply(200,self.automation_action(s,data))
             if self.path=='/api/admin/action' and data.get('op') in APITOKEN_OPS:
                 return self.reply(200,self.apitoken_action(s,data))
             if self.path=='/api/admin/action' and data.get('op')=='reports':
@@ -2891,9 +2918,13 @@ def serve():
     server.reserved_domains={d.strip().lower() for d in os.environ.get('RESERVED_DOMAINS','dejoiy.com').split(',') if d.strip()}
     server.provisioner=Provisioner(server.admin,os.environ['PROVISION_ADMIN'],os.environ['PROVISION_ADMIN_PASSWORD']) if server.admin and os.environ.get('PROVISION_ADMIN') and os.environ.get('PROVISION_ADMIN_PASSWORD') else None
     # 'mail.received' webhooks: incoming mail never passes this server, so a watcher looks once a minute (only for companies that asked)
-    if server.hooks and server.provisioner and server.zimbra:
+    # ready-made automations (Configure > Automations), run here on the new-mail watcher
+    server.automations=Automations(state_dir/'automations.json',lambda payload: shine_admin_call(server.shine_site,server.shine_secret,payload),server.audit) if state_dir else None
+    if server.automations: server.automations.start()
+    if (server.hooks or server.automations) and server.provisioner and server.zimbra:
         NewMailWatcher(server.hooks,lambda domain: domain_mailboxes(server.provisioner,domain),
-            lambda email: inbox_heads(server.zimbra,delegated_token(server.provisioner,email))).start()
+            lambda email: inbox_heads(server.zimbra,delegated_token(server.provisioner,email)),
+            listeners=[server.automations] if server.automations else []).start()
     print(f'Dejoiy Mail: {origin}; backend '+('configured' if url else 'requires ZIMBRA_URL'))
     server.serve_forever()
 

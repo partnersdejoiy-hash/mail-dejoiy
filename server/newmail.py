@@ -15,14 +15,18 @@ MAX_BOXES = 300   # per company, per round
 
 
 class NewMailWatcher:
-    def __init__(self, hooks, mailboxes, inbox, every=60):
+    def __init__(self, hooks, mailboxes, inbox, every=60, listeners=()):
         self.hooks, self.mailboxes, self.inbox, self.every = hooks, mailboxes, inbox, every
+        # automations (automations.py) that also want new mail: each has domains() and new_mail(domain, mailbox, mail)
+        self.listeners = list(listeners)
         self.seen = {}   # mailbox -> date (ms) of the newest mail already reported
 
     def check(self):
         """One round. Returns how many notes were queued."""
         queued, seen = 0, {}
-        for domain in sorted(self.hooks.wanting(EVENT)):
+        hooked = self.hooks.wanting(EVENT) if self.hooks else set()
+        wanted = {l: l.domains() for l in self.listeners}
+        for domain in sorted(hooked.union(*wanted.values())):
             try: boxes = list(self.mailboxes(domain))[:MAX_BOXES]
             except Exception: continue          # the mail server is busy or down: try again next round
             for email in boxes:
@@ -35,7 +39,12 @@ class NewMailWatcher:
                 # a mailbox seen for the first time only sets the line: mail that was already there is not news
                 if last is not None:
                     for m in sorted((m for m in mails if m['date'] > last), key=lambda m: m['date']):
-                        queued += self.hooks.send(EVENT, domain, {'actor': m.get('from', ''), 'target': email, 'count': 1, 'message': str(m['id'])})
+                        if domain in hooked:   # the note never carries the subject
+                            queued += self.hooks.send(EVENT, domain, {'actor': m.get('from', ''), 'target': email, 'count': 1, 'message': str(m['id'])})
+                        for listener, domains in wanted.items():
+                            if domain in domains:
+                                try: listener.new_mail(domain, email, m)
+                                except Exception: pass
                 seen[email] = max(newest, last or 0)
         # shortcut: kept in memory, so mail that arrives while the server restarts is not reported; store it when someone depends on every single one
         self.seen = seen   # mailboxes no longer watched are forgotten, so old mail is not reported if they are watched again
