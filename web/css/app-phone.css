@@ -1,0 +1,114 @@
+/* ============ Dejoiy Mail — app-phone.css : the clean phone app look ============
+   Loaded last. Phones only, and only while Settings → Phone app look is "Clean".
+   A calm white inbox: title header, quiet chips, flat rows, a slim tab bar,
+   and the message's actions at the bottom while reading. One accent, used sparingly. */
+.ph-only,#ph-title,#ph-readbar,#ph-size,#ph-search-x{display:none}
+
+@media (max-width:680px){
+  html[data-app-look="clean"]{--ph-pad:16px}
+
+  /* ---- header: avatar, where you are, compose, search ---- */
+  html[data-app-look="clean"] #topbar{min-height:56px;height:auto;margin:0!important;padding:calc(6px + env(safe-area-inset-top)) 12px 6px var(--ph-pad);gap:10px;background:var(--surface)!important;border:0;border-radius:0!important;box-shadow:none}
+  html[data-app-look="clean"] :is(#menu-btn,#joi-btn span,#theme-btn,#shortcuts-btn,#check-mail-btn,#settings-btn,.account-label,.brand){display:none!important}
+  html[data-app-look="clean"] .top-actions{display:contents}
+  html[data-app-look="clean"] #account-btn{order:-1;width:36px;height:36px;margin:0;border-radius:50%;flex:none}
+  html[data-app-look="clean"] #ph-title{display:flex;flex-direction:column;align-items:flex-start;flex:1;min-width:0;padding:4px 0;border:0;background:none;color:var(--ink);font:inherit;text-align:left;cursor:pointer}
+  html[data-app-look="clean"] .ph-name{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:17px;font-weight:700;line-height:1.2;letter-spacing:-.01em}
+  html[data-app-look="clean"] .ph-name::after{content:"";display:inline-block;width:6px;height:6px;margin:0 0 3px 7px;border:solid var(--ink-3);border-width:0 1.6px 1.6px 0;transform:rotate(45deg)}
+  html[data-app-look="clean"] .ph-sub{font-size:12px;line-height:1.3;color:var(--ink-3)}
+  html[data-app-look="clean"] .ph-sub:empty{display:none}
+  html[data-app-look="clean"] .icon-btn.ph-only{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;padding:0;border:0;border-radius:50%;background:none;color:var(--ink)}
+  html[data-app-look="clean"] .icon-btn.ph-only .ui-icon{width:22px;height:22px}
+  html[data-app-look="clean"] .icon-btn.ph-only:active{background:var(--active)}
+  html[data-app-look="clean"] #joi-btn{width:36px;height:36px;padding:0;flex:none}
+
+  /* search opens over the title, with Cancel to leave it */
+  html[data-app-look="clean"] .search-wrap{display:none}
+  html[data-app-look="clean"] body.ph-searching :is(#ph-title,.icon-btn.ph-only,#joi-btn,#account-btn){display:none!important}
+  html[data-app-look="clean"] body.ph-searching .search-wrap{display:flex;flex:1;height:40px;border-radius:12px;background:var(--surface-2);border-color:transparent}
+  html[data-app-look="clean"] body.ph-searching #global-search{font-size:16px}
+  html[data-app-look="clean"] body.ph-searching #ph-search-x{display:block;min-height:44px;padding:0 4px;border:0;background:none;color:var(--ink);font:inherit;font-size:15px;font-weight:600}
+
+  /* ---- list: quiet chips, date groups, flat rows ---- */
+  html[data-app-look="clean"] :is(.mail-heading,.fab){display:none!important}
+  html[data-app-look="clean"] #view{background:var(--surface)!important}
+  html[data-app-look="clean"] .mail-filterbar{padding:6px var(--ph-pad) 8px;gap:8px;min-height:0;border:0}
+  html[data-app-look="clean"] .mail-filterbar button{height:32px;padding:0 13px!important;border:1px solid var(--line)!important;border-radius:16px!important;background:none;color:var(--ink-2);font-size:13px;font-weight:600}
+  html[data-app-look="clean"] .mail-filterbar button.active{background:var(--accent)!important;border-color:var(--accent)!important;color:var(--accent-ink)!important}
+  html[data-app-look="clean"] .message-group{padding:18px var(--ph-pad) 6px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+  html[data-app-look="clean"] .msg-row{min-height:0;margin:0!important;padding:11px var(--ph-pad)!important;column-gap:12px;border:0!important;border-radius:0!important;background:var(--surface)!important;box-shadow:none!important;transform:none!important}
+  html[data-app-look="clean"] .msg-row:active,html[data-app-look="clean"] .msg-row.selected{background:var(--active)!important}
+  html[data-app-look="clean"] .msg-row .m-avatar{width:40px;height:40px;border-radius:50%!important;box-shadow:none;font-size:13px;font-weight:600}
+  html[data-app-look="clean"] .msg-row.unread .m-avatar::after{display:none}
+  html[data-app-look="clean"] .msg-row .m-from{font-size:15px;font-weight:500;color:var(--ink)}
+  html[data-app-look="clean"] .msg-row .m-subj{margin-top:2px;font-size:14px;font-weight:400;color:var(--ink)}
+  html[data-app-look="clean"] .msg-row .m-snip{margin-top:1px;font-size:13px;color:var(--ink-3)}
+  html[data-app-look="clean"] .msg-row .m-date{font-size:12px;font-weight:400;color:var(--ink-3)}
+  html[data-app-look="clean"] .msg-row.unread :is(.m-from,.m-subj){font-weight:700}
+  html[data-app-look="clean"] .msg-row.unread .m-from::before{content:"";display:inline-block;width:7px;height:7px;margin:0 6px 1px 0;border-radius:50%;background:var(--accent)}
+  html[data-app-look="clean"] .msg-row.unread .m-date{color:var(--ink);font-weight:600}
+  html[data-app-look="clean"] .msg-row .m-labels .lbl{background:var(--surface-2)}
+
+  /* ---- tab bar: flat, full width ---- */
+  html[data-app-look="clean"] #bottomnav{left:0!important;right:0!important;bottom:0!important;min-height:0;padding:4px 4px calc(4px + env(safe-area-inset-bottom))!important;border:0;border-top:1px solid var(--line);border-radius:0;background:var(--surface)!important;box-shadow:none}
+  html[data-app-look="clean"] #bottomnav button{min-height:48px;gap:2px;border-radius:10px;font-size:10.5px;font-weight:500;color:var(--ink-3);transform:none}
+  html[data-app-look="clean"] #bottomnav button.active{color:var(--ink);font-weight:700}
+  html[data-app-look="clean"] #bottomnav button.active .b-ico{padding:0;background:none}
+  html[data-app-look="clean"] #bottomnav button.active .ui-icon{stroke-width:2.2}
+  html[data-app-look="clean"] #view{padding-bottom:calc(64px + env(safe-area-inset-bottom))!important}
+
+  /* ---- reading: plain page, actions at the bottom ---- */
+  html[data-app-look="clean"] body.reader-open #topbar{display:none}
+  html[data-app-look="clean"] body.reader-open .r-toolbar{min-height:calc(52px + env(safe-area-inset-top));padding:env(safe-area-inset-top) 6px 0;border:0;background:var(--surface)}
+  html[data-app-look="clean"] .r-toolbar .icon-btn:not(#r-back){display:none}
+  html[data-app-look="clean"] .r-toolbar #r-back{width:44px;height:44px}
+  html[data-app-look="clean"] .reader{padding:4px var(--ph-pad) calc(96px + env(safe-area-inset-bottom))}
+  html[data-app-look="clean"] .mail-card{margin:0;padding:0;border:0;border-radius:0;background:none!important;box-shadow:none;animation:none;--card-ink:var(--ink)}
+  html[data-app-look="clean"] .mc-tag{padding:3px 9px;background:var(--surface-2);color:var(--ink-2);font-size:11px;font-weight:600;transform:none}
+  html[data-app-look="clean"] .mc-tag::before{width:6px;height:6px;background:var(--accent)}
+  html[data-app-look="clean"] .mail-card .r-subject{margin:8px 0 14px;font-size:20px;font-weight:700;line-height:1.3;letter-spacing:-.01em}
+  html[data-app-look="clean"] .mail-card .thread-count{background:var(--surface-2);color:var(--ink-2);font-size:12px}
+  html[data-app-look="clean"] .mail-card .thread-messages{gap:0}
+  html[data-app-look="clean"] .mail-card .thread-message{padding:0;border-radius:0;background:none!important;color:var(--ink);border-top:1px solid var(--line)!important}
+  html[data-app-look="clean"] .mail-card .thread-message:first-child{border-top:0!important}
+  html[data-app-look="clean"] .mail-card .tm-head,html[data-app-look="clean"] .mail-card .tm-head:hover{padding-left:0;padding-right:0;background:none}
+  html[data-app-look="clean"] .r-body{font-size:var(--ph-read,15px);line-height:1.6}
+  html[data-app-look="clean"] .mail-card .thread-actions{display:none!important}
+  html[data-app-look="clean"] .mail-card .lbl{background:var(--surface-2);color:var(--ink-2)}
+  html[data-app-look="clean"] body.reader-open #ph-size{display:block;position:fixed;top:calc(4px + env(safe-area-inset-top));right:8px;z-index:43;min-width:44px;height:44px;border:0;border-radius:50%;background:none;color:var(--ink);font:inherit;font-size:19px;font-weight:600}
+  html[data-app-look="clean"] :is(#ph-size,.ph-aa) small{font-size:.7em}
+  html[data-app-look="clean"] body.reader-open #ph-readbar{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:42;padding:4px 4px calc(4px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:var(--surface)}
+  html[data-app-look="clean"] #ph-readbar button{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:52px;border:0;border-radius:10px;background:none;color:var(--ink-2);font:inherit;font-size:10.5px;font-weight:500}
+  html[data-app-look="clean"] #ph-readbar button:active{background:var(--active)}
+  html[data-app-look="clean"] #ph-readbar .ui-icon{width:22px;height:22px}
+  html[data-app-look="clean"] body:is(.selecting,[data-route="compose"]) :is(#ph-readbar,#ph-size){display:none!important}
+
+  /* ---- "More" sheet ---- */
+  #ph-sheet{position:fixed;inset:0;z-index:70}
+  #ph-sheet .ph-scrim{position:absolute;inset:0;background:rgba(0,0,0,.42);animation:phFade .18s ease-out}
+  #ph-sheet .ph-panel{position:absolute;left:0;right:0;bottom:0;display:flex;flex-direction:column;padding:8px 8px calc(12px + env(safe-area-inset-bottom));border-radius:18px 18px 0 0;background:var(--surface);color:var(--ink);animation:phUp .24s cubic-bezier(.16,1,.3,1)}
+  #ph-sheet .ph-close{align-self:flex-end;width:44px;height:44px;border:0;border-radius:50%;background:none;color:var(--ink-2);font-size:24px;line-height:1}
+  #ph-sheet .ph-item{display:flex;align-items:center;gap:16px;min-height:52px;padding:0 14px;border:0;border-radius:12px;background:none;color:var(--ink);font:inherit;font-size:16px;text-align:left}
+  #ph-sheet .ph-item:active{background:var(--active)}
+  #ph-sheet .ph-item .ui-icon{width:22px;height:22px;color:var(--ink-2)}
+  #ph-sheet .ph-aa{width:22px;text-align:center;font-weight:600;color:var(--ink-2)}
+
+  /* ---- writing: a plain sheet, Send in the accent ---- */
+  html[data-app-look="clean"] .compose-head{flex-wrap:nowrap!important;padding:calc(6px + env(safe-area-inset-top)) 12px 6px!important;border-radius:0!important;background:var(--surface)!important;color:var(--ink);border-bottom:1px solid var(--line)}
+  html[data-app-look="clean"] .compose-head .c-title{order:0!important;flex:1 1 auto!important;padding:0!important;font-size:17px!important;font-weight:700;letter-spacing:-.01em;white-space:nowrap;color:var(--ink)!important}
+  html[data-app-look="clean"] .compose-head .icon-btn{color:var(--ink)}
+  html[data-app-look="clean"] .compose-head #c-discard{border:0!important;color:var(--ink-2);font-weight:600}
+  html[data-app-look="clean"] .compose-head .c-send-top{background:var(--accent)!important;color:var(--accent-ink)!important}
+  html[data-app-look="clean"] .compose .c-row{margin:0;padding:6px var(--ph-pad)!important;min-height:50px;border-radius:0;background:none!important;box-shadow:none;border-bottom:1px solid var(--line)!important}
+  html[data-app-look="clean"] .compose .c-lab{padding:0;min-width:56px!important;border-radius:0;background:none;color:var(--ink-3);font-size:14px;font-weight:500}
+  html[data-app-look="clean"] .compose #compose-body{margin:0;padding:14px var(--ph-pad)!important;border-radius:0;background:var(--surface)!important;color:var(--ink)!important;box-shadow:none}
+  html[data-app-look="clean"] .compose #compose-body:focus{outline:0}
+
+  /* ---- home ---- */
+  html[data-app-look="clean"] .home{padding:8px var(--ph-pad) 0}
+  html[data-app-look="clean"] .home-unread{background:var(--surface-2);color:var(--ink)}
+  html[data-app-look="clean"] .home-unread b{color:var(--accent)}
+}
+@keyframes phFade{from{opacity:0}}
+@keyframes phUp{from{transform:translateY(100%)}}
+@media (prefers-reduced-motion:reduce){#ph-sheet .ph-scrim,#ph-sheet .ph-panel{animation:none}}

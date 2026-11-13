@@ -14,7 +14,7 @@ const MAILBOX_DEFAULTS = {locale:"", timeZone:"Asia/Kolkata", pageSize:"50", con
   forwardTo:"", forwardKeepCopy:true, popDelete:"keep", vacationOn:false, vacationMessage:"", vacationFrom:"", vacationUntil:"",
   vacationExternalOn:false, vacationExternalMessage:"", vacationEvery:"4d", vacationAudience:"everyone"};
 const UI_DEFAULTS = {undoSendOn:true, undoSend:5, defaultReply:"reply", hoverActions:true, sendArchive:false, spellcheck:true, autocorrect:true,
-  buttonLabels:"icons", notifications:"off", inboxType:"default", readingPane:"off", autoAdvanceOn:false, autoAdvance:"next", density:"comfortable",
+  buttonLabels:"icons", notifications:"off", inboxType:"default", readingPane:"off", autoAdvanceOn:false, autoAdvance:"next", density:"comfortable", appLook:"clean",
   indicators:false, importanceMarkers:true, templates:false, templateList:[], unreadBadge:true, hiddenFolders:[]};
 const LOCAL_KEY = "dejoiy-settings-v1";
 
@@ -58,6 +58,7 @@ const Settings = {
   apply(){
     const body = document.body, root = document.documentElement, ui = this.ui, mb = this.mailbox;
     body.classList.toggle("density-compact", ui.density==="compact");
+    root.dataset.appLook = ui.appLook==="colourful" ? "colourful" : "clean";
     body.classList.toggle("no-snippets", mb.snippets===false);
     body.classList.toggle("labels-text", ui.buttonLabels==="text");
     body.classList.toggle("hover-actions", !!ui.hoverActions);

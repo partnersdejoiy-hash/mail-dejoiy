@@ -110,6 +110,7 @@ function general(body){
     ${row("Personal level indicators", radio("ui.indicators",[[false,"No indicators"],[true,"Show indicators","An arrow ( › ) by messages sent to my address, and a double arrow ( » ) by messages sent only to me."]]))}
     ${row("Snippets", radio("mb.snippets",[[true,"Show snippets","Show a preview of each message in the list."],[false,"No snippets","Show the subject only."]]))}
     ${row("Density", radio("ui.density",[["comfortable","Comfortable"],["compact","Compact","Fits more conversations on the screen."]]))}
+    ${row("Phone app look", radio("ui.appLook",[["clean","Clean","A calm white inbox with actions at the bottom while you read."],["colourful","Colourful","Bright cards, one colour per kind of mail."]]))}
     ${row("Sounds", `<label class="st-check"><input type="checkbox" id="sg-sounds" ${Store.state.prefs.sounds?"checked":""}> Play a sound for new and sent mail</label>`)}
     ${row("Out-of-office auto-reply", `<p class="st-note">${mb.vacationOn?"<b>On</b>"+(mb.vacationUntil?" until "+esc(mb.vacationUntil):""):"Off"}</p><button class="btn sm" type="button" data-goto="vacation">Set up out of office</button>`)}
   </div>${saveBar()}`;
