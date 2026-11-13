@@ -486,10 +486,11 @@ figure.upd-cover.is-gone .upd-sticker{left:22px;right:auto;top:22px;bottom:auto;
 .upd-hero figure.upd-cover.is-gone .upd-sticker{left:50%;top:50%;width:120px;height:120px;font-size:64px;transform:translate(-50%,-50%) rotate(-6deg)}
 .upd-hero figure.upd-cover.is-gone{min-height:220px;background:color-mix(in srgb,var(--k) 80%,#fff)}
 
-/* ===== Solid panels, not glass (Zoho Cliq / Claude apps look) =====
-   Photo and scene themes keep their picture around the edges; every panel on top of it is solid. */
+/* ===== Solid panels by default (Zoho Cliq / Claude apps look) =====
+   Photo and scene themes keep their picture around the edges; panels on top of it are solid until the person
+   moves Themes > Panel transparency, which sets --glass (0% = solid). No blur, and mail cards always stay solid. */
 html :is(#app,#topbar,#sidebar,#app-rail,#view,.mail-card,.msg-row,.dlg-back){-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
 html #shell::before{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
-html:is([data-photo-theme="true"],[data-scenic="true"]) :is(#topbar,#sidebar,#app-rail,#view){background:var(--surface)!important}
+html:is([data-photo-theme="true"],[data-scenic="true"]) :is(#topbar,#sidebar,#app-rail,#view){background:color-mix(in srgb,var(--surface) calc(100% - var(--glass,0%)),transparent)!important}
 html[data-scenic="true"] .mail-card{background:var(--card)!important}
 html[data-scenic="true"] .msg-row{--row-base:var(--card)!important;background:color-mix(in srgb,var(--t,var(--accent)) 15%,var(--card))!important}

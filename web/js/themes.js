@@ -70,7 +70,8 @@ const THEME_CSS = {
 };
 
 // How see-through the mail panels start for each kind of background (percent).
-const GLASS_DEFAULT = {live:55, photo:50, scenic:45, custom:50};
+// solid until the person asks for see-through panels (the keys still say which themes have a background to show)
+const GLASS_DEFAULT = {live:0, photo:0, scenic:0, custom:0};
 const GLASS_MAX = 85;
 
 const Themes = {
