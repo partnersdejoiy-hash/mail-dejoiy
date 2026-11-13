@@ -523,6 +523,53 @@ async function search(main, d, h){
     </tbody></table></div><p class="adm-muted">${r.total} found${r.more?" · showing the first 50; narrow the search to see the rest":""}.</p>`;
 }
 
+async function apiTokens(main, d, h, rest, picked){
+  const title="API tokens";
+  const domains=d.scope?[d.scope]:(d.domains||[]).map(x=>x.domain);
+  const domain=d.scope||picked||domains[0]||"";
+  loading(h,main,title);
+  let r;
+  try{ r=await h.act({op:"apitokens_get",domain}); }
+  catch(e){ main.innerHTML=h.head(title)+`<div class="adm-card adm-error">${h.esc(e.message)}</div>`; return; }
+  const day=t=>t?new Date(t*1000).toLocaleDateString([],{dateStyle:"medium"}):"";
+  const when=t=>t?new Date(t*1000).toLocaleString([],{dateStyle:"medium",timeStyle:"short"}):"";
+  const origin=location.origin.replace("//admin-","//");
+  const draw=(out,token)=>{
+    r=out;
+    main.innerHTML=h.head(title,"Let your own scripts and tools send mail, label mail, list mail and post in Shine for your company, without anyone's password.")+
+      (d.scope?"":`<div class="adm-card"><label>Company <select id="at-domain">${domains.map(x=>`<option${x===domain?" selected":""}>${h.esc(x)}</option>`).join("")}</select></label></div>`)+
+      (token?`<div class="adm-card"><h2>Your new token</h2><p>Copy it now. It is shown only this once and is not stored anywhere readable; if you lose it, revoke it and make a new one.</p>
+        <p><code id="at-token">${h.esc(token)}</code> <button class="adm-btn primary sm" id="at-copy">Copy</button></p></div>`:"")+
+      `<div class="adm-card adm-flush"><table class="adm-table"><thead><tr><th>Name</th><th>Permissions</th><th>Valid until</th><th>Last used</th><th></th></tr></thead><tbody>
+      ${r.tokens.map(x=>`<tr><td><b>${h.esc(x.name)}</b><small>Made ${h.esc(day(x.created))}${x.by?" by "+h.esc(x.by):""}</small></td>
+        <td>${x.scopes.map(s=>`<span class="adm-chip">${h.esc(s)}</span>`).join(" ")}</td>
+        <td>${x.expires<=r.now?pill("Expired",false):h.esc(day(x.expires))}</td><td>${x.lastUsed?`<small>${h.esc(when(x.lastUsed))}</small>`:`<span class="adm-muted">Never</span>`}</td>
+        <td class="adm-right"><button class="adm-btn ghost sm" data-r="${h.esc(x.id)}" data-n="${h.esc(x.name)}">Revoke</button></td></tr>`).join("")||`<tr><td colspan="5">${empty(h,"No API tokens yet.")}</td></tr>`}
+      </tbody></table></div>`+
+      (r.tokens.length<r.max?`<div class="adm-card"><h2>Make a token</h2><form id="at-add" class="adm-wh-form">
+        <label>Name<input name="name" required maxlength="60" placeholder="Invoices robot"></label>
+        <fieldset class="adm-wh-ev"><legend>What it may do</legend>${Object.entries(r.scopes).map(([k,v])=>`<label><input type="checkbox" name="sc" value="${h.esc(k)}"><span><b>${h.esc(k)}</b> <small>${h.esc(v)}</small></span></label>`).join("")}</fieldset>
+        <label>Valid for <select name="days">${r.days.map(n=>`<option value="${n}"${n===90?" selected":""}>${n===365?"1 year":n+" days"}</option>`).join("")}</select></label>
+        <div><button class="adm-btn primary">Make token</button></div></form></div>`:`<p class="adm-muted">A company can have ${r.max} API tokens. Revoke one to make another.</p>`)+
+      `<p class="adm-muted">Send the token as <code>Authorization: Bearer &lt;token&gt;</code>. It only reaches mailboxes of ${h.esc(domain)}.
+        <code>POST ${h.esc(origin)}/api/v1/mail/send</code> {mailbox, to, subject, text or html} ·
+        <code>POST …/api/v1/mail/label</code> {mailbox, id, label} ·
+        <code>GET …/api/v1/mail/messages?mailbox=…&amp;folder=inbox&amp;limit=20</code> (add <code>&amp;body=1</code> for the text) ·
+        <code>POST …/api/v1/shine/post</code> {channel, text}: posts as the admin who made the token, in a channel they are in.
+        Up to 60 calls a minute and 100 mails an hour per token. Every call is in the audit log.</p>`;
+    h.$("at-domain")?.addEventListener("change",e=>apiTokens(main,d,h,rest,e.target.value));
+    h.$("at-copy")?.addEventListener("click",async()=>{ try{ await navigator.clipboard.writeText(token); h.toast("Copied."); }catch(_){ const c=h.$("at-token"); const rg=document.createRange(); rg.selectNodeContents(c); const sel=getSelection(); sel.removeAllRanges(); sel.addRange(rg); h.toast("Press Ctrl+C to copy."); } });
+    main.querySelectorAll("[data-r]").forEach(b=>b.addEventListener("click",()=>h.confirmDialog("Revoke this token?",`Anything using "${b.dataset.n}" stops working at once.`,"Revoke",async()=>{
+      b.disabled=true; try{ draw(await h.act({op:"apitoken_revoke",domain,id:b.dataset.r})); h.toast("Revoked."); }catch(e){ h.toast(e.message); b.disabled=false; } })));
+    h.$("at-add")?.addEventListener("submit",async e=>{ e.preventDefault(); const f=e.target, btn=f.querySelector("button");
+      const scopes=[...f.querySelectorAll("[name=sc]:checked")].map(x=>x.value);
+      btn.disabled=true;
+      try{ const out=await h.act({op:"apitoken_add",domain,name:f.elements.name.value.trim(),scopes,days:Number(f.elements.days.value)}); draw(out,out.token); h.toast("Token made."); }
+      catch(x){ h.toast(x.message); btn.disabled=false; } });
+  };
+  draw(r);
+}
+
 window.AdminPages = { servers, statistics, queues, sessions, usersDetail, listsDetail, resources, domainsDetail, cos, cosDetail:cos,
-  globalSettings, rights, zimlets, certs, retention, webhooks, bulkImport, mailboxTools, caches, search };
+  globalSettings, rights, zimlets, certs, retention, webhooks, apiTokens, bulkImport, mailboxTools, caches, search };
 })();

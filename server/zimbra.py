@@ -25,6 +25,7 @@ import dcalendar
 import zconsole
 from webhooks import Webhooks, WebhookError
 from newmail import NewMailWatcher
+from apitokens import ApiTokens, TokenError, SCOPES as API_SCOPES
 from html.parser import HTMLParser
 
 SOAP = 'http://www.w3.org/2003/05/soap-envelope'
@@ -218,7 +219,7 @@ class AuditLog:
                 'active':len(set().union(*[v['active'] for v in series.values()]))},
             'topSenders':top(senders),'failedSignins':top(failed),
             'signins':[event(r) for r in rows if r[1] in ('signin','signin_failed')][:60],
-            'audit':[event(r) for r in rows if r[1].startswith('admin')][:100]}
+            'audit':[event(r) for r in rows if r[1].startswith(('admin','api:'))][:100]}
 
 IMAGE_MAGIC = {'png':lambda b:b.startswith(b'\x89PNG\r\n\x1a\n'),'jpeg':lambda b:b.startswith(b'\xff\xd8\xff'),
     'gif':lambda b:b[:6] in (b'GIF87a',b'GIF89a'),'webp':lambda b:b[:4]==b'RIFF' and b[8:12]==b'WEBP'}
@@ -292,6 +293,11 @@ class MediaStore:
         return path.read_bytes() if path.is_file() else None
 
 WEBHOOK_OPS=('webhooks_get','webhook_add','webhook_remove','webhook_set_active','webhook_test')
+APITOKEN_OPS=('apitokens_get','apitoken_add','apitoken_revoke')
+# the automation API: (method, path) -> the token permission it needs
+API_ROUTES={('POST','/api/v1/mail/send'):'mail.send',('POST','/api/v1/mail/label'):'mail.label',
+    ('GET','/api/v1/mail/messages'):'mail.read',('POST','/api/v1/shine/post'):'shine.post'}
+MAX_API_BYTES=1024*1024
 
 
 def webhook_domain(scope, chosen):
@@ -1814,6 +1820,7 @@ class Handler(SimpleHTTPRequestHandler):
         if not session: raise APIError('Sign in to your mailbox',401)
         return sid,session
     def do_GET(self):
+        if self.path.split('?',1)[0].startswith('/api/v1/'): return self.api_v1('GET')
         if self.path=='/.well-known/assetlinks.json':
             app='admin' if self.headers.get('Host','').split(':')[0].lower().startswith('admin-') else 'mail'
             raw=json.dumps(assetlinks(app)).encode(); self.send_response(200); self.send_header('Content-Type','application/json')
@@ -2517,6 +2524,129 @@ class Handler(SimpleHTTPRequestHandler):
         except WebhookError as e: raise APIError(str(e))
         if data['op']!='webhooks_get': self.log('admin:'+data['op'],s['user']['email'],domain+' '+str(payload.get('url') or payload.get('id') or '')[:200])
         return out
+    def apitoken_action(self, s, data):
+        """A company's API tokens (see apitokens.py). Same permission as webhooks: the company's domain settings."""
+        tokens=getattr(self.server,'api_tokens',None)
+        if not tokens: raise APIError('API tokens are not switched on for this server.',503)
+        client,token,scope=self.admin_session(s)
+        perms=client.actor_perms(token,s['user']['email'],scope)
+        if scope and perms is not None and 'roles.manage' not in perms:
+            raise APIError('Your role does not allow this. Ask an admin for "'+PERMISSIONS['roles.manage']+'".',403)
+        domain=webhook_domain(scope,data.get('domain'))
+        if not scope:
+            lookup=node(ADMIN,'GetDomainRequest'); lookup.append(node(ADMIN,'domain',{'by':'name'},domain))
+            if client.call(lookup,token).find('{'+ADMIN+'}domain') is None: raise APIError('Domain not found.',404)
+        payload={k:data.get(k) for k in ('id','name','scopes','days')}
+        try: out=tokens.action(data['op'],payload,domain,s['user']['email'])
+        except TokenError as e: raise APIError(str(e))
+        if data['op']!='apitokens_get':   # never the token itself: its name and id only
+            self.log('admin:'+data['op'],s['user']['email'],domain+' '+str(payload.get('name') or out.get('revoked') or '')[:60]+' '+str(out.get('id') or payload.get('id') or ''))
+        return out
+    def api_v1(self, method):
+        """The automation API: Authorization: Bearer <API token>, only ever the token's own company domain.
+        Any missing, wrong, expired or revoked token gets the same bare 401."""
+        try:
+            path,_,query=self.path.partition('?')
+            tokens=getattr(self.server,'api_tokens',None)
+            auth=self.headers.get('Authorization','')
+            tok=tokens.check(auth[7:]) if tokens and auth[:7].lower()=='bearer ' else None
+            if not tok: return self.reply(401,{'error':'Unauthorized'})
+            need=API_ROUTES.get((method,path))
+            if not need: raise APIError('Not found',404)
+            if need not in tok['scopes']: raise APIError('This token is not allowed to do that.',403)
+            if not tokens.allow(tok['id'],need): raise APIError('Too many requests for this token; wait a minute.',429)
+            if method=='GET': data={k:v[-1] for k,v in urllib.parse.parse_qs(query).items()}
+            else:
+                if self.headers.get('Content-Type','').split(';')[0]!='application/json': raise APIError('JSON required',415)
+                length=int(self.headers.get('Content-Length','0'))
+                if not 0<length<=MAX_API_BYTES: raise APIError('Request too large or empty',413)
+                data=json.loads(self.rfile.read(length))
+                if not isinstance(data,dict): raise APIError('JSON object required')
+        except APIError as e: return self.reply(e.status,{'error':str(e)})
+        except (ValueError,TypeError): return self.reply(400,{'error':'Invalid request'})
+        who=tok['by']; note='token '+tok['id']
+        try:
+            if need=='shine.post': out=self.api_shine_post(tok,data)
+            else:
+                who=self.api_mailbox(tok,data)
+                mail_token=self.api_delegated(who)
+                if need=='mail.send': out=self.api_send(tok,who,mail_token,data); note+=' to '+str(out.pop('_count'))
+                elif need=='mail.label': out=self.api_label(who,mail_token,data)
+                else: out=self.api_messages(tok,who,mail_token,data)
+        except APIError as e:
+            self.log('api:'+need,who,note+' failed '+str(e.status)); return self.reply(e.status,{'error':str(e)})
+        except (ValueError,TypeError):
+            self.log('api:'+need,who,note+' failed 400'); return self.reply(400,{'error':'Invalid request'})
+        except Exception:
+            self.log('api:'+need,who,note+' failed 502'); return self.reply(502,{'error':'Mail operation failed. Try again later.'})
+        if need=='mail.send':
+            n=int(note.rsplit(' ',1)[1]); self.log('send',who,note,n=n)   # counts in Reports and fires 'mail.sent' webhooks, like the app
+        else: self.log('api:'+need,who,note)
+        return self.reply(200,out)
+    def api_mailbox(self, tok, data):
+        email=str(data.get('mailbox') or '').strip().lower()
+        if not EMAIL.fullmatch(email) or len(email)>320: raise APIError('Give "mailbox": an address of your company.')
+        if email.rsplit('@',1)[1]!=tok['domain']: raise APIError('This token only reaches mailboxes of '+tok['domain']+'.',403)
+        return email
+    def api_delegated(self, email):
+        try: return self.delegated(email)
+        except APIError as e:
+            if e.code=='account.NO_SUCH_ACCOUNT': raise APIError('Mailbox not found.',404)
+            raise
+    def api_send(self, tok, mailbox, token, data):
+        to=data.get('to'); to=to if isinstance(to,list) else re.split(r'[,;\s]+',str(to or ''))
+        to=[str(a).strip() for a in to if str(a).strip()]
+        if not to or len(to)>20 or any(not EMAIL.fullmatch(a) or len(a)>320 for a in to): raise APIError('Give "to": 1 to 20 email addresses.')
+        subject=str(data.get('subject') or '')
+        if len(subject)>500 or any(ord(c)<32 for c in subject): raise APIError('"subject" must be one line of up to 500 characters.')
+        text,markup=data.get('text'),data.get('html')
+        if markup is not None:
+            if not isinstance(markup,str) or len(markup)>500000: raise APIError('"html" must be text of up to 500 KB.')
+            body=markup
+        elif isinstance(text,str) and len(text)<=500000: body=html.escape(text).replace('\n','<br>')
+        else: raise APIError('Give "text" or "html".')
+        if not subject and not body.strip(): raise APIError('Give a subject or a body.')
+        out=self.server.zimbra.write_message(token,{'to':','.join(to),'subject':subject,'body':body},sender=mailbox)
+        return {'ok':True,'id':out.get('id'),'_count':len(to)}
+    def api_label(self, mailbox, token, data):
+        mid=str(data.get('id') or '')
+        if not re.fullmatch(r'\d{1,12}',mid): raise APIError('Give "id": the message id.')
+        label=str(data.get('label') or '').strip()
+        if not label: raise APIError('Give "label".')
+        self.server.zimbra.action(token,{'ids':[mid],'op':'label','label':label})
+        return {'ok':True}
+    def api_messages(self, tok, mailbox, token, data):
+        folder=str(data.get('folder') or 'inbox')
+        if folder not in ('inbox','sent'): raise APIError('"folder" is inbox or sent.')
+        try: limit=int(data.get('limit') or 20)
+        except ValueError: raise APIError('"limit" is a number from 1 to 50.')
+        if not 1<=limit<=50: raise APIError('"limit" is a number from 1 to 50.')
+        body=str(data.get('body') or '') in ('1','true')
+        if body and 'mail.read.body' not in tok['scopes']: raise APIError('This token is not allowed to read the text of mail.',403)
+        if body: limit=min(limit,20)
+        r=node(MAIL,'SearchRequest',{'types':'message','limit':str(limit),'sortBy':'dateDesc'}); r.append(node(MAIL,'query',text='in:'+folder))
+        out=[]
+        for m in self.server.zimbra.call(r,token).findall('{'+MAIL+'}m'):
+            addresses=m.findall('{'+MAIL+'}e'); subject=m.find('{'+MAIL+'}su'); flags=m.get('f','')
+            item={'id':m.get('id'),'date':int(m.get('d') or 0),'from':next((e.get('a','') for e in addresses if e.get('t')=='f'),''),
+                'to':[e.get('a','') for e in addresses if e.get('t')=='t'],'subject':subject.text or '' if subject is not None else '',
+                'read':'u' not in flags,'labels':[x for x in (m.get('tn') or '').split(',') if x]}
+            if body:
+                req=node(MAIL,'GetMsgRequest'); req.append(node(MAIL,'m',{'id':m.get('id'),'read':'0','html':'0'}))
+                full=self.server.zimbra.call(req,token).find('{'+MAIL+'}m'); texts=[]
+                for part in (full.iter('{'+MAIL+'}mp') if full is not None else []):
+                    content=part.find('{'+MAIL+'}content')
+                    if content is not None and part.get('ct') in ('text/plain','text/html') and not part.get('filename'): texts.append((part.get('ct'),content.text or ''))
+                item['text']=(next((v for t,v in texts if t=='text/plain'),None) or plain(next((v for t,v in texts if t=='text/html'),'')))[:20000]
+            out.append(item)
+        return {'mailbox':mailbox,'folder':folder,'messages':out}
+    def api_shine_post(self, tok, data):
+        channel=str(data.get('channel') or '').strip().lstrip('#')
+        text=str(data.get('text') or '').strip()
+        if not channel or len(channel)>100: raise APIError('Give "channel": the Shine channel name.')
+        if not text or len(text)>4000: raise APIError('Give "text" of up to 4000 characters.')
+        out=self.shine_admin_post({'op':'post','scope':tok['domain'],'actor':tok['by'],'channel':channel,'text':text})
+        return {'ok':True,'channel':out.get('channel',channel)}
     def admin_session(self, session):
         client=getattr(self.server,'admin',None)
         if not client: raise APIError('Mail administration is not configured on this server.',503)
@@ -2524,6 +2654,7 @@ class Handler(SimpleHTTPRequestHandler):
             raise APIError('Sign in to Dejoiy Mail Admin to continue.',403)
         return client,session['admin_token'],session.get('admin_scope')
     def do_POST(self):
+        if self.path.split('?',1)[0].startswith('/api/v1/'): return self.api_v1('POST')
         try:
             # Shine's server asking for calendar work: no browser, so no Origin; the shared secret instead.
             if self.path=='/api/joi/mailbox':
@@ -2635,6 +2766,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.reply(200,out)
             if self.path=='/api/admin/action' and data.get('op') in WEBHOOK_OPS:
                 return self.reply(200,self.webhook_action(s,data))
+            if self.path=='/api/admin/action' and data.get('op') in APITOKEN_OPS:
+                return self.reply(200,self.apitoken_action(s,data))
             if self.path=='/api/admin/action' and data.get('op')=='reports':
                 client,token,scope=self.admin_session(s)
                 audit=getattr(self.server,'audit',None)
@@ -2741,6 +2874,8 @@ def serve():
     # webhooks: signed notes to a company's own tools when something happens (secrets kept 0600 beside the sessions)
     server.hooks=Webhooks(state_dir/'webhooks.json') if state_dir else None
     if server.hooks: server.hooks.start()
+    # API tokens for a company's own automation (only their hashes are kept, 0600 beside the sessions)
+    server.api_tokens=ApiTokens(state_dir/'api-tokens.json') if state_dir else None
     server.avatars=AvatarStore(str(state_dir/'avatars.sqlite') if state_dir else None)
     server.media=MediaStore(str(state_dir/'media') if state_dir else None)
     if server.zimbra: server.zimbra.media_prefix=server.app_origin+'/media/'; server.zimbra.app_url=server.app_origin
