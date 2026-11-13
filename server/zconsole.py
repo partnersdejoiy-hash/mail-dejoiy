@@ -591,6 +591,16 @@ class Console:
         if grantee == self.actor: raise self.Error('You cannot change your own rights.')
         right = str(data.get('right', ''))
         if not re.fullmatch(r'[A-Za-z][A-Za-z0-9.]{1,80}', right) or right not in {x['name'] for x in self.z_rights({})['rights']}: raise self.Error('Choose a right from the list.')
+        if data.get('revoke') is not True:
+            # the mail server only gives admin rights to delegated administrators (not to ordinary
+            # mailboxes, and not to platform admins, who already have every right)
+            look = node('GetAccountRequest', {'attrs': 'zimbraIsDelegatedAdminAccount,zimbraIsAdminAccount'}); look.append(node('account', {'by': 'name'}, grantee))
+            found = self.call(look).find(A+'account')
+            if found is None: raise self.Error('No mailbox has that address.', 404)
+            a = attrs_of(found)
+            if a.get('zimbraIsAdminAccount') == 'TRUE': raise self.Error(grantee+' is a platform admin and already has every right.')
+            if a.get('zimbraIsDelegatedAdminAccount') != 'TRUE':
+                raise self.Error(grantee+' is not an administrator yet. Make them a company admin first (Accounts, Access), then give rights here.')
         r = node('RevokeRightRequest' if data.get('revoke') is True else 'GrantRightRequest')
         r.append(node('target', {'type': target_type, **({'by': 'name'} if target_type != 'global' else {})}, target if target_type != 'global' else 'globalacltarget'))
         r.append(node('grantee', {'type': 'usr', 'by': 'name'}, grantee))

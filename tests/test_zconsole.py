@@ -19,6 +19,8 @@ class Fake:
             name = {RAVI: 'ravi@kaali.in', BOSS: 'boss@kaali.in', OTHER: 'x@other.in'}.get(ident, ident)
             acc = ET.SubElement(out, A+'account', {'id': ident, 'name': name})
             ET.SubElement(acc, A+'a', {'n': 'zimbraAuthTokenValidityValue'}).text = '4'
+            role = {'it@kaali.in': 'zimbraIsDelegatedAdminAccount', 'root@kaali.in': 'zimbraIsAdminAccount'}.get(ident)
+            if role: ET.SubElement(acc, A+'a', {'n': role}).text = 'TRUE'
         if tag == 'GetDistributionListRequest': ET.SubElement(out, A+'dl', {'id': LIST, 'name': 'team@kaali.in'})
         if tag == 'GetAllServersRequest': ET.SubElement(out, A+'server', {'id': 's'*36, 'name': 'mail.kaali.in'})
         if tag == 'GetAllRightsRequest': ET.SubElement(out, A+'right', {'name': 'adminConsoleDomainRights', 'type': 'combo'})
@@ -115,6 +117,16 @@ class Checks(unittest.TestCase):
         with self.assertRaises(z.APIError): con.run({**base, 'grantee': 'root@kaali.in', 'right': 'adminConsoleDomainRights'})
         con.run({**base, 'right': 'adminConsoleDomainRights'})
         self.assertEqual(f.calls[-1][0], 'GrantRightRequest')
+
+    def test_admin_rights_only_go_to_delegated_admins(self):
+        # found live: the mail server refuses admin rights for an ordinary mailbox with a bare fault
+        f, con = console(scope=None, actor='boss@kaali.in', global_admin=lambda: None)
+        base = {'op': 'z_grant', 'targetType': 'domain', 'target': 'kaali.in', 'right': 'adminConsoleDomainRights'}
+        with self.assertRaisesRegex(z.APIError, 'not an administrator yet'): con.run({**base, 'grantee': 'ravi@kaali.in'})
+        with self.assertRaisesRegex(z.APIError, 'already has every right'): con.run({**base, 'grantee': 'root@kaali.in'})
+        self.assertNotIn('GrantRightRequest', [x[0] for x in f.calls])
+        con.run({**base, 'grantee': 'ravi@kaali.in', 'revoke': True})  # taking a right back is always allowed
+        self.assertEqual(f.calls[-1][0], 'RevokeRightRequest')
 
     def test_resource_gets_random_password_and_type(self):
         f, con = console()
