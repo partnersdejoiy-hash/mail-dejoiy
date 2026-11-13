@@ -2624,7 +2624,7 @@ class Handler(SimpleHTTPRequestHandler):
         body=str(data.get('body') or '') in ('1','true')
         if body and 'mail.read.body' not in tok['scopes']: raise APIError('This token is not allowed to read the text of mail.',403)
         if body: limit=min(limit,20)
-        r=node(MAIL,'SearchRequest',{'types':'message','limit':str(limit),'sortBy':'dateDesc'}); r.append(node(MAIL,'query',text='in:'+folder))
+        r=node(MAIL,'SearchRequest',{'types':'message','limit':str(limit),'sortBy':'dateDesc','recip':'2'}); r.append(node(MAIL,'query',text='in:'+folder))   # recip=2: senders and recipients
         out=[]
         for m in self.server.zimbra.call(r,token).findall('{'+MAIL+'}m'):
             addresses=m.findall('{'+MAIL+'}e'); subject=m.find('{'+MAIL+'}su'); flags=m.get('f','')

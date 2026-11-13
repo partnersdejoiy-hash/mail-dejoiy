@@ -97,6 +97,7 @@ class FakeMail:
     def call(self, r, token=None, timeout=25):
         self.calls.append(('call', token, r.tag))
         if r.tag == M + 'SearchRequest':
+            self.recip = r.get('recip')
             out = ET.Element(M + 'SearchResponse')
             m = ET.SubElement(out, M + 'm', {'id': '361', 'd': '1794600826000', 'f': 'u', 'tn': 'Invoices'})
             ET.SubElement(m, M + 'e', {'t': 'f', 'a': 'x@vendor.com'}); ET.SubElement(m, M + 'e', {'t': 't', 'a': 'test@acme.com'})
@@ -187,6 +188,7 @@ class Api(unittest.TestCase):
         m = r.data['messages'][0]
         self.assertEqual((m['id'], m['from'], m['subject'], m['read'], m['labels']), ('361', 'x@vendor.com', 'Invoice 7', False, ['Invoices']))
         self.assertNotIn('text', m); self.assertNotIn('secret body preview', json.dumps(r.data))
+        self.assertEqual(r.mail.recip, '2')   # without it the mail server leaves out the recipients
         full = make(self.s, scopes=('mail.read', 'mail.read.body'), name='full')
         r = api(self.s, 'GET', '/api/v1/mail/messages?mailbox=test@acme.com&body=1', full)
         self.assertEqual(r.data['messages'][0]['text'], 'Please pay.')
