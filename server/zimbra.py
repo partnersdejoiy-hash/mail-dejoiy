@@ -24,6 +24,7 @@ from pathlib import Path
 import dcalendar
 import zconsole
 from webhooks import Webhooks, WebhookError
+from newmail import NewMailWatcher
 from html.parser import HTMLParser
 
 SOAP = 'http://www.w3.org/2003/05/soap-envelope'
@@ -492,6 +493,28 @@ class SignupStore:
             if self.db is None: self.memory.pop(token,None)
             else: self.db.execute('DELETE FROM signups WHERE token=?',(token,)); self.db.commit()
 
+def delegated_token(provisioner, email):
+    """A one-hour mailbox token for this address, issued by the service admin (cached until it nears its end)."""
+    cached=DELEGATED.get(email)
+    if cached and cached[1]>time.time()+60: return cached[0]
+    r=node(ADMIN,'DelegateAuthRequest',{'duration':'3600'}); r.append(node(ADMIN,'account',{'by':'name'},email))
+    token=provisioner.admin.call(r,provisioner.token()).findtext('{'+ADMIN+'}authToken')
+    if not token: raise APIError('Booking is unavailable right now.',502)
+    DELEGATED[email]=(token,time.time()+3600); return token
+def inbox_heads(zimbra, token):
+    """The newest inbox mail as headers only (id, date in ms, sender): what the new-mail watcher compares."""
+    r=node(MAIL,'SearchRequest',{'types':'message','limit':'20','sortBy':'dateDesc'}); r.append(node(MAIL,'query',text='in:inbox'))
+    out=[]
+    for m in zimbra.call(r,token).findall('{'+MAIL+'}m'):
+        sender=next((e.get('a','') for e in m.findall('{'+MAIL+'}e') if e.get('t')=='f'),'')
+        try: out.append({'id':m.get('id'),'date':int(m.get('d') or 0),'from':sender})
+        except ValueError: pass
+    return out
+def domain_mailboxes(provisioner, domain):
+    """Every person's address in one domain (system mailboxes left out)."""
+    r=node(ADMIN,'GetAllAccountsRequest'); r.append(node(ADMIN,'domain',{'by':'name'},domain))
+    return [a.get('name') for a in provisioner.admin.call(r,provisioner.token()).findall('{'+ADMIN+'}account')
+            if a.get('name') and not any(x.get('n')=='zimbraIsSystemResource' and x.text=='TRUE' for x in a.findall('{'+ADMIN+'}a'))]
 class Provisioner:
     """Creates a company's domain and first administrator with a dedicated service admin account."""
     def __init__(self, admin, email, password):
@@ -2393,12 +2416,7 @@ class Handler(SimpleHTTPRequestHandler):
         visitors never hold a token, and the owner doesn't need to be signed in."""
         provisioner=getattr(self.server,'provisioner',None)
         if not provisioner: raise APIError('Booking links are not set up on this server yet.',503)
-        cached=DELEGATED.get(email)
-        if cached and cached[1]>time.time()+60: return cached[0]
-        r=node(ADMIN,'DelegateAuthRequest',{'duration':'3600'}); r.append(node(ADMIN,'account',{'by':'name'},email))
-        token=provisioner.admin.call(r,provisioner.token()).findtext('{'+ADMIN+'}authToken')
-        if not token: raise APIError('Booking is unavailable right now.',502)
-        DELEGATED[email]=(token,time.time()+3600); return token
+        return delegated_token(provisioner,email)
     def booking_view(self, session):
         email=session['user']['email']; store=self.server.booking; saved=store.get('user:'+email)
         if not saved.get('slug'):
@@ -2737,6 +2755,10 @@ def serve():
     server.signups=SignupStore(str(state/'signups.sqlite') if state else None)
     server.reserved_domains={d.strip().lower() for d in os.environ.get('RESERVED_DOMAINS','dejoiy.com').split(',') if d.strip()}
     server.provisioner=Provisioner(server.admin,os.environ['PROVISION_ADMIN'],os.environ['PROVISION_ADMIN_PASSWORD']) if server.admin and os.environ.get('PROVISION_ADMIN') and os.environ.get('PROVISION_ADMIN_PASSWORD') else None
+    # 'mail.received' webhooks: incoming mail never passes this server, so a watcher looks once a minute (only for companies that asked)
+    if server.hooks and server.provisioner and server.zimbra:
+        NewMailWatcher(server.hooks,lambda domain: domain_mailboxes(server.provisioner,domain),
+            lambda email: inbox_heads(server.zimbra,delegated_token(server.provisioner,email))).start()
     print(f'Dejoiy Mail: {origin}; backend '+('configured' if url else 'requires ZIMBRA_URL'))
     server.serve_forever()
 

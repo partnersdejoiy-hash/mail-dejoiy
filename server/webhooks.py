@@ -13,6 +13,7 @@ import hashlib, hmac, ipaddress, json, os, queue, re, secrets, socket, threading
 from pathlib import Path
 
 EVENTS = {
+    'mail.received': 'A mail arrives in a mailbox',
     'mail.sent': 'Someone sends a mail',
     'signin.ok': 'Someone signs in',
     'signin.failed': 'A sign-in fails',
@@ -147,11 +148,20 @@ class Webhooks:
 
     # ---- sending ----
     def emit(self, kind, actor, target='', n=1):
-        """Queues a note for every active webhook of the actor's company that asked for this event. Never blocks, never raises."""
+        """An audit-log line as a note for the actor's company. Never blocks, never raises."""
         event, domain = event_for(str(kind)), domain_of(actor)
         if not event or not domain: return 0
-        note = {'type': event, 'domain': domain, 'actor': str(actor), 'target': str(target or ''), 'count': int(n or 1)}
-        if event == 'admin.action': note['action'] = str(kind)[6:]
+        fields = {'actor': str(actor), 'target': str(target or ''), 'count': int(n or 1)}
+        if event == 'admin.action': fields['action'] = str(kind)[6:]
+        return self.send(event, domain, fields)
+
+    def wanting(self, event):
+        """The companies that have an active webhook asking for this event."""
+        with self.lock: return {d for d, hooks in self.all.items() if any(h['active'] and event in h['events'] for h in hooks)}
+
+    def send(self, event, domain, fields):
+        """Queues one note for every active webhook of this company that asked for the event. Never blocks, never raises."""
+        note = {'type': event, 'domain': domain, **fields}
         queued = 0
         with self.lock: hooks = [dict(h) for h in self.all.get(domain, []) if h['active'] and event in h['events']]
         for hook in hooks:
