@@ -289,7 +289,9 @@ class MediaStore:
         path=self.dir/name
         return path.read_bytes() if path.is_file() else None
 
-ADMIN_ASSETS = {'/admin.html','/js/admin-app.js','/css/admin.css'}
+ADMIN_ASSETS = {'/admin.html','/js/admin-app.js','/js/admin-console.js','/css/admin.css'}
+# the console's own pages: /admin/monitor/mail-queues, /admin/manage/accounts/<id>, /admin/search ...
+ADMIN_PAGE = re.compile(r'/admin/[a-z0-9-]+(?:/[a-zA-Z0-9.-]{1,253}){0,3}')
 DOMAIN_NAME = re.compile(r'(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}')
 LOCAL_PART = re.compile(r'[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?')
 FREE_MAIL = {'gmail.com','googlemail.com','yahoo.com','yahoo.co.in','outlook.com','hotmail.com','live.com','msn.com','icloud.com','me.com',
@@ -1863,17 +1865,18 @@ class Handler(SimpleHTTPRequestHandler):
             elif path in ('/terms','/privacy'): self.path=path+'.html'
             elif path=='/home': self.path='/admin-home.html'
             elif path=='/admin/': return self.redirect('/admin')
-            elif path=='/admin' or path in ADMIN_ASSETS:
+            elif path=='/admin' or path in ADMIN_ASSETS or ADMIN_PAGE.fullmatch(path):
+                page=path=='/admin' or bool(ADMIN_PAGE.fullmatch(path))
                 try: _,s=self.session()
-                except APIError: return self.redirect('/signin?next=admin') if path=='/admin' else self.send_error(404)
-                if s['user'].get('isAdmin') is not True: return self.redirect(self.server.app_origin+'/') if path=='/admin' else self.send_error(404)
-                if path=='/admin': self.path='/admin.html'
+                except APIError: return self.redirect('/signin?next=admin') if page else self.send_error(404)
+                if s['user'].get('isAdmin') is not True: return self.redirect(self.server.app_origin+'/') if page else self.send_error(404)
+                if page: self.path='/admin.html'
             elif not (path.startswith(('/css/','/js/','/assets/')) or path in ('/admin-home.html','/sw.js','/manifest.webmanifest','/admin.webmanifest','/offline.html','/runtime-config.js')):
                 return self.redirect(self.server.app_origin+self.path)
             return super().do_GET()
-        if path in ('/admin','/admin/') and getattr(self.server,'admin_origin',None):
+        if (path in ('/admin','/admin/') or ADMIN_PAGE.fullmatch(path)) and getattr(self.server,'admin_origin',None):
             # The console lives on the admin site; mailboxes never show it.
-            return self.redirect(self.server.admin_origin+'/admin')
+            return self.redirect(self.server.admin_origin+(path if ADMIN_PAGE.fullmatch(path) else '/admin'))
         if path=='/home':
             self.path='/home.html'
         if path in ('/terms','/privacy'):
@@ -1885,12 +1888,13 @@ class Handler(SimpleHTTPRequestHandler):
             return self.redirect('/admin')
         if path=='/signup':
             self.path='/signup.html'
-        if path=='/admin' or path in ADMIN_ASSETS:
+        if path=='/admin' or path in ADMIN_ASSETS or ADMIN_PAGE.fullmatch(path):
             # The console and its code are only served to signed-in administrators.
+            page=path=='/admin' or bool(ADMIN_PAGE.fullmatch(path))
             try: _,s=self.session()
-            except APIError: return self.redirect('/?next=admin') if path=='/admin' else self.send_error(404)
-            if s['user'].get('isAdmin') is not True: return self.redirect('/') if path=='/admin' else self.send_error(404)
-            if path=='/admin': self.path='/admin.html'
+            except APIError: return self.redirect('/?next=admin') if page else self.send_error(404)
+            if s['user'].get('isAdmin') is not True: return self.redirect('/') if page else self.send_error(404)
+            if page: self.path='/admin.html'
         super().do_GET()
     def image(self, raw, mime, cache):
         self.send_response(200); self.send_header('Content-Type',mime); self.send_header('Content-Length',str(len(raw)))

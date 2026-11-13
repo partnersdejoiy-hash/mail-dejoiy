@@ -10,12 +10,29 @@ const icon = name => window.Icons ? Icons.get(name) : "";
 const mb = bytes => bytes == null ? "—" : bytes >= 1073741824 ? (bytes/1073741824).toFixed(1)+" GB" : bytes >= 1048576 ? Math.round(bytes/1048576)+" MB" : Math.max(0,Math.round(bytes/1024))+" KB";
 const when = stamp => { const m=/^(\d{4})(\d\d)(\d\d)(\d\d)(\d\d)(\d\d)/.exec(stamp||""); if(!m) return "Never"; const d=new Date(Date.UTC(+m[1],m[2]-1,+m[3],+m[4],+m[5],+m[6])); return d.toLocaleString([],{dateStyle:"medium",timeStyle:"short"}); };
 
-const SECTIONS = [
-  ["overview","home","Overview"],["users","contacts","Mailboxes"],["org","tag","Teams & roles"],["domains","shield","Domains"],
-  ["lists","mail","Mailing lists"],["policies","shield","Policies"],["reports","refresh","Reports"],["shine","chat","Chat & meetings"],["plans","tag","Plans"],["settings","settings","Settings"]
+/* The console tree (like a mail server's admin console): [path under /admin/, icon, label, page, platform team only] */
+const P = true;
+const TREE = [
+  ["Monitor",[["monitor/overview","home","Overview","overview"],["monitor/servers","settings","Server status","servers",P],
+    ["monitor/statistics","refresh","Server statistics","statistics",P],["monitor/mail-queues","mail","Mail queues","queues",P],
+    ["monitor/sessions","contacts","Active sessions","sessions"],["monitor/reports","note","Reports","reports"]]],
+  ["Manage",[["manage/accounts","contacts","Accounts","users"],["manage/teams","tag","Teams & roles","org"],
+    ["manage/lists","mail","Distribution lists","lists"],["manage/resources","calendar","Resources","resources"],
+    ["manage/domains","building","Domains","domains"],["manage/chat","chat","Chat & meetings","shine"]]],
+  ["Configure",[["configure/cos","tag","Class of service","cos",P],["configure/global-settings","settings","Global settings","globalSettings",P],
+    ["configure/policies","shield","Mailbox policies","policies"],["configure/admins","shield","Admins & rights","rights",P],
+    ["configure/zimlets","layoutlist","Add-ons","zimlets",P],["configure/certificates","check","Certificates","certs",P],
+    ["configure/retention","archive","Retention","retention",P]]],
+  ["Tools",[["tools/bulk-import","compose","Bulk import","bulkImport"],["tools/mailbox","inbox","Mailbox tools","mailboxTools"],
+    ["tools/caches","refresh","Server caches","caches",P]]],
+  ["Search",[["search","search","Search directory","search"]]]
 ];
+// old #/links keep working
+const LEGACY = {overview:"monitor/overview",users:"manage/accounts",org:"manage/teams",domains:"manage/domains",lists:"manage/lists",
+  policies:"configure/policies",reports:"monitor/reports",shine:"manage/chat",plans:"configure/cos",settings:"configure/global-settings"};
+const routePath = () => { const p=location.pathname.replace(/^\/admin\/?/,"").replace(/\/+$/,""); return p||"monitor/overview"; };
 
-const state = { csrf:"", user:null, data:null, section:(location.hash.slice(2)||"overview") };
+const state = { csrf:"", user:null, data:null, section:routePath() };
 
 /* ---------------- server ---------------- */
 async function api(path, body){
@@ -55,31 +72,58 @@ function dialog({title, body, actions=[{label:"Close"}], wide}){
 }
 function confirmDialog(title, text, label, fn){ dialog({title, body:`<p>${esc(text)}</p><p role="alert" class="adm-error"></p>`, actions:[{label:"Cancel"},{label, danger:true, fn}]}); }
 
-// Company admins manage their own domain; plans and server settings stay with the platform team.
-const visibleSections = () => state.data?.scope ? SECTIONS.filter(([id])=>!["plans","settings"].includes(id)) : SECTIONS;
+// Company admins manage their own domain; server-wide items stay with the platform team.
+const visibleTree = () => TREE.map(([g,items])=>[g,items.filter(x=>!(x[4]&&state.data?.scope))]).filter(([,items])=>items.length);
 const roles = () => ["User","Domain admin",...(state.user?.canManageRoles?["Admin"]:[])];
+// the page for a path: its tree entry, plus what follows it (an id, like manage/accounts/<id>)
+function findRoute(path){
+  for(const [group,items] of visibleTree()) for(const item of items)
+    if(path===item[0]||path.startsWith(item[0]+"/")) return {group,item,rest:path.slice(item[0].length+1)};
+  return null;
+}
 function renderNav(){
   const nav=$("adm-nav"); nav.hidden=false;
-  if(!visibleSections().some(([id])=>id===state.section)) state.section="overview";
-  nav.innerHTML=visibleSections().map(([id,ico,label])=>`<a href="#/${id}" class="${state.section===id?"active":""}" ${state.section===id?'aria-current="page"':""}>${icon(ico)}<span>${label}</span></a>`).join("");
+  const at=findRoute(state.section)?.item[0];
+  nav.innerHTML=visibleTree().map(([group,items])=>`<div class="adm-nav-group"><p>${esc(group)}</p>${items.map(([path,ico,label])=>
+    `<a href="/admin/${path}" class="${at===path?"active":""}" ${at===path?'aria-current="page"':""}>${icon(ico)}<span>${esc(label)}</span></a>`).join("")}</div>`).join("");
 }
-window.addEventListener("hashchange",()=>{ state.section=location.hash.slice(2)||"overview"; if(state.data){ renderNav(); renderSection(); } });
+function navigate(path, replace){
+  const url="/admin/"+path.replace(/^\/+/,"");
+  if(replace) history.replaceState(null,"",url); else history.pushState(null,"",url);
+  state.section=routePath(); if(state.data){ renderNav(); renderSection(); }
+}
+document.addEventListener("click",e=>{
+  const a=e.target.closest?.("a[href^='/admin/']");
+  if(!a||e.defaultPrevented||e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||a.target) return;
+  e.preventDefault(); navigate(a.getAttribute("href").slice(7));
+});
+window.addEventListener("popstate",()=>{ state.section=routePath(); if(state.data){ renderNav(); renderSection(); } });
+if(location.hash.startsWith("#/")) history.replaceState(null,"","/admin/"+(LEGACY[location.hash.slice(2)]||"monitor/overview"));
+state.section=routePath();
 
 async function load(){
   try{ state.data = await api("admin"); }
   catch(e){ if(e.status===401) return showSignIn(); if(e.status===403) return showVerify(e.message); throw e; }
+  const ts=$("adm-top-search"); ts.hidden=false;
+  ts.onsubmit=e=>{ e.preventDefault(); const q=ts.elements.q.value.trim(); history.pushState(null,"","/admin/search"+(q?"?q="+encodeURIComponent(q):"")); state.section="search"; renderNav(); renderSection(); };
   $("adm-account").hidden=false; $("adm-who").textContent=state.data.scope?`${state.user?.email||""} · ${state.data.scope}`:state.user?.email||"";
   renderNav(); renderSection();
 }
 function renderSection(){
-  const main=$("adm-main"), fn=({overview,users,org,domains,lists,policies,reports,shine,plans,settings})[state.section]||overview;
-  fn(main, state.data); main.focus({preventScroll:true});
+  const main=$("adm-main"), found=findRoute(state.section);
+  if(!found){ navigate("monitor/overview",true); return; }
+  const pages={overview,users,org,domains,lists,policies,reports,shine,plans,settings,...(window.AdminPages||{})};
+  const fn=(found.rest&&pages[found.item[3]+"Detail"])||pages[found.item[3]]||overview;
+  document.title=found.item[2]+" · Dejoiy Mail Admin";
+  Promise.resolve(fn(main, state.data, helpers, found.rest)).catch(e=>{ main.innerHTML=head(found.item[2])+`<div class="adm-card adm-error">${esc(e.message)}</div>`; });
+  const crumb=$("adm-crumb"); if(crumb) crumb.textContent=found.group+" › "+found.item[2];
+  main.focus({preventScroll:true});
 }
 const reload = async msg => { if(msg) toast(msg); await load(); };
 
 /* ---------------- sign-in ---------------- */
 function authCard(inner){
-  $("adm-nav").hidden=true; $("adm-account").hidden=true;
+  $("adm-nav").hidden=true; $("adm-account").hidden=true; $("adm-top-search").hidden=true; $("adm-crumb").textContent="";
   $("adm-main").innerHTML=`<div class="adm-auth"><form class="adm-card adm-auth-card">${inner}<p role="alert" class="adm-error"></p></form>
     <p class="adm-muted adm-auth-foot">Dejoiy Mail Admin · for organisation administrators</p></div>`;
   return $("adm-main").querySelector("form");
@@ -115,23 +159,23 @@ function overview(main, d){
   const top=[...d.users].sort((a,b)=>(b.used||0)-(a.used||0)).slice(0,8), biggest=Math.max(1,...top.map(u=>u.used||0));
   main.innerHTML=head("Overview",d.scope?`Your company mail on ${d.scope}.`:"Your organisation at a glance.",`<button class="adm-btn ghost" id="ov-refresh">${icon("refresh")} Refresh</button>`)+`
     <div class="adm-stats">
-      <a class="adm-card adm-stat" href="#/users"><b>${d.users.length}</b><span>Mailboxes</span></a>
-      <a class="adm-card adm-stat" href="#/domains"><b>${d.domains.length}</b><span>Domains</span></a>
-      <a class="adm-card adm-stat" href="#/lists"><b>${d.lists?d.lists.length:"—"}</b><span>Mailing lists</span></a>
+      <a class="adm-card adm-stat" href="/admin/manage/accounts"><b>${d.users.length}</b><span>Mailboxes</span></a>
+      <a class="adm-card adm-stat" href="/admin/manage/domains"><b>${d.domains.length}</b><span>Domains</span></a>
+      <a class="adm-card adm-stat" href="/admin/manage/lists"><b>${d.lists?d.lists.length:"—"}</b><span>Mailing lists</span></a>
       <div class="adm-card adm-stat"><b>${mb(used)}</b><span>Storage used</span></div>
     </div>
     <div class="adm-card"><div class="adm-card-head"><h2>Server health</h2>${d.services?`<span class="adm-pill ${stopped.length?"bad":"good"}">${stopped.length?stopped.length+" stopped":"All running"}</span>`:""}</div>
       ${d.scope?`<p class="adm-muted">Dejoiy monitors the mail servers for you around the clock.</p>`:d.services?`<div class="adm-services">${d.services.map(s=>`<div class="adm-service ${s.running?"up":"down"}"><i aria-hidden="true"></i><span>${esc(s.service)}</span><small>${s.running?"Running":"Stopped"}</small></div>`).join("")}</div>`:`<p class="adm-muted">Server health is available to full administrators.</p>`}
     </div>
     <div class="adm-two">
-      <div class="adm-card"><div class="adm-card-head"><h2>People</h2><a href="#/users">All mailboxes →</a></div>
+      <div class="adm-card"><div class="adm-card-head"><h2>People</h2><a href="/admin/manage/accounts">All mailboxes →</a></div>
         <div class="adm-seg" role="img" aria-label="${people.map(p=>p[1]+" "+p[0]).join(", ")}">${people.filter(p=>p[1]).map(p=>`<i class="${p[2]}" style="flex:${p[1]}"></i>`).join("")}</div>
         <ul class="adm-legend">${people.map(p=>`<li><i class="${p[2]}"></i><span>${p[0]}</span><b>${p[1]}</b></li>`).join("")}</ul>
         <p class="adm-muted">Quiet = no sign-in for 30 days. A mailbox nobody uses still counts on your plan.</p></div>
-      <div class="adm-card"><div class="adm-card-head"><h2>Mail security</h2><a href="#/domains">Domains →</a></div>
+      <div class="adm-card"><div class="adm-card-head"><h2>Mail security</h2><a href="/admin/manage/domains">Domains →</a></div>
         <div id="ov-dns"><p class="adm-muted">Checking each domain's public DNS…</p></div></div>
     </div>
-    <div class="adm-card"><div class="adm-card-head"><h2>Storage by mailbox</h2><a href="#/users">All mailboxes →</a></div>
+    <div class="adm-card"><div class="adm-card-head"><h2>Storage by mailbox</h2><a href="/admin/manage/accounts">All mailboxes →</a></div>
       <div class="adm-bars">${top.map(u=>`<div class="adm-bar"><span title="${esc(u.email)}">${esc(u.name)}</span>
         <div class="adm-bar-track" role="img" aria-label="${esc(u.name)} uses ${mb(u.used||0)}${u.limit?" of "+mb(u.limit):""}"><i class="${u.limit&&(u.used||0)/u.limit>0.9?"full":""}" style="width:${Math.max(1,Math.round((u.used||0)/(u.limit||biggest)*100))}%"></i></div>
         <small>${mb(u.used||0)}${u.limit?" of "+mb(u.limit):""}</small></div>`).join("")||`<p class="adm-muted">No mailboxes yet.</p>`}</div></div>`;
@@ -300,12 +344,12 @@ async function reports(main, d){
 
 function users(main, d){
   const plans=d.plans||[], planName=id=>{const n=(id&&plans.find(p=>p.id===id)?.name)||"default";return n.charAt(0).toUpperCase()+n.slice(1);};
-  main.innerHTML=head("Mailboxes",`${d.users.length} mailboxes`,`<input type="search" id="u-search" placeholder="Search name or email" aria-label="Search mailboxes"><button class="adm-btn ghost" id="u-export">Export CSV</button>${can("mailboxes.manage")?'<button class="adm-btn primary" id="u-add">+ New mailbox</button>':""}`)+`
+  main.innerHTML=head("Accounts",`${d.users.length} mailboxes`,`<input type="search" id="u-search" placeholder="Search name or email" aria-label="Search mailboxes"><button class="adm-btn ghost" id="u-export">Export CSV</button>${can("mailboxes.manage")?'<button class="adm-btn primary" id="u-add">+ New mailbox</button>':""}`)+`
     <div class="adm-card adm-flush"><table class="adm-table" id="u-table"><thead><tr><th>Mailbox</th><th>Status</th><th>Department</th><th>Role</th><th>Plan</th><th>Storage</th><th>Last sign-in</th><th></th></tr></thead><tbody>
     ${d.users.map((u,i)=>`<tr data-q="${esc((u.name+" "+u.email+" "+(u.department||"")+" "+(u.title||"")).toLowerCase())}"><td><b>${esc(u.name)}</b><small>${esc(u.email)}</small></td>
       <td><span class="adm-pill ${u.status==="active"?"good":"warn"}">${esc(u.status)}</span></td><td>${esc(u.department||"—")}</td><td>${esc(u.title||u.role)}${u.title?`<small>${esc(u.role)}</small>`:""}</td><td>${esc(planName(u.cosId))}</td>
       <td>${mb(u.used)}${u.limit?` <small>of ${mb(u.limit)}</small>`:""}</td><td><small>${esc(when(u.lastLogin))}</small></td>
-      <td><button class="adm-btn ghost sm" data-edit="${i}">Manage</button></td></tr>`).join("")}
+      <td class="adm-right"><button class="adm-btn ghost sm" data-edit="${i}">Manage</button> <a class="adm-btn ghost sm" href="/admin/manage/accounts/${esc(u.id)}">Details</a></td></tr>`).join("")}
     </tbody></table></div>`;
   $("u-export").addEventListener("click",()=>exportUsers(d));
   $("u-search").addEventListener("input",e=>{const q=e.target.value.trim().toLowerCase();main.querySelectorAll("#u-table tbody tr").forEach(r=>r.hidden=!r.dataset.q.includes(q));});
@@ -449,7 +493,7 @@ function domains(main, d){
     <div class="adm-card adm-flush"><table class="adm-table"><thead><tr><th>Domain</th><th>Mailboxes</th><th>Status</th><th></th></tr></thead><tbody>
     ${d.domains.map((x,i)=>`<tr><td><b>${esc(x.domain)}</b></td><td>${d.users.filter(u=>u.email.endsWith("@"+x.domain)).length}</td>
       <td>${d.scope?`<span class="adm-pill ${x.status==="active"?"good":"warn"}">${esc(x.status)}</span>`:`<select data-dstatus="${i}" aria-label="Status for ${esc(x.domain)}">${["active","locked","maintenance","suspended"].map(s=>`<option ${s===x.status?"selected":""}>${s}</option>`).join("")}</select>`}</td>
-      <td class="adm-right"><button class="adm-btn ghost sm" data-dns="${esc(x.domain)}">DNS setup</button> <button class="adm-btn ghost sm" data-host="${esc(x.domain)}">Branding & sign-in</button>${d.scope?"":` <button class="adm-btn ghost sm" data-ddel="${i}" aria-label="Delete ${esc(x.domain)}">Delete</button>`}</td></tr>`).join("")}
+      <td class="adm-right">${can("domain.view")?`<a class="adm-btn ghost sm" href="/admin/manage/domains/${esc(x.domain)}">Settings</a> `:""}<button class="adm-btn ghost sm" data-dns="${esc(x.domain)}">DNS setup</button> <button class="adm-btn ghost sm" data-host="${esc(x.domain)}">Branding & sign-in</button>${d.scope?"":` <button class="adm-btn ghost sm" data-ddel="${i}" aria-label="Delete ${esc(x.domain)}">Delete</button>`}</td></tr>`).join("")}
     </tbody></table></div>
     <div class="adm-card"><h2>DNS checklist</h2><p class="adm-muted">Adding a domain here does not change public DNS. At your DNS provider, point <b>MX</b> to this server and publish <b>SPF</b>, <b>DKIM</b> and <b>DMARC</b> records so mail is delivered and trusted.</p></div>`;
   main.querySelectorAll("[data-dstatus]").forEach(s=>s.addEventListener("change",async()=>{const x=d.domains[+s.dataset.dstatus];s.disabled=true;try{await act({op:"domain_status",id:x.id,status:s.value});x.status=s.value;toast("Domain status updated.");}catch(e){s.value=x.status;toast(e.message);}finally{s.disabled=false;}}));
@@ -467,7 +511,7 @@ function deleteDomain(d, x){
   if(boxes||lists) return dialog({title:"Delete "+x.domain,
     body:`<p><b>${esc(x.domain)}</b> still has ${boxes?`${boxes} mailbox${boxes===1?"":"es"}`:""}${boxes&&lists?" and ":""}${lists?`${lists} mailing list${lists===1?"":"s"}`:""}.</p>
       <p class="adm-muted">Delete or move them first, then delete the domain. This keeps anyone's mail from disappearing by accident.</p>`,
-    actions:[{label:"Close"},...(boxes?[{label:"Show mailboxes",primary:true,fn:()=>{location.hash="#/users";}}]:[])]});
+    actions:[{label:"Close"},...(boxes?[{label:"Show mailboxes",primary:true,fn:()=>{navigate("manage/accounts");}}]:[])]});
   dialog({title:"Delete "+x.domain,
     body:`<p>This removes <b>${esc(x.domain)}</b> from Dejoiy Mail. It has no mailboxes, so no mail is lost. You can add it again later.</p>
       <p class="adm-muted">Also remove its MX, SPF, DKIM and DMARC records at your DNS provider.</p>
@@ -542,10 +586,10 @@ async function dnsSetup(domain){
 }
 
 function lists(main, d){
-  if(!d.lists){ main.innerHTML=head("Mailing lists")+unavailable("Mailing lists"); return; }
-  main.innerHTML=head("Mailing lists","One address that delivers to many people.",`<button class="adm-btn primary" id="l-add">+ New list</button>`)+`
+  if(!d.lists){ main.innerHTML=head("Distribution lists")+unavailable("Distribution lists"); return; }
+  main.innerHTML=head("Distribution lists","One address that delivers to many people.",`<button class="adm-btn primary" id="l-add">+ New list</button>`)+`
     <div class="adm-card adm-flush"><table class="adm-table"><thead><tr><th>List</th><th></th></tr></thead><tbody>
-    ${d.lists.map((l,i)=>`<tr><td><b>${esc(l.name||l.email)}</b><small>${esc(l.email)}</small></td><td class="adm-right"><button class="adm-btn ghost sm" data-members="${i}">Members</button> <button class="adm-btn ghost sm" data-ldel="${i}">Delete</button></td></tr>`).join("")||`<tr><td class="adm-muted">No mailing lists yet.</td><td></td></tr>`}
+    ${d.lists.map((l,i)=>`<tr><td><b>${esc(l.name||l.email)}</b><small>${esc(l.email)}</small></td><td class="adm-right"><a class="adm-btn ghost sm" href="/admin/manage/lists/${esc(l.id)}">Settings</a> <button class="adm-btn ghost sm" data-members="${i}">Members</button> <button class="adm-btn ghost sm" data-ldel="${i}">Delete</button></td></tr>`).join("")||`<tr><td class="adm-muted">No mailing lists yet.</td><td></td></tr>`}
     </tbody></table></div>`;
   $("l-add").addEventListener("click",()=>dialog({title:"New mailing list",body:`<label>List address<input id="nl-email" type="email" placeholder="team@${esc(d.domains[0]?.domain||"example.com")}"></label><label>Name (optional)<input id="nl-name" maxlength="200"></label><p role="alert" class="adm-error"></p>`,
     actions:[{label:"Cancel"},{label:"Create list",primary:true,fn:async()=>{await act({op:"create_list",email:$("nl-email").value,name:$("nl-name").value});await reload("Mailing list created.");}}]}));
@@ -593,6 +637,9 @@ function settings(main, d){
     try{await act({op:"settings_update",maxMessageMB:Number(f.elements.maxMessageMB.value),uploadMaxMB:Number(f.elements.uploadMaxMB.value),blockedExtensions:f.elements.blocked.value.split(/[\s,]+/).map(x=>x.replace(/^\./,"").toLowerCase()).filter(Boolean)});await reload("Settings saved.");}
     catch(x){f.querySelector("[role=alert]").textContent=x.message;b.disabled=false;}});
 }
+
+/* ---------------- what admin-console.js pages get ---------------- */
+const helpers = { $, esc, icon, mb, when, act, api, dialog, confirmDialog, toast, head, unavailable, reload, navigate, can, state, settings };
 
 /* ---------------- start ---------------- */
 (async function start(){

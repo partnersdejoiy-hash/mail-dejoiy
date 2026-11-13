@@ -241,3 +241,47 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--pop)!imp
 .adm-logo img{width:100%;height:100%;object-fit:contain}.adm-logo i{font-size:10px;color:var(--ink-3);font-style:normal}
 
 .adm-card-head input[type=search]{max-width:240px}
+
+/* ---------- full console: grouped tree, breadcrumb, search, settings forms ---------- */
+.adm-nav{gap:0;padding-top:10px}
+.adm-nav-group{display:flex;flex-direction:column;gap:2px;padding-bottom:10px}
+.adm-nav-group p{font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--ink-3);padding:10px 20px 4px}
+.adm-nav a{padding:7px 14px 7px 20px;font-size:13.5px}
+.adm-crumb{font-size:13px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.adm-top-search{flex:1;max-width:420px;margin-left:auto}
+.adm-top-search input{margin:0;padding:7px 12px;background:var(--surface-2)}
+.adm-top-search+.adm-top-actions{margin-left:8px}
+.adm-back{margin-bottom:8px;font-size:13px}
+.adm-pad{padding:16px 20px}
+.adm-card-head.adm-pad{margin:0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.adm-fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:4px 20px;margin-bottom:12px}
+.adm-field{margin-bottom:10px}
+.adm-field small{display:block;font-weight:400;color:var(--ink-3);margin-top:3px}
+.adm-field.adm-check{align-self:end;padding:8px 0}
+.adm-wide{grid-column:1/-1}
+textarea{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:var(--surface);margin-top:5px;font:inherit;color:inherit;resize:vertical}
+textarea:focus{outline:2px solid color-mix(in srgb,var(--accent) 40%,transparent);border-color:var(--accent)}
+.adm-mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;margin-bottom:12px}
+.adm-settings .adm-tabs{margin-top:0}
+.adm-grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.adm-mini{list-style:none;display:flex;flex-direction:column;gap:4px;margin-bottom:8px;font-size:13px}
+.adm-mini small{color:var(--ink-3)}
+.adm-scroll{max-height:260px;overflow:auto}
+.adm-empty{padding:6px 0}
+.adm-stats-5{grid-template-columns:repeat(5,minmax(0,1fr))}
+button.adm-stat{font:inherit;text-align:left;cursor:pointer}
+.adm-queue.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.adm-seg{display:flex;gap:6px}
+.adm-search{display:flex;flex-direction:column;gap:12px}
+.adm-search input[type=search]{margin:0}
+.adm-chips{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center}
+.adm-chips label{margin:0}.adm-chips select{width:auto;margin:0}
+.adm-head .adm-pill{margin-left:6px}
+code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;background:var(--surface-2);padding:1px 5px;border-radius:5px}
+@media(max-width:900px){.adm-stats-5{grid-template-columns:repeat(3,minmax(0,1fr))}.adm-crumb{display:none}}
+@media(max-width:680px){
+  .adm-grid2{grid-template-columns:1fr}.adm-stats-5{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .adm-nav-group{flex-direction:row;padding:0;gap:4px}.adm-nav-group p{display:none}
+  .adm-top-search{display:none}
+}
+.adm-stat.sm b{font-size:17px;letter-spacing:-.2px;line-height:1.3}

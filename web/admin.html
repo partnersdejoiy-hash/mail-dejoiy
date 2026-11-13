@@ -4,19 +4,21 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <meta name="theme-color" content="#121212" />
-<link rel="manifest" href="admin.webmanifest" />
-<link rel="apple-touch-icon" href="assets/icons/admin-192.png?v=20261110z" />
+<link rel="manifest" href="/admin.webmanifest" />
+<link rel="apple-touch-icon" href="/assets/icons/admin-192.png?v=20261110z" />
 <meta name="robots" content="noindex" />
 <title>Dejoiy Mail Admin</title>
-<link rel="icon" type="image/svg+xml" href="assets/brand/dmail-logo.svg?v=20261110a" />
-<link rel="icon" type="image/png" sizes="32x32" href="assets/icons/favicon-32.png?v=20261110a" />
-<script src="js/accent.js?v=20261110g"></script>
-<link rel="stylesheet" href="css/font.css?v=20261110b" />
-<link rel="stylesheet" href="css/admin.css?v=20261112p" />
+<link rel="icon" type="image/svg+xml" href="/assets/brand/dmail-logo.svg?v=20261110a" />
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32.png?v=20261110a" />
+<script src="/js/accent.js?v=20261110g"></script>
+<link rel="stylesheet" href="/css/font.css?v=20261110b" />
+<link rel="stylesheet" href="/css/admin.css?v=20261112q" />
 </head>
 <body>
 <header class="adm-top">
-  <a class="adm-brand" href="/admin" aria-label="Dejoiy Mail Admin home"><picture><source srcset="assets/brand/dejoiy-mail-on-dark.svg?v=20261110a" media="(prefers-color-scheme: dark)"><img src="assets/brand/dejoiy-mail.svg?v=20261110a" alt="Dejoiy Mail" height="30"></picture> <em>Admin</em></a>
+  <a class="adm-brand" href="/admin" aria-label="Dejoiy Mail Admin home"><picture><source srcset="/assets/brand/dejoiy-mail-on-dark.svg?v=20261110a" media="(prefers-color-scheme: dark)"><img src="/assets/brand/dejoiy-mail.svg?v=20261110a" alt="Dejoiy Mail" height="30"></picture> <em>Admin</em></a>
+  <span class="adm-crumb" id="adm-crumb"></span>
+  <form class="adm-top-search" id="adm-top-search" role="search" hidden><input type="search" name="q" placeholder="Search accounts, lists, rooms, domains" aria-label="Search the directory"></form>
   <div class="adm-top-actions" id="adm-account" hidden>
     <span id="adm-who"></span>
     <a class="adm-btn ghost" id="adm-open-mail" href="/">Open mail</a>
@@ -29,8 +31,9 @@
 </div>
 <div id="adm-dialog-root"></div>
 <div class="adm-toasts" id="adm-toasts" aria-live="polite"></div>
-<script src="js/compat.js?v=20261009m"></script>
-<script src="js/icons.js?v=20261009m"></script>
-<script src="js/admin-app.js?v=20261112p"></script>
+<script src="/js/compat.js?v=20261009m"></script>
+<script src="/js/icons.js?v=20261009m"></script>
+<script src="/js/admin-console.js?v=20261112a"></script>
+<script src="/js/admin-app.js?v=20261112q"></script>
 </body>
 </html>

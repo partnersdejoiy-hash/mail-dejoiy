@@ -10,7 +10,7 @@ self.addEventListener("activate", event => event.waitUntil(
 self.addEventListener("fetch", event => {
   const url = new URL(event.request.url), navigate = event.request.mode === "navigate";
   if (event.request.method !== "GET" || url.origin !== location.origin || url.pathname.startsWith("/api/")) return;
-  const secret = url.pathname.startsWith("/admin") || url.pathname.includes("admin-app") || url.pathname.endsWith("admin.css");
+  const secret = url.pathname.startsWith("/admin") || url.pathname.includes("admin-app") || url.pathname.includes("admin-console") || url.pathname.endsWith("admin.css");
   if (secret) {
     // The console is never stored; offline it shows the offline page instead of a browser error.
     if (navigate) event.respondWith(fetch(event.request).catch(() => caches.match(OFFLINE)));
