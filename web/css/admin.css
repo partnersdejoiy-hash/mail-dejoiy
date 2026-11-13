@@ -285,3 +285,13 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;backgrou
   .adm-top-search{display:none}
 }
 .adm-stat.sm b{font-size:17px;letter-spacing:-.2px;line-height:1.3}
+
+/* Webhooks */
+.adm-wh-form{display:grid;gap:16px;max-width:640px}
+.adm-wh-form>label{display:grid;gap:6px;font-weight:600}
+.adm-wh-ev{display:grid;gap:10px;border:0;padding:0;margin:0;min-width:0}
+.adm-wh-ev legend{font-weight:600;margin-bottom:8px;padding:0}
+.adm-wh-ev label{display:flex;gap:10px;align-items:flex-start;font-weight:400;cursor:pointer}
+.adm-wh-ev input{width:16px;height:16px;margin:2px 0 0;flex:none}
+.adm-wh-ev small{color:var(--adm-muted,#6b6b76);margin-left:4px}
+#wh-secret{word-break:break-all}

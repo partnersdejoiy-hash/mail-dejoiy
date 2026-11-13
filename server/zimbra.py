@@ -23,6 +23,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import dcalendar
 import zconsole
+from webhooks import Webhooks, WebhookError
 from html.parser import HTMLParser
 
 SOAP = 'http://www.w3.org/2003/05/soap-envelope'
@@ -288,6 +289,18 @@ class MediaStore:
         if not self.dir: return self.memory.get(name)
         path=self.dir/name
         return path.read_bytes() if path.is_file() else None
+
+WEBHOOK_OPS=('webhooks_get','webhook_add','webhook_remove','webhook_set_active','webhook_test')
+
+
+def webhook_domain(scope, chosen):
+    """Whose webhooks: a company admin only ever their own domain (never taken from the request);
+    a platform admin the domain they chose."""
+    if scope: return scope.lower()
+    domain=str(chosen or '').strip().lower()
+    if not DOMAIN_NAME.fullmatch(domain): raise APIError('Choose a domain first.')
+    return domain
+
 
 def shown_mb(raw):
     """A size limit stored in bytes, as the whole MB the Settings card shows (10240000 -> 10)."""
@@ -1931,6 +1944,8 @@ class Handler(SimpleHTTPRequestHandler):
     def log(self, kind, actor, target='', n=1):
         audit=getattr(self.server,'audit',None)
         if audit: audit.add(kind,actor,target,self.client_ip(),n)
+        hooks=getattr(self.server,'hooks',None)
+        if hooks: hooks.emit(kind,actor,target,n)  # queues only: never blocks, never raises
     def login_hosts(self):
         store=getattr(self.server,'hosts',None)
         return store.get('all') if store else {}
@@ -2467,6 +2482,23 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header('Content-Disposition',"attachment; filename*=UTF-8''"+urllib.parse.quote(found['name'],safe=''))
         self.send_header('X-Content-Type-Options','nosniff'); self.send_header('Cache-Control','private, no-store')
         self.send_header('Content-Length',str(len(raw))); self.end_headers(); self.wfile.write(raw)
+    def webhook_action(self, s, data):
+        """A company's webhooks (see webhooks.py). Same permission as the company's domain settings."""
+        hooks=getattr(self.server,'hooks',None)
+        if not hooks: raise APIError('Webhooks are not switched on for this server.',503)
+        client,token,scope=self.admin_session(s)
+        perms=client.actor_perms(token,s['user']['email'],scope)
+        if scope and perms is not None and 'roles.manage' not in perms:
+            raise APIError('Your role does not allow this. Ask an admin for "'+PERMISSIONS['roles.manage']+'".',403)
+        domain=webhook_domain(scope,data.get('domain'))
+        if not scope:  # a platform admin picks the company; it must be a real one
+            lookup=node(ADMIN,'GetDomainRequest'); lookup.append(node(ADMIN,'domain',{'by':'name'},domain))
+            if client.call(lookup,token).find('{'+ADMIN+'}domain') is None: raise APIError('Domain not found.',404)
+        payload={k:data.get(k) for k in ('id','url','events','active')}
+        try: out=hooks.action(data['op'],payload,domain)
+        except WebhookError as e: raise APIError(str(e))
+        if data['op']!='webhooks_get': self.log('admin:'+data['op'],s['user']['email'],domain+' '+str(payload.get('url') or payload.get('id') or '')[:200])
+        return out
     def admin_session(self, session):
         client=getattr(self.server,'admin',None)
         if not client: raise APIError('Mail administration is not configured on this server.',503)
@@ -2583,6 +2615,8 @@ class Handler(SimpleHTTPRequestHandler):
                 if data['op'] not in zconsole.LOOKUPS:
                     self.log('admin:'+data['op'],s['user']['email'],str(data.get('email') or data.get('id') or data.get('domain') or data.get('name') or data.get('grantee') or data.get('queue') or '')[:200])
                 return self.reply(200,out)
+            if self.path=='/api/admin/action' and data.get('op') in WEBHOOK_OPS:
+                return self.reply(200,self.webhook_action(s,data))
             if self.path=='/api/admin/action' and data.get('op')=='reports':
                 client,token,scope=self.admin_session(s)
                 audit=getattr(self.server,'audit',None)
@@ -2686,6 +2720,9 @@ def serve():
     server.joi_internal=[d.strip().lower() for d in (os.environ.get('JOI_INTERNAL_DOMAINS') or 'dejoiy.com,mail.dejoiy.com').split(',') if d.strip()]
     server.shine_site=(os.environ.get('SHINE_SITE') or 'https://convex-site.shine.dejoiy.com').rstrip('/')
     state_dir=Path(os.environ['SESSION_DB']).parent if os.environ.get('SESSION_DB') else None
+    # webhooks: signed notes to a company's own tools when something happens (secrets kept 0600 beside the sessions)
+    server.hooks=Webhooks(state_dir/'webhooks.json') if state_dir else None
+    if server.hooks: server.hooks.start()
     server.avatars=AvatarStore(str(state_dir/'avatars.sqlite') if state_dir else None)
     server.media=MediaStore(str(state_dir/'media') if state_dir else None)
     if server.zimbra: server.zimbra.media_prefix=server.app_origin+'/media/'; server.zimbra.app_url=server.app_origin

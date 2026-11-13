@@ -384,6 +384,50 @@ async function certs(main, d, h, rest, tries=0, refresh=false){
   h.$("ct-refresh").addEventListener("click",()=>{ loading(h,main,title,"Reading the server's certificates again…"); certs(main,d,h,rest,1,true); });
 }
 
+async function webhooks(main, d, h, rest, picked){
+  const title="Webhooks";
+  const domains=d.scope?[d.scope]:(d.domains||[]).map(x=>x.domain);
+  const domain=d.scope||picked||domains[0]||"";
+  loading(h,main,title);
+  let r;
+  try{ r=await h.act({op:"webhooks_get",domain}); }
+  catch(e){ main.innerHTML=h.head(title)+`<div class="adm-card adm-error">${h.esc(e.message)}</div>`; return; }
+  const when=t=>t?new Date(t*1000).toLocaleString([],{dateStyle:"medium",timeStyle:"short"}):"";
+  const last=x=>!x.last?`<span class="adm-muted">Not sent yet</span>`:`${pill(x.last.ok?"OK "+x.last.status:(x.last.status?"Error "+x.last.status:"No answer"),x.last.ok)} <small>${h.esc(when(x.last.at))}</small>`;
+  const draw=(out,secret)=>{
+    r=out;
+    main.innerHTML=h.head(title,"Post a small signed note to your own tools (n8n, Zapier, Make or your code) when something happens. Notes never carry mail content or passwords.")+
+      (d.scope?"":`<div class="adm-card"><label>Company <select id="wh-domain">${domains.map(x=>`<option${x===domain?" selected":""}>${h.esc(x)}</option>`).join("")}</select></label></div>`)+
+      (secret?`<div class="adm-card"><h2>Signing secret</h2><p>Copy it now. It is shown only this once; to get a new one, remove the webhook and add it again.</p>
+        <p><code id="wh-secret">${h.esc(secret)}</code> <button class="adm-btn primary sm" id="wh-copy">Copy</button></p></div>`:"")+
+      `<div class="adm-card adm-flush"><table class="adm-table"><thead><tr><th>Address</th><th>Events</th><th>Status</th><th>Last result</th><th></th></tr></thead><tbody>
+      ${r.webhooks.map(x=>`<tr><td><b>${h.esc(x.url)}</b><small>Added ${h.esc(when(x.created))}${x.failures?` · ${x.failures} failed in a row`:""}</small></td>
+        <td>${x.events.map(e=>`<span class="adm-chip">${h.esc(e)}</span>`).join(" ")}</td><td>${pill(x.active?"On":"Off",x.active)}</td><td>${last(x)}</td>
+        <td class="adm-right"><button class="adm-btn ghost sm" data-t="${h.esc(x.id)}">Send test</button>
+          <button class="adm-btn ghost sm" data-a="${h.esc(x.id)}" data-on="${x.active?0:1}">${x.active?"Switch off":"Switch on"}</button>
+          <button class="adm-btn ghost sm" data-r="${h.esc(x.id)}" data-u="${h.esc(x.url)}">Remove</button></td></tr>`).join("")||`<tr><td colspan="5">${empty(h,"No webhooks yet.")}</td></tr>`}
+      </tbody></table></div>`+
+      (r.webhooks.length<r.max?`<div class="adm-card"><h2>Add webhook</h2><form id="wh-add" class="adm-wh-form">
+        <label>Address<input name="url" type="url" required placeholder="https://hooks.example.com/dejoiy" maxlength="500"></label>
+        <fieldset class="adm-wh-ev"><legend>Events</legend>${Object.entries(r.events).map(([k,v])=>`<label><input type="checkbox" name="ev" value="${h.esc(k)}"><span><b>${h.esc(k)}</b> <small>${h.esc(v)}</small></span></label>`).join("")}</fieldset>
+        <div><button class="adm-btn primary">Add webhook</button></div></form></div>`:`<p class="adm-muted">A company can have ${r.max} webhooks.</p>`)+
+      `<p class="adm-muted">Each note is a POST with a JSON body. Check it with the header <code>X-Dejoiy-Signature: t=&lt;time&gt;,v1=&lt;signature&gt;</code>,
+        where signature = HMAC-SHA256(secret, "&lt;time&gt;.&lt;body&gt;") in hex. Ignore notes older than 5 minutes. After 20 failures in a row a webhook switches itself off.</p>`;
+    h.$("wh-domain")?.addEventListener("change",e=>webhooks(main,d,h,rest,e.target.value));
+    h.$("wh-copy")?.addEventListener("click",async()=>{ try{ await navigator.clipboard.writeText(secret); h.toast("Copied."); }catch(_){ const c=h.$("wh-secret"); const rg=document.createRange(); rg.selectNodeContents(c); const sel=getSelection(); sel.removeAllRanges(); sel.addRange(rg); h.toast("Press Ctrl+C to copy."); } });
+    const run=async(btn,body,done)=>{ btn.disabled=true; try{ const out=await h.act({...body,domain}); draw(out); done&&done(out); }catch(e){ h.toast(e.message); btn.disabled=false; } };
+    main.querySelectorAll("[data-t]").forEach(b=>b.addEventListener("click",()=>run(b,{op:"webhook_test",id:b.dataset.t},o=>h.toast(o.ok?"Test sent: they answered "+o.status+".":o.status?"They answered "+o.status+".":"No answer from that address."))));
+    main.querySelectorAll("[data-a]").forEach(b=>b.addEventListener("click",()=>run(b,{op:"webhook_set_active",id:b.dataset.a,active:b.dataset.on==="1"},()=>h.toast("Saved."))));
+    main.querySelectorAll("[data-r]").forEach(b=>b.addEventListener("click",()=>h.confirmDialog("Remove this webhook?",`Notes stop going to ${b.dataset.u}.`,"Remove",()=>run(b,{op:"webhook_remove",id:b.dataset.r},()=>h.toast("Removed.")))));
+    h.$("wh-add")?.addEventListener("submit",async e=>{ e.preventDefault(); const f=e.target, btn=f.querySelector("button");
+      const events=[...f.querySelectorAll("[name=ev]:checked")].map(x=>x.value);
+      btn.disabled=true;
+      try{ const out=await h.act({op:"webhook_add",domain,url:f.elements.url.value.trim(),events}); draw(out,out.secret); h.toast("Webhook added."); }
+      catch(x){ h.toast(x.message); btn.disabled=false; } });
+  };
+  draw(r);
+}
+
 async function retention(main, d, h){
   loading(h,main,"Retention");
   const r=await h.act({op:"z_retention"});
@@ -480,5 +524,5 @@ async function search(main, d, h){
 }
 
 window.AdminPages = { servers, statistics, queues, sessions, usersDetail, listsDetail, resources, domainsDetail, cos, cosDetail:cos,
-  globalSettings, rights, zimlets, certs, retention, bulkImport, mailboxTools, caches, search };
+  globalSettings, rights, zimlets, certs, retention, webhooks, bulkImport, mailboxTools, caches, search };
 })();
