@@ -65,7 +65,7 @@ class Posting(unittest.TestCase):
         self.assertTrue(autos.new_mail('acme.com', 'asha@acme.com', {'id': '5', 'from': 'alerts@bank.com', 'subject': 'Salary credited'}))
         self.assertFalse(autos.new_mail('acme.com', 'asha@acme.com', {'id': '6', 'from': 'news@shop.in', 'subject': 'Sale'}))
         drain(autos)
-        self.assertEqual(posted, [{'op': 'post', 'scope': 'acme.com', 'actor': 'boss@acme.com', 'channel': 'urgent', 'text': 'Important mail for asha@acme.com from alerts@bank.com'}])
+        self.assertEqual(posted, [{'op': 'post', 'scope': 'acme.com', 'actor': 'boss@acme.com', 'channel': 'urgent', 'text': 'Important mail for asha@acme.com from alerts@bank.com', 'via': 'automation'}])
         self.assertEqual(audit.lines, [('automation:important_to_shine', 'asha@acme.com', '#urgent ok')])
         self.assertTrue(autos.listing('acme.com')['important_to_shine']['last']['ok'])
 
@@ -164,6 +164,141 @@ class AdminWiring(unittest.TestCase):
     def test_needs_the_domain_settings_permission(self):
         h = self.handler('acme.com', {'mailboxes.manage'}, 'boss@acme.com')
         with self.assertRaisesRegex(z.APIError, 'does not allow'): h.act({'op': 'automations_get'})
+
+
+
+DAY = 86400
+
+
+class FakeMail:
+    """Mailboxes per domain, sent mail per mailbox, which conversations got a reply; records reminders."""
+    def __init__(self):
+        self.boxes = {'acme.com': ['asha@acme.com', 'ravi@acme.com'], 'other.com': ['zed@other.com']}
+        self.sentbox, self.replies, self.reminders, self.asked = {}, set(), [], []
+    def mailboxes(self, domain): self.asked.append(domain); return self.boxes.get(domain, [])
+    def sent(self, email, since_ms): return [m for m in self.sentbox.get(email, []) if m['date'] >= since_ms]
+    def replied(self, email, mail): return mail['id'] in self.replies
+    def remind(self, email, subject, text): self.reminders.append((email, subject, text))
+
+
+class Followup(unittest.TestCase):
+    def setUp(self):
+        self.now = [1_000_000.0]; self.mail = FakeMail(); self.audit = Audit()
+        self.autos = au.Automations(Path(tempfile.mkdtemp()) / 'automations.json', lambda p: None, self.audit, clock=lambda: self.now[0], mail=self.mail)
+
+    def on(self, domain='acme.com', days=3, on=True):
+        return self.autos.action('automation_save', {'kind': 'followup', 'settings': {'on': on, 'days': days}}, domain, 'boss@' + domain)
+
+    def send(self, box, mid, ago_days, to=('client@x.com',), subject='Quote'):
+        self.mail.sentbox.setdefault(box, []).append({'id': mid, 'cid': mid, 'date': int((self.now[0] - ago_days * DAY) * 1000), 'to': list(to), 'subject': subject})
+
+    def test_reminds_once_after_n_days_without_reply(self):
+        self.on(); self.now[0] += 10 * DAY
+        self.send('asha@acme.com', '1', 4, subject='Quote for March')   # due
+        self.send('asha@acme.com', '2', 1)                              # not yet
+        self.assertEqual(self.autos.followups(), 1)
+        box, subject, text = self.mail.reminders[0]
+        self.assertEqual((box, subject), ('asha@acme.com', 'Reminder: no reply yet to "Quote for March"'))
+        self.assertIn('client@x.com', text); self.assertIn('3 days', text)
+        self.assertEqual(self.autos.followups(), 0)                     # never twice
+        self.now[0] += 3 * DAY
+        self.assertEqual(self.autos.followups(), 1)                     # the second one is due now
+        self.assertEqual(self.audit.lines[0], ('automation:followup', 'asha@acme.com', 'reminded about mail 1'))
+        self.assertNotIn('Quote', repr(self.audit.lines))
+        last = self.autos.listing('acme.com')['followup']['last']
+        self.assertEqual((last['ok'], last['reminders']), (True, 1))
+
+    def test_a_reply_or_mail_to_yourself_means_no_reminder(self):
+        self.on(); self.now[0] += 10 * DAY
+        self.send('asha@acme.com', '1', 4); self.mail.replies.add('1')
+        self.send('asha@acme.com', '2', 4, to=('Asha@acme.com',))
+        self.assertEqual(self.autos.followups(), 0)
+        self.mail.replies.clear()
+        self.assertEqual(self.autos.followups(), 0)   # already settled, not looked at again
+
+    def test_mail_from_before_switching_on_is_never_reminded(self):
+        self.send('asha@acme.com', 'old', 2)
+        self.on(); self.now[0] += 5 * DAY
+        self.assertEqual(self.autos.followups(), 0)
+        # saving again while on keeps the start; switching off and on starts again from then
+        self.on(days=1); self.assertEqual(self.autos.listing('acme.com')['followup']['since'], 1_000_000)
+        self.on(on=False); self.on()
+        self.assertEqual(self.autos.listing('acme.com')['followup']['since'], self.now[0])
+
+    def test_too_old_mail_is_left_alone(self):
+        self.on(); self.now[0] += 30 * DAY
+        self.send('asha@acme.com', '1', 3 + au.FOLLOWUP_GRACE + 1)
+        self.assertEqual(self.autos.followups(), 0)
+
+    def test_at_most_ten_per_mailbox_per_round(self):
+        self.on(); self.now[0] += 10 * DAY
+        for i in range(15): self.send('asha@acme.com', str(i), 4)
+        self.assertEqual(self.autos.followups(), au.REMINDERS_PER_ROUND)
+        self.assertEqual(self.autos.followups(), 5)
+
+    def test_only_companies_that_switched_it_on_and_only_their_mailboxes(self):
+        self.on('acme.com'); self.now[0] += 10 * DAY
+        self.send('zed@other.com', '9', 4); self.send('ravi@acme.com', '1', 4)
+        self.autos.followups()
+        self.assertEqual(self.mail.asked, ['acme.com'])
+        self.assertEqual([r[0] for r in self.mail.reminders], ['ravi@acme.com'])
+
+    def test_a_mailbox_that_fails_is_reported_and_the_rest_go_on(self):
+        self.on(); self.now[0] += 10 * DAY
+        self.send('ravi@acme.com', '1', 4)
+        real = self.mail.sent
+        self.mail.sent = lambda email, since: (_ for _ in ()).throw(OSError('busy')) if email == 'asha@acme.com' else real(email, since)
+        self.assertEqual(self.autos.followups(), 1)
+        last = self.autos.listing('acme.com')['followup']['last']
+        self.assertFalse(last['ok']); self.assertIn('1 mailbox', last['error'])
+
+    def test_not_offered_without_the_mail_side(self):
+        autos, _, _ = rig()
+        self.assertFalse(autos.listing('acme.com')['followup']['available'])
+        with self.assertRaisesRegex(au.AutomationError, 'not available'):
+            autos.action('automation_save', {'kind': 'followup', 'settings': {'on': True, 'days': 3}}, 'acme.com', 'a@acme.com')
+        with self.assertRaisesRegex(au.AutomationError, 'how many days'): self.on(days=4)
+
+
+M = '{urn:zimbraMail}'
+
+
+class FollowupMailSide(unittest.TestCase):
+    def rig(self, conv=None):
+        calls = []
+        class Fake:
+            def call(self, r, token):
+                calls.append((r, token))
+                if r.tag == M + 'SearchRequest':
+                    return ET.fromstring(f'<SearchResponse xmlns="{z.MAIL}"><m id="9" cid="20" d="5000"><e t="t" a="c@x.com"/><e t="c" a="d@x.com"/><e t="f" a="asha@acme.com"/><su>Quote</su></m><m id="8" cid="-8" d="1000"/></SearchResponse>')
+                if r.tag == M + 'GetConvRequest': return ET.fromstring(f'<GetConvResponse xmlns="{z.MAIL}"><c id="20">{conv}</c></GetConvResponse>')
+                return ET.Element(M + 'AddMsgResponse')
+        old = z.delegated_token; z.delegated_token = lambda p, email: 'tok:' + email
+        self.addCleanup(setattr, z, 'delegated_token', old)
+        return z.FollowupMail(Fake(), None, 'no-reply@mail.dejoiy.com'), calls
+
+    def test_sent_reads_recipients_and_stops_at_since(self):
+        side, calls = self.rig()
+        self.assertEqual(side.sent('asha@acme.com', 2000), [{'id': '9', 'cid': '20', 'date': 5000, 'subject': 'Quote', 'to': ['c@x.com', 'd@x.com']}])
+        self.assertEqual((calls[0][0].get('recip'), calls[0][0].find(M + 'query').text, calls[0][1]), ('2', 'in:sent', 'tok:asha@acme.com'))
+
+    def test_only_someone_elses_later_mail_is_a_reply(self):
+        own = '<m id="9" d="5000"><e t="f" a="asha@acme.com"/></m><m id="10" d="6000"><e t="f" a="Asha@acme.com"/></m>'
+        side, _ = self.rig(own)
+        self.assertFalse(side.replied('asha@acme.com', {'cid': '20', 'date': 5000}))
+        side, _ = self.rig(own + '<m id="11" d="7000"><e t="f" a="c@x.com"/></m>')
+        self.assertTrue(side.replied('asha@acme.com', {'cid': '20', 'date': 5000}))
+        side, calls = self.rig()
+        self.assertFalse(side.replied('asha@acme.com', {'cid': '-8', 'date': 1000})); self.assertEqual(calls, [])
+
+    def test_reminder_goes_unread_into_their_own_inbox(self):
+        side, calls = self.rig()
+        side.remind('asha@acme.com', 'Reminder: no reply yet to "Quote"', 'You sent ...')
+        r, token = calls[0]
+        m = r.find(M + 'm')
+        self.assertEqual((r.tag, m.get('l'), m.get('f'), token), (M + 'AddMsgRequest', '2', 'u', 'tok:asha@acme.com'))
+        raw = m.find(M + 'content').text
+        self.assertIn('From: Dejoiy Mail <no-reply@mail.dejoiy.com>', raw); self.assertIn('To: asha@acme.com', raw)
 
 
 if __name__ == '__main__': unittest.main()

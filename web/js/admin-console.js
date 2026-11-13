@@ -593,7 +593,20 @@ async function automations(main, d, h, rest, picked){
           <label>Shine channel<input name="channel" maxlength="100" placeholder="urgent" value="${h.esc(a.channel)}"></label>
           <label><input type="checkbox" name="subject"${a.subject?" checked":""}> Also show the subject</label>
           <div><button class="adm-btn primary">Save</button></div></form>
-        <p>Last result: ${last}</p></div>`;
+        <p>Last result: ${last}</p></div>`+
+      (r.followup.available?(()=>{ const f=r.followup;
+        const fl=!f.last?`<span class="adm-muted">Not checked yet</span>`:`${pill(f.last.ok?"Checked":"Partly checked",f.last.ok)} <small>${h.esc(when(f.last.at))} · ${f.last.reminders} reminder${f.last.reminders===1?"":"s"}${f.last.error?" · "+h.esc(f.last.error):""}</small>`;
+        return `<div class="adm-card"><div class="adm-card-head"><h2>Follow-up reminder</h2>${pill(f.on?"On":"Off",f.on)}</div>
+        <p class="adm-muted">When someone's sent mail has had no reply for the chosen number of days, a reminder lands in their own inbox. Checked every hour.
+          Only mail sent after it is switched on${f.on&&f.since?` (on since ${h.esc(when(f.since))})`:""}; each mail is reminded about at most once.</p>
+        <form id="au-fu" class="adm-wh-form">
+          <label><input type="checkbox" name="on"${f.on?" checked":""}> Switched on</label>
+          <label>Remind after <select name="days">${f.choices.map(n=>`<option value="${n}"${n===f.days?" selected":""}>${n} day${n>1?"s":""}</option>`).join("")}</select></label>
+          <div><button class="adm-btn primary">Save</button></div></form>
+        <p>Last check: ${fl}</p></div>`; })():"");
+    h.$("au-fu")?.addEventListener("submit",async e=>{ e.preventDefault(); const f=e.target, btn=f.querySelector("button"); btn.disabled=true;
+      try{ draw(await h.act({op:"automation_save",domain,kind:"followup",settings:{on:f.elements.on.checked,days:Number(f.elements.days.value)}})); h.toast("Saved."); }
+      catch(x){ h.toast(x.message); btn.disabled=false; } });
     h.$("au-domain")?.addEventListener("change",e=>automations(main,d,h,rest,e.target.value));
     h.$("au-imp").addEventListener("submit",async e=>{ e.preventDefault(); const f=e.target, btn=f.querySelector("button"); btn.disabled=true;
       try{ draw(await h.act({op:"automation_save",domain,kind:"important_to_shine",settings:{on:f.elements.on.checked,senders:f.elements.senders.value,channel:f.elements.channel.value.trim(),subject:f.elements.subject.checked}})); h.toast("Saved."); }

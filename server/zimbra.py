@@ -534,6 +534,40 @@ def shine_admin_call(site, secret, payload, timeout=15):
         if error.code==404: raise APIError('Shine needs its latest update before it can be managed from here.',502)
         raise APIError('Shine is not reachable right now.',502)
     except (urllib.error.URLError,TimeoutError,ValueError): raise APIError('Shine is not reachable right now.',502)
+class FollowupMail:
+    """What the follow-up reminder needs from the mail server, acting for each mailbox with a one-hour delegated token."""
+    def __init__(self, zimbra, provisioner, sender):
+        self.zimbra, self.provisioner, self.sender = zimbra, provisioner, sender
+    def token(self, email): return delegated_token(self.provisioner, email)
+    def mailboxes(self, domain): return domain_mailboxes(self.provisioner, domain)
+    def sent(self, email, since_ms):
+        """Sent mail since then (newest 100): id, conversation, date (ms), recipients, subject."""
+        r=node(MAIL,'SearchRequest',{'types':'message','limit':'100','sortBy':'dateDesc','recip':'2'}); r.append(node(MAIL,'query',text='in:sent'))
+        out=[]
+        for m in self.zimbra.call(r,self.token(email)).findall('{'+MAIL+'}m'):
+            try: date=int(m.get('d') or 0)
+            except ValueError: continue
+            if date<since_ms: break
+            su=m.find('{'+MAIL+'}su')
+            out.append({'id':m.get('id'),'cid':m.get('cid') or '','date':date,'subject':(su.text or '') if su is not None else '',
+                'to':[e.get('a','') for e in m.findall('{'+MAIL+'}e') if e.get('t') in ('t','c')]})
+        return out
+    def replied(self, email, mail):
+        """True when anyone but the sender wrote in that conversation after the mail went out."""
+        if not mail.get('cid') or str(mail['cid']).startswith('-'): return False   # a lone mail: Zimbra makes a conversation once a reply comes
+        r=node(MAIL,'GetConvRequest'); r.append(node(MAIL,'c',{'id':str(mail['cid'])}))
+        for m in self.zimbra.call(r,self.token(email)).iter('{'+MAIL+'}m'):
+            sender=next((e.get('a','') for e in m.findall('{'+MAIL+'}e') if e.get('t')=='f'),'')
+            if int(m.get('d') or 0)>mail['date'] and sender.lower()!=email.lower(): return True
+        return False
+    def remind(self, email, subject, text):
+        """The reminder goes straight into the person's own inbox, unread (never through the internet)."""
+        from email.message import EmailMessage
+        from email.utils import formatdate, make_msgid
+        msg=EmailMessage(); msg['From']=f'Dejoiy Mail <{self.sender}>'; msg['To']=email; msg['Subject']=subject
+        msg['Date']=formatdate(localtime=True); msg['Message-ID']=make_msgid(domain=self.sender.rsplit('@',1)[1]); msg.set_content(text)
+        r=node(MAIL,'AddMsgRequest'); m=node(MAIL,'m',{'l':FOLDERS['inbox'],'f':'u'}); m.append(node(MAIL,'content',text=msg.as_string())); r.append(m)
+        self.zimbra.call(r,self.token(email))
 def domain_mailboxes(provisioner, domain):
     """Every person's address in one domain (system mailboxes left out)."""
     r=node(ADMIN,'GetAllAccountsRequest'); r.append(node(ADMIN,'domain',{'by':'name'},domain))
@@ -2952,7 +2986,8 @@ def serve():
     server.provisioner=Provisioner(server.admin,os.environ['PROVISION_ADMIN'],os.environ['PROVISION_ADMIN_PASSWORD']) if server.admin and os.environ.get('PROVISION_ADMIN') and os.environ.get('PROVISION_ADMIN_PASSWORD') else None
     # 'mail.received' webhooks: incoming mail never passes this server, so a watcher looks once a minute (only for companies that asked)
     # ready-made automations (Configure > Automations), run here on the new-mail watcher
-    server.automations=Automations(state_dir/'automations.json',lambda payload: shine_admin_call(server.shine_site,server.shine_secret,payload),server.audit) if state_dir else None
+    followup_mail=FollowupMail(server.zimbra,server.provisioner,'no-reply@'+(server.mail_host or 'mail.dejoiy.com')) if server.zimbra and server.provisioner else None
+    server.automations=Automations(state_dir/'automations.json',lambda payload: shine_admin_call(server.shine_site,server.shine_secret,payload),server.audit,mail=followup_mail) if state_dir else None
     if server.automations: server.automations.start()
     if (server.hooks or server.automations) and server.provisioner and server.zimbra:
         NewMailWatcher(server.hooks,lambda domain: domain_mailboxes(server.provisioner,domain),
