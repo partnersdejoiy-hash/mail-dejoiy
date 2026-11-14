@@ -50,8 +50,8 @@ Views.compose = function(el, arg){
   </div>`;
 
   const $ = id => el.querySelector("#"+id);
-  suggestions(el);
   const chips = {to:chipField(el.querySelector('[data-field="to"]'), draft.to), cc:chipField(el.querySelector('[data-field="cc"]'), draft.cc), bcc:chipField(el.querySelector('[data-field="bcc"]'), draft.bcc)};
+  suggestions(el, ()=>Object.values(chips).forEach(c=>c.draw()));
   el.querySelector("#c-ccbtn").addEventListener("click", async ()=>{
     const open = el.querySelector("#c-ccrow").style.display==="none";
     for(const id of ["c-ccrow","c-bccrow"]) el.querySelector("#"+id).style.display = open?"flex":"none";
@@ -110,6 +110,7 @@ Views.compose = function(el, arg){
   };
   const send = async archiveAfter=>{
     if(pendingFiles)return;
+    Object.values(chips).forEach(c=>c.commit());   // what is still being typed counts when you press Send
     const d = collect();
     if(window.Live?.enabled && draftId)d.id=draftId;
     if(!d.to.trim()){ App.toast("Add at least one recipient first."); $("c-to").focus(); return; }
@@ -187,8 +188,11 @@ Views.compose = function(el, arg){
   setTimeout(()=> (mode==="reply"||mode==="replyall" ? $("compose-body") : $("c-to")).focus(), 60);
 };
 
-/* Recipient field: typed addresses become removable chips on Enter, comma, semicolon, Tab or
-   blur; pasting a list adds them all. value() returns the comma-separated list the server expects. */
+/* Recipient field: a typed address becomes a removable chip on Enter, Space, comma, semicolon or Tab,
+   or when a suggestion is picked; pasting a list adds them all. Text still being typed is never
+   turned into a chip by itself (autosave reads it with value(), which changes nothing).
+   value() returns the comma-separated list the server expects. */
+const NAMES = new Map();   // address (lower case) -> contact name, filled by suggestions()
 const ADDRESS = /^[^\s<>@,;]+@[^\s<>@,;]+\.[^\s<>@,;]+$/;
 /* group mentions: @all = everyone on your domain, @allS = everyone on Dejoiy Mail (DEJOIY super admins and IT) */
 const GROUP = /^@alls?$/i;
@@ -201,7 +205,8 @@ function chipField(box, initial){
     list.forEach((address,i)=>{
       const chip=document.createElement("span"); chip.className="chip"+(okAddress(address)?"":" bad")+(GROUP.test(address)?" group":"");
       chip.title=GROUP.test(address)?"Everyone in this group gets the mail as Bcc":okAddress(address)?address:"This doesn't look like an email address";
-      chip.innerHTML=`<span>${esc(GROUP.test(address)?GROUP_LABEL(address):address)}</span><button type="button" aria-label="Remove ${esc(address)}">×</button>`;
+      const name=NAMES.get(address.toLowerCase());
+      chip.innerHTML=`<span>${esc(GROUP.test(address)?GROUP_LABEL(address):name||address)}</span><button type="button" aria-label="Remove ${esc(address)}">×</button>`;
       chip.querySelector("button").addEventListener("click",()=>{ list.splice(i,1); draw(); input.focus(); });
       box.insertBefore(chip,input);
     });
@@ -210,28 +215,45 @@ function chipField(box, initial){
   const commit = ()=>{ if(input.value.trim()){ add(input.value); input.value=""; } };
   input.addEventListener("keydown",e=>{
     if(["Enter",",",";"].includes(e.key) || (e.key==="Tab" && input.value.trim())){ if(input.value.trim()){ e.preventDefault(); commit(); } else if(e.key==="Enter") e.preventDefault(); }
+    else if(e.key===" " && input.value.includes("@")){ e.preventDefault(); if(okAddress(input.value.trim())) commit(); }   // Space finishes a whole address; a half-typed one stays as text
     else if(e.key==="Backspace" && !input.value && list.length){ list.pop(); draw(); }
   });
   // a picked suggestion becomes a chip straight away
-  input.addEventListener("input",e=>{ if((!e.inputType || e.inputType==="insertReplacementText") && okAddress(input.value.trim())) commit(); });
+  // (phone keyboards send Space as typed text, not as a key)
+  input.addEventListener("input",e=>{ if((!e.inputType || e.inputType==="insertReplacementText" || e.data===" ") && okAddress(input.value.trim())) commit(); });
   input.addEventListener("paste",e=>{ const t=e.clipboardData?.getData("text"); if(t && /[,;\s]/.test(t.trim())){ e.preventDefault(); add(t); } });
-  input.addEventListener("blur",commit);
+  input.addEventListener("blur",()=>{ if(okAddress(input.value.trim())) commit(); });   // leaving the field keeps a whole address, never half of one
   box.addEventListener("click",e=>{ if(e.target===box) input.focus(); });
   add(initial||"");
-  return { value:()=>{ commit(); return list.join(", "); }, invalid:()=>{ commit(); return list.filter(a=>!okAddress(a)); } };
+  const pending = ()=> input.value.split(/[,;\s]+/).map(a=>a.trim().replace(/^<|>$/g,"")).filter(a=>a && !list.some(x=>x.toLowerCase()===a.toLowerCase()));
+  return { draw, commit, value:()=>[...list, ...pending()].join(", "), invalid:()=>list.filter(a=>!okAddress(a)) };
 }
 
-/* Address suggestions: your contacts, plus supervisors at other companies when your admin allows it. */
-function suggestions(el){
+/* Address suggestions: the people you write to most come first, then your other contacts, plus
+   supervisors at other companies when your admin allows it. The names also label the chips. */
+function suggestions(el, named){
   const dl=document.createElement("datalist"); dl.id="c-people";
-  const fill=extra=>{ const seen=new Set();
-    dl.innerHTML=[...(Store.state.contacts||[]), ...extra].filter(p=>p.email && !seen.has(p.email.toLowerCase()) && seen.add(p.email.toLowerCase()))
-      .slice(0,800).map(p=>`<option value="${esc(p.email)}">${esc([p.name, p.title, p.company||p.org].filter(Boolean).join(" · "))}</option>`).join(""); };
+  const me=(Store.state.user?.email||"").toLowerCase();
+  const fill=extra=>{
+    const sent=new Map();   // address -> how often you wrote to it, in the mail loaded so far
+    for(const m of Store.state.emails||[]) if(m.folder==="sent") for(const a of [...(m.to||[]), ...(m.cc||[])]){ const k=String(a?.email||a||"").trim().toLowerCase(); if(ADDRESS.test(k) && k!==me) sent.set(k,(sent.get(k)||0)+1); }
+    const seen=new Set(), people=[...(Store.state.contacts||[]), ...extra, ...[...sent.keys()].map(email=>({email}))]
+      .filter(p=>p.email && !seen.has(p.email.toLowerCase()) && seen.add(p.email.toLowerCase()));
+    const often=p=>sent.get(p.email.toLowerCase())||0;
+    people.sort((x,y)=>GROUP.test(y.email)-GROUP.test(x.email) || often(y)-often(x));   // sort is stable: equal ones keep their order
+    for(const p of people) if(p.name && p.name!==p.email && !GROUP.test(p.email)) NAMES.set(p.email.toLowerCase(), p.name);
+    dl.innerHTML=people.slice(0,800).map(p=>`<option value="${esc(p.email)}">${esc([p.name, p.title, p.company||p.org].filter(Boolean).join(" · "))}</option>`).join("");
+    named();
+  };
   const u=Store.state.user||{};
   const groups=[{email:"@all", name:"Everyone on your domain"}, ...(u.canManageRoles||u.isAdmin ? [{email:"@allS", name:"Everyone on Dejoiy Mail, every domain (super admins and IT)"}] : [])];
-  const fillAll=extra=>fill([...groups, ...extra]);
-  fillAll([]); el.appendChild(dl);
-  if(window.Live?.enabled && window.Contacts) Contacts.supervisors().then(fillAll);
+  let extra=[]; const fillAll=()=>fill([...groups, ...extra]);
+  fillAll(); el.appendChild(dl);
+  if(window.Live?.enabled){
+    // contacts used to load only when the Contacts page was opened, so Compose had nobody to suggest
+    Live.request("contacts").then(r=>{ Store.state.contacts=r.contacts; fillAll(); }).catch(()=>{});
+    if(window.Contacts) Contacts.supervisors().then(more=>{ extra=more; fillAll(); });
+  }
   el.querySelectorAll(".chip-field input").forEach(i=>i.setAttribute("list","c-people"));
 }
 
