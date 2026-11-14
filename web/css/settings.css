@@ -106,7 +106,8 @@
 @media (max-width:680px){
   #view[data-route="settings"]{padding:0!important}
   .st-head{position:sticky;top:0;z-index:5;background:var(--surface-2);padding-top:env(safe-area-inset-top)}
-  .st-save{bottom:calc(64px + env(safe-area-inset-bottom));margin-left:-12px;margin-right:-12px;border-radius:0}
+  /* on a phone the bar is part of the page: stuck in place it covered the settings you were reading */
+  .st-save{position:static;margin-left:-12px;margin-right:-12px;border-radius:0;box-shadow:none}
   .st-body{padding:0 12px calc(16px + env(safe-area-inset-bottom))}
   .st-card{border-radius:12px;padding:2px 14px}
   .st-actions .btn{min-height:40px}

@@ -51,3 +51,12 @@ class JoiPictures(unittest.TestCase):
         self.assertIn('joi-peek.gif?v=8', out); self.assertNotIn('tracker.test', out)
 
 if __name__ == '__main__': unittest.main()
+
+
+class PhoneSettings(unittest.TestCase):
+    """The phone look and its background switch are saved with the mailbox like any other display setting."""
+    def test_saved(self):
+        self.assertEqual(z.clean_ui_settings({'appLook': 'colourful', 'phoneBg': 'on'}), {'appLook': 'colourful', 'phoneBg': 'on'})
+    def test_only_known_values(self):
+        for bad in ({'phoneBg': 'yes'}, {'phoneBg': True}, {'appLook': 'neon'}):
+            with self.assertRaises(z.APIError): z.clean_ui_settings(bad)

@@ -1399,7 +1399,8 @@ PREF_FIELDS = {
     'vacationEvery':('zimbraPrefOutOfOfficeCacheDuration','choice',('1d','4d','7d'),'Reply frequency'),
 }
 UI_CHOICES = {'undoSend':(0,5,10,20,30),'defaultReply':('reply','replyall'),'buttonLabels':('icons','text'),'notifications':('all','important','off'),
-    'inboxType':('default','unread','starred','important'),'readingPane':('off','right','bottom'),'autoAdvance':('off','next','previous'),'density':('comfortable','compact'),'starPreset':('one','four','all')}
+    'inboxType':('default','unread','starred','important'),'readingPane':('off','right','bottom'),'autoAdvance':('off','next','previous'),'density':('comfortable','compact'),'starPreset':('one','four','all'),
+    'appLook':('clean','colourful'),'phoneBg':('off','on')}
 UI_FLAGS = ('hoverActions','sendArchive','spellcheck','autocorrect','indicators','importanceMarkers','templates','unreadBadge','autoAdvanceOn','undoSendOn','smartRefresh')
 UI_FOLDERS = ('inbox','starred','sent','drafts','archive','spam','trash','unread','attach','important')
 def clean_ui_settings(data):
