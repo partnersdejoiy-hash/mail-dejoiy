@@ -233,3 +233,15 @@ html[data-scenic="true"] .home-card,html[data-scenic="true"] .home-mail{backgrou
 .r-body .mail-html{background:#fff;color:#121212;color-scheme:light;border-radius:12px;padding:16px;max-width:100%;overflow-x:auto}
 .r-body .mail-html a{color:#0b57d0}
 .r-body .mail-html table{max-width:100%}
+/* A mail with its own design opens in its own colours (see ownDesign in view-mail.js).
+   One message: the whole reading pane takes the mail's background. A thread: each designed message
+   gets a box of its own colour. Higher specificity + !important beats the tone card, the white
+   message panel, dark mode and the phone's clean look. */
+html .reader.own-design{background:var(--mail-bg)!important;color:var(--mail-ink)}
+html .reader.own-design .mail-card{background:var(--mail-bg)!important;--card:var(--mail-bg);--card-ink:var(--mail-ink);color:var(--mail-ink);border:0!important;box-shadow:none!important;margin-left:0;margin-right:0;padding-left:0;padding-right:0}
+html .reader.own-design .mail-card .r-subject{color:var(--mail-ink)}
+html .reader .mail-card .thread-message.own-design,html .reader .thread-message.own-design{background:var(--mail-bg)!important;color:var(--mail-ink);--ink:var(--mail-ink);--ink-2:var(--mail-ink-2);--ink-3:var(--mail-ink-3)}
+html .reader .thread-message.own-design .r-body .mail-html{background:transparent;padding:0;border-radius:0;color:inherit}
+html .reader .thread-message.own-design .tm-content .r-body{max-width:none}
+html .reader.own-design .mail-card .thread-actions .btn{background:var(--mail-ink);color:var(--mail-bg)}
+html .reader.own-design .ai-note{background:rgba(255,255,255,.55);color:#121212}

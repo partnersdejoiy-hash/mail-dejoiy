@@ -366,11 +366,13 @@ Views.mail = function(el, folder){
     readerEl.querySelectorAll(".r-body").forEach(foldQuote);
     Profile.brandLogos(readerEl);
     readerEl.scrollTop = 0;
+    // measure once the pane is laid out (it may still be hidden while it opens), and again after images settle
+    requestAnimationFrame(()=>ownDesign(readerEl)); setTimeout(()=>ownDesign(readerEl), 400);
     const foldBtn=readerEl.querySelector("#thread-fold");
     if(foldBtn) foldBtn.addEventListener("click", ()=>{ ui.unfolded=true; renderReader(); });
     readerEl.querySelectorAll(".thread-message").forEach(article=>{
       const head=article.querySelector(".tm-head");
-      const toggle=()=>{ const open=!article.classList.contains("open"); article.classList.toggle("open",open); head.setAttribute("aria-expanded",String(open)); };
+      const toggle=()=>{ const open=!article.classList.contains("open"); article.classList.toggle("open",open); head.setAttribute("aria-expanded",String(open)); ownDesign(readerEl); };
       head.addEventListener("click", ev=>{ if(!ev.target.closest("button")) toggle(); });
       head.addEventListener("keydown", ev=>{ if(ev.target===head&&(ev.key==="Enter"||ev.key===" ")){ ev.preventDefault(); toggle(); } });
     });
@@ -484,4 +486,41 @@ function codeOf(m){
 }
 
 function strip(h){ const d=new DOMParser().parseFromString((h||"").replace(/<br\s*\/?>|<\/(p|div|li|tr|h[1-6])>/gi,"$& "),"text/html"); d.querySelectorAll("blockquote").forEach(q=>{ const intro=q.previousElementSibling; if(intro&&/wrote:\s*$/i.test(intro.textContent||"")) intro.remove(); q.remove(); }); return (d.body.textContent||"").replace(/\s+/g," ").trim(); }
+/* A mail that brings its own design opens in its own colours (phone, web and the app alike):
+   one message -> the whole reading pane takes the mail's background; a thread -> each designed
+   message sits in a box of its own colour. Text on top switches to dark or light to stay readable. */
+function paintOf(el){
+  const c=getComputedStyle(el).backgroundColor||"";
+  const m=c.match(/rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\)/);
+  if(!m || (m[4]!==undefined && Number(m[4])<0.9)) return null;  // transparent or see-through: not the mail's own colour
+  return [Number(m[1]),Number(m[2]),Number(m[3])];
+}
+function mailBackground(article){
+  const sheet=article.querySelector(".r-body .mail-html"); if(!sheet) return null;
+  const cs=getComputedStyle(sheet), width=sheet.getBoundingClientRect().width-parseFloat(cs.paddingLeft||0)-parseFloat(cs.paddingRight||0);
+  if(!(width>0)) return null;  // closed message: nothing to measure
+  let level=[...sheet.children];
+  for(let depth=0; depth<4 && level.length; depth++){
+    const wide=level.filter(x=>x.getBoundingClientRect().width>=width*0.9);
+    for(const el of wide){ const rgb=paintOf(el); if(rgb) return rgb; }
+    level=wide.flatMap(x=>[...x.children]);
+  }
+  return [255,255,255];  // a designed mail without its own colour is drawn on white
+}
+function ownDesign(readerEl){
+  const set=(el,rgb)=>{
+    const lum=(0.2126*rgb[0]+0.7152*rgb[1]+0.0722*rgb[2])/255, dark=lum<0.5;
+    el.style.setProperty("--mail-bg",`rgb(${rgb.join(",")})`);
+    el.style.setProperty("--mail-ink",dark?"#ffffff":"#121212");
+    el.style.setProperty("--mail-ink-2",dark?"#e4e4e8":"#3d3a42");
+    el.style.setProperty("--mail-ink-3",dark?"#c4c4cc":"#5b5560");
+  };
+  const clear=el=>["--mail-bg","--mail-ink","--mail-ink-2","--mail-ink-3"].forEach(k=>el.style.removeProperty(k));
+  const articles=[...readerEl.querySelectorAll(".thread-message")];
+  readerEl.classList.remove("own-design"); clear(readerEl);
+  articles.forEach(a=>{ a.classList.remove("own-design"); clear(a); });
+  const painted=articles.map(a=>[a, a.classList.contains("open") ? mailBackground(a) : null]).filter(([,rgb])=>rgb);
+  if(articles.length===1 && painted.length===1){ readerEl.classList.add("own-design"); set(readerEl,painted[0][1]); painted[0][0].classList.add("own-design"); set(painted[0][0],painted[0][1]); return; }
+  painted.forEach(([a,rgb])=>{ a.classList.add("own-design"); set(a,rgb); });
+}
 })();

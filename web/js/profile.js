@@ -24,7 +24,7 @@ const Profile = {
   photo(email){
     const key=String(email||"").toLowerCase(); if(!key) return "";
     if(window.Live?.enabled){ const v=Live.avatars?.[key]; if(v) return `/api/avatar?email=${encodeURIComponent(key)}&v=${v}`; }
-    if(JOI.has(key)) return "/assets/brand/joi-avatar.webp?v=8";
+    if(JOI.has(key)) return "/assets/brand/joi-profile.png?v=9";
     if(window.Live?.enabled) return "";
     return key===String(Store.state.user.email||"").toLowerCase() ? (Store.state.prefs.avatar||"") : "";
   },
