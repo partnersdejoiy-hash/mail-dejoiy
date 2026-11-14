@@ -70,3 +70,15 @@ class Accounts(unittest.TestCase):
         self.b.csrf = 'wrong'; self.assertEqual(self.b.call('/api/accounts/add', {'email': 'b@acme.in', 'password': 'right'})[0], 403)
 
 if __name__ == '__main__': unittest.main()
+
+
+class StaySignedIn(unittest.TestCase):
+    """A sign-in lasts as long as the mail server's token (the company's policy), not one hour; never more than 30 days."""
+    def lifetime(self, ms):
+        client = z.Zimbra.__new__(z.Zimbra)
+        client.call = lambda r, *a, **k: z.ET.fromstring(f'<AuthResponse xmlns="urn:zimbraAccount"><authToken>tok</authToken><lifetime>{ms}</lifetime></AuthResponse>')
+        return client.login('a@acme.in', 'pw')[1]
+    def test_policy_decides(self):
+        self.assertEqual(self.lifetime(48 * 3600 * 1000), 48 * 3600)
+        self.assertEqual(self.lifetime(3600 * 1000), 3600)
+        self.assertEqual(self.lifetime(400 * 86400 * 1000), z.MAX_SESSION_SECONDS)

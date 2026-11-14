@@ -652,6 +652,7 @@ class Provisioner:
                 except APIError: pass
             if isinstance(error,APIError) and error.code=='account.INVALID_PASSWORD': raise APIError('The password does not meet the mailbox password policy.')
             raise APIError('Your company mail could not be created. Nothing was changed; try again.',502)
+MAX_SESSION_SECONDS = 30*86400   # the longest a sign-in is kept, whatever the mail server says
 MAX_OTHER_ACCOUNTS = 4   # accounts that can wait signed in beside the open one
 SESSIONS = {}
 LOCK = threading.Lock()
@@ -897,7 +898,9 @@ class Zimbra:
         r=node(ACCOUNT,'AuthRequest'); r.append(node(ACCOUNT,'account',{'by':'name'},email)); r.append(node(ACCOUNT,'password',text=password))
         out=self.call(r); token=out.find('{'+ACCOUNT+'}authToken'); lifetime=out.find('{'+ACCOUNT+'}lifetime')
         if token is None or not token.text: raise APIError('Login failed',401)
-        return token.text, min(int(lifetime.text)/1000 if lifetime is not None else 3600,3600)
+        # You stay signed in as long as the mail server's own token lasts: the company's policy sets that
+        # ("Stay signed in for", 1 hour to 30 days; 48 hours unless changed). It used to be cut to one hour.
+        return token.text, min(int(lifetime.text)/1000 if lifetime is not None else 3600,MAX_SESSION_SECONDS)
     def capabilities(self, token):
         response=self.call(node(ACCOUNT,'GetInfoRequest',{'sections':'attrs'}),token)
         attrs={a.get('name') or a.get('n'):a.text or '' for a in response.findall('.//{'+ACCOUNT+'}attr')}
@@ -1252,7 +1255,7 @@ class Zimbra:
             if e.code=='account.INVALID_PASSWORD': raise APIError('The new password does not meet your company password policy.')
             raise
         fresh=out.find('{'+ACCOUNT+'}authToken'); lifetime=out.find('{'+ACCOUNT+'}lifetime')
-        return (fresh.text if fresh is not None and fresh.text else token), min(int(lifetime.text)/1000 if lifetime is not None else 3600,3600)
+        return (fresh.text if fresh is not None and fresh.text else token), min(int(lifetime.text)/1000 if lifetime is not None else 3600,MAX_SESSION_SECONDS)
     # ---------- labels (mailbox tags) ----------
     def labels(self, token):
         out=self.call(node(MAIL,'GetTagRequest'),token)
