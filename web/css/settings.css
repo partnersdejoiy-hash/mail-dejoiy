@@ -38,6 +38,17 @@
 .st-radio small{display:block;color:var(--ink-3);font-size:12.5px;margin-top:2px}
 .st-note{font-size:13px;color:var(--ink-2);line-height:1.5;margin:6px 0}
 .st-error{color:#d93025;font-size:13px;margin:6px 0}
+/* passkeys */
+.pk-list{list-style:none;margin:8px 0;padding:0}
+.pk-list li{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+.pk-list li span{flex:1;min-width:0}.pk-list small{display:block;color:var(--ink-2);font-size:12.5px;margin-top:2px;overflow-wrap:anywhere}
+.pk-list .btn{min-height:44px}
+.pk-codes{border:2px solid var(--accent,#e91e63);border-radius:12px;padding:4px 14px 2px;margin:10px 0}
+.pk-codes h3{font-size:15px;margin:10px 0 4px}
+.pk-codes ol{margin:8px 0;padding-left:26px;max-width:420px}
+@media (min-width:520px){.pk-codes ol{columns:2;column-gap:24px}}
+.pk-codes code{font:600 15px/2 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.04em;user-select:all;white-space:nowrap}
+#pk-form .btn-row{display:flex;flex-wrap:wrap;gap:8px}
 .st-card.st-error{color:var(--ink)}
 .st-field{margin:10px 0}
 .st-field label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-2);margin-bottom:6px}

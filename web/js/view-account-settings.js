@@ -230,6 +230,9 @@ function accounts(body){
     <p class="st-note">At least ${Math.max(10,a?a.passwordMinLength:10)} characters, mixing three of: lowercase, uppercase, numbers, symbols. Mail apps on your other devices will ask for the new password.</p>
     <p class="st-error" role="alert"></p><button class="btn primary" ${live()?"":"disabled"}>Change password</button>`}
   </form>
+  <div class="st-card" id="ac-pk"><h2>Passkey sign-in</h2>
+    <p class="st-note">A second step after your password: your fingerprint, face or screen lock. Someone who learns your password still cannot open your mail here.</p>
+    <div id="pk-body"><p class="st-note">${live()?"Loading…":"Passkeys work on your company's mail server. This demo has no server."}</p></div></div>
   <div class="st-card"><h2>Sign out</h2><p class="st-note">Sign out of Dejoiy Mail on this device.</p><button class="btn" id="ac-out" type="button">Sign out</button></div>`;
   const nameInput = body.querySelector("#ac-name");
   nameInput.addEventListener("input", ()=>{ body.querySelector("#ac-from").textContent = `${nameInput.value.trim()||u.email} <${u.email}>`; });
@@ -243,7 +246,48 @@ function accounts(body){
     try{ await Live.request("password",{current,password:next}); form.reset(); App.toast("Password changed."); }
     catch(error){ alert.textContent=error.message; }finally{ button.disabled=false; }
   });
+  if(live()) passkeys(body.querySelector("#pk-body"));
   body.querySelector("#ac-out").addEventListener("click", async ()=>{ if(live()) await Live.logout(); else App.toast("Demo build — there is no server session to sign out of."); });
+}
+
+/* ---------- Passkeys: add, remove, recovery codes. Every change asks for the password again. ---------- */
+async function passkeys(box, state, codes){
+  try{ state = state || await Live.request("passkeys",{op:"view"}); }
+  catch(error){ box.innerHTML = `<p class="st-error" role="alert">${esc(error.message)}</p>`; return; }
+  const day = ts => ts ? new Date(ts*1000).toLocaleDateString([], {day:"numeric", month:"short", year:"numeric"}) : "never";
+  const can = Passkey.supported();
+  box.innerHTML = `
+    ${codes ? `<div class="pk-codes" role="status"><h3>Your recovery codes</h3>
+        <p class="st-note"><b>Save these now. They are shown only this once.</b> If you lose your device, one code signs you in instead of the passkey. Each works once.</p>
+        <ol>${codes.map(c=>`<li><code>${esc(c)}</code></li>`).join("")}</ol>
+        <div class="btn-row"><button class="btn" type="button" id="pk-copy">Copy codes</button><button class="btn" type="button" id="pk-saved">I have saved them</button></div></div>` : ""}
+    ${state.passkeys.length ? `<ul class="pk-list">${state.passkeys.map(k=>`<li><span><b>${esc(k.name)}</b><small>Added ${esc(day(k.created))} · last used ${esc(day(k.used))} · works on ${esc(k.site)}</small></span>
+        <button class="btn" type="button" data-remove="${esc(k.id)}" aria-label="Remove ${esc(k.name)}">Remove</button></li>`).join("")}</ul>
+        <p class="st-note">${state.codesLeft} of 10 recovery codes left. Mail apps on a phone or computer (IMAP, POP) and Shine still sign in with the password alone.</p>`
+      : `<p class="st-note"><b>Off.</b> You sign in with your password only.</p>`}
+    <form id="pk-form" autocomplete="off">
+      <div class="st-field"><label for="pk-pass">Your password (needed for any change here)</label><input type="password" id="pk-pass" autocomplete="current-password" required></div>
+      <div class="st-field"><label for="pk-name">Name for the new passkey</label><input type="text" id="pk-name" maxlength="40" placeholder="My phone"></div>
+      <p class="st-error" role="alert"></p>
+      <div class="btn-row"><button class="btn primary" ${can?"":"disabled"}>Add a passkey on this device</button>${state.on?`<button class="btn" type="button" id="pk-fresh">Get new recovery codes</button>`:""}</div>
+      ${can?"":`<p class="st-note">This browser cannot make passkeys. Use a recent Chrome, Edge, Safari or Firefox, or the Dejoiy Mail app.</p>`}
+    </form>`;
+  const form = box.querySelector("#pk-form"), alert = form.querySelector("[role=alert]"), pass = form.querySelector("#pk-pass");
+  const run = async job => {
+    if(!pass.value){ alert.textContent="Enter your password first."; pass.focus(); return; }
+    form.querySelectorAll("button").forEach(b=>b.disabled=true); alert.textContent="";
+    try{ const out = await job(pass.value); await passkeys(box, out, out.codes); }
+    catch(error){ alert.textContent = Passkey.message(error); form.querySelectorAll("button").forEach(b=>b.disabled=false); box.querySelector(".primary").disabled=!can; }
+  };
+  form.addEventListener("submit", ev=>{ ev.preventDefault(); run(async password=>{
+    const {options} = await Live.request("passkeys",{op:"register_options",password});
+    const out = await Live.request("passkeys",{op:"register",credential:await Passkey.create(options),name:form.querySelector("#pk-name").value});
+    App.toast("Passkey added. From now on, sign-in asks for it."); return out; }); });
+  box.querySelector("#pk-fresh")?.addEventListener("click", ()=>run(password=>Live.request("passkeys",{op:"fresh_codes",password})));
+  box.querySelectorAll("[data-remove]").forEach(b=>b.addEventListener("click", ()=>run(async password=>{
+    const out = await Live.request("passkeys",{op:"remove",id:b.dataset.remove,password}); App.toast(out.on?"Passkey removed.":"Passkey removed. Sign-in is password only again."); return out; })));
+  box.querySelector("#pk-copy")?.addEventListener("click", async ()=>{ try{ await navigator.clipboard.writeText(codes.join("\n")); App.toast("Codes copied."); }catch(_){ App.toast("Could not copy. Write them down."); } });
+  box.querySelector("#pk-saved")?.addEventListener("click", ()=>passkeys(box, state));
 }
 
 /* ---------- Filters and blocked addresses ---------- */

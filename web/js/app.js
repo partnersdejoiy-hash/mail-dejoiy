@@ -182,16 +182,33 @@ const App = {
       const email=document.getElementById("aa-email").value.trim(), password=document.getElementById("aa-pass").value, note=document.getElementById("aa-note"), button=document.querySelector(".dlg-foot .primary");
       if(!email || !password){ note.textContent="Enter the email address and its password."; return false; }
       if(button.disabled) return false; button.disabled=true; note.textContent="";
-      Live.request("accounts/add",{email,password}).then(()=>location.reload()).catch(error=>{ button.disabled=false; document.getElementById("aa-pass").value=""; note.textContent=error.message; });
+      Live.request("accounts/add",{email,password}).then(out=>{ if(out.step!=="passkey") return location.reload();
+          pending=out; document.getElementById("aa-pass").value=""; document.getElementById("aa-first").hidden=true; document.getElementById("aa-second").hidden=false;
+          if(Passkey.usable(out)) second(); else { button.disabled=false; note.textContent="Enter one of this mailbox's recovery codes."; document.getElementById("aa-code").focus(); } })
+        .catch(error=>{ button.disabled=false; document.getElementById("aa-pass").value=""; note.textContent=error.message; });
+      return false;
+    };
+    // that mailbox has a passkey: its device's lock, or a recovery code typed in the box
+    let pending=null;
+    const second = ()=>{
+      const code=document.getElementById("aa-code").value.trim(), note=document.getElementById("aa-note"), button=document.querySelector(".dlg-foot .primary");
+      button.disabled=true; note.textContent="";
+      (code ? Promise.resolve({pending:pending.pending,code}) : Passkey.get(pending.options).then(assertion=>({pending:pending.pending,assertion})))
+        .then(body=>Live.request("login/passkey",body)).then(()=>location.reload())
+        .catch(error=>{ button.disabled=false; note.textContent=Passkey.message(error);
+          if(/took too long/.test(error.message)){ pending=null; document.getElementById("aa-first").hidden=false; document.getElementById("aa-second").hidden=true; } });
       return false;
     };
     this.dialog({title:"Add another account", body:`
       <p class="hint">Sign in to another Dejoiy Mail mailbox. You stay signed in to ${esc(Store.state.user.email)} and can switch between them from this menu. Up to 5 accounts.</p>
-      <div class="field"><label for="aa-email">Email address</label><input type="email" id="aa-email" autocomplete="username" autocapitalize="off"></div>
-      <div class="field"><label for="aa-pass">Password</label><input type="password" id="aa-pass" autocomplete="current-password"></div>
+      <div id="aa-first"><div class="field"><label for="aa-email">Email address</label><input type="email" id="aa-email" autocomplete="username" autocapitalize="off"></div>
+      <div class="field"><label for="aa-pass">Password</label><input type="password" id="aa-pass" autocomplete="current-password"></div></div>
+      <div id="aa-second" hidden><p class="hint">This mailbox has a passkey. Unlock it with your fingerprint, face or screen lock, or type a recovery code and press Sign in.</p>
+      <div class="field"><label for="aa-code">Recovery code (only if you cannot use the passkey)</label><input type="text" id="aa-code" autocomplete="one-time-code" autocapitalize="off" placeholder="xxxx-xxxx-xxxx"></div></div>
       <p id="aa-note" role="alert" class="field-error"></p>`,
-      actions:[{label:"Cancel"},{label:"Sign in", primary:true, fn:send}]});
+      actions:[{label:"Cancel"},{label:"Sign in", primary:true, fn:()=>pending?second():send()}]});
     document.getElementById("aa-pass").addEventListener("keydown", e=>{ if(e.key==="Enter") send(); });
+    document.getElementById("aa-code").addEventListener("keydown", e=>{ if(e.key==="Enter") second(); });
   },
   confirm(msg, fn){
     this.dialog({title:"Please confirm", body:`<p>${esc(msg)}</p>`,

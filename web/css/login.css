@@ -32,6 +32,13 @@ html[data-brightness="dark"] .lg-root{--lg-bg:#141316;--lg-card:#1d1b20;--lg-ton
 .lg-pane form[data-step="email"] .lg-step[data-step="password"],.lg-pane form[data-step="password"] .lg-step[data-step="email"]{position:absolute;inset:0 0 auto}
 .lg-pane form[data-step="email"] .lg-step[data-step="password"]{opacity:0;visibility:hidden;transform:translateX(48px)}
 .lg-pane form[data-step="password"] .lg-step[data-step="email"]{opacity:0;visibility:hidden;transform:translateX(-48px)}
+/* the passkey step: third in the row */
+.lg-pane form:not([data-step="passkey"]) .lg-step[data-step="passkey"]{position:absolute;inset:0 0 auto;opacity:0;visibility:hidden;transform:translateX(48px)}
+.lg-pane form[data-step="passkey"] .lg-step:not([data-step="passkey"]){position:absolute;inset:0 0 auto;opacity:0;visibility:hidden;transform:translateX(-48px)}
+.lg-key{margin:0 0 14px;font-size:15px;line-height:1.5;color:var(--lg-ink)}
+.lg-change.lg-other{padding:10px 0;margin:0 0 4px;min-height:44px}
+.lg-change.lg-other:hover{background:none;text-decoration:underline}
+.lg-code[hidden],.lg-other[hidden]{display:none}
 
 .lg-field{display:block;margin:0}
 .lg-field>span:first-child{display:block;margin-bottom:7px;font-size:13px;font-weight:600;color:var(--lg-ink-2)}

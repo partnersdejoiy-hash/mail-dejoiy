@@ -32,6 +32,12 @@ function loginMarkup(admin,configured){
             <label class="lg-field"><span>Password</span><span class="lg-pass"><input name="password" type="password" autocomplete="current-password"><button class="lg-eye" type="button" aria-label="Show password" aria-pressed="false">${eye}</button></span></label>
             <p class="lg-hint">Forgot it? Your company administrator can reset it.</p>
           </div>
+          <div class="lg-step" data-step="passkey">
+            <p class="lg-key">This mailbox has a passkey. Unlock it with your fingerprint, face or screen lock.</p>
+            <label class="lg-field lg-code" hidden><span>Recovery code</span><input name="code" type="text" autocomplete="one-time-code" autocapitalize="off" spellcheck="false" placeholder="xxxx-xxxx-xxxx"></label>
+            <button class="lg-change lg-other" type="button">Use a recovery code instead</button>
+            <p class="lg-hint">Lost the device and the codes? Your company administrator can remove the passkey.</p>
+          </div>
         </div>
         <p class="lg-alert" role="alert"></p>
         <button class="lg-btn" ${configured?'':'disabled'}><span>Next</span><i aria-hidden="true"></i></button>
@@ -44,6 +50,29 @@ function loginMarkup(admin,configured){
   </main>
   <p class="lg-foot">© ${new Date().getFullYear()} Dejoiy India Private Limited · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a></p>`;
 }
+/* Passkeys: the browser side of the second sign-in step. The device keeps the key; bytes travel as base64url text. */
+const Passkey={
+  b64:buf=>btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''),
+  raw:text=>Uint8Array.from(atob(text.replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0)),
+  supported:()=>!!(window.PublicKeyCredential&&navigator.credentials),
+  usable:step=>Passkey.supported()&&step.options.allowCredentials.length>0,   // none listed: no passkey was made on this address
+  async get(options){
+    const c=await navigator.credentials.get({publicKey:{...options,challenge:Passkey.raw(options.challenge),allowCredentials:options.allowCredentials.map(k=>({...k,id:Passkey.raw(k.id)}))}});
+    return {id:Passkey.b64(c.rawId),response:{clientDataJSON:Passkey.b64(c.response.clientDataJSON),authenticatorData:Passkey.b64(c.response.authenticatorData),signature:Passkey.b64(c.response.signature)}};
+  },
+  async create(options){
+    const c=await navigator.credentials.create({publicKey:{...options,challenge:Passkey.raw(options.challenge),user:{...options.user,id:Passkey.raw(options.user.id)},excludeCredentials:options.excludeCredentials.map(k=>({...k,id:Passkey.raw(k.id)}))}});
+    return {id:Passkey.b64(c.rawId),response:{clientDataJSON:Passkey.b64(c.response.clientDataJSON),attestationObject:Passkey.b64(c.response.attestationObject)}};
+  },
+  // what the browser says when the person cancels or the device cannot do it, in plain words
+  message(error){
+    return error.name==='NotAllowedError'?'The passkey was not used. Try again, or use a recovery code.'
+      :error.name==='InvalidStateError'?'This device already has a passkey for this mailbox.'
+      :error.name==='SecurityError'?'Passkeys do not work on this address.'
+      :error.name==='NotSupportedError'?'This device cannot make the kind of passkey Dejoiy Mail uses.':error.message;
+  }
+};
+window.Passkey=Passkey;
 const Live={enabled:!!window.DEJOIY_LIVE,csrf:'',more:false,avatars:{},
   async request(path,data){
     const response=await fetch('/api/'+path,{method:data===undefined?'GET':'POST',credentials:'same-origin',headers:data===undefined?{}:{'Content-Type':'application/json','X-CSRF-Token':this.csrf},body:data===undefined?undefined:JSON.stringify(data)});
@@ -135,7 +164,26 @@ const Live={enabled:!!window.DEJOIY_LIVE,csrf:'',more:false,avatars:{},
       const shake=()=>{card.classList.remove('lg-shake');void card.offsetWidth;card.classList.add('lg-shake');};
       const go=next=>{step=next;form.dataset.step=next;alert.textContent='';
         form.querySelectorAll('.lg-step').forEach(s=>{s.inert=s.dataset.step!==next;});
-        label.textContent=next==='email'?'Next':'Sign in';(next==='email'?email:pass).focus({preventScroll:true});};
+        label.textContent=next==='email'?'Next':next==='passkey'?'Use passkey':'Sign in';(next==='email'?email:next==='passkey'?btn:pass).focus({preventScroll:true});};
+      // the second step, for a mailbox with a passkey: the device's own lock, or one of the recovery codes
+      const code=form.elements.code,codeField=form.querySelector('.lg-code'),other=form.querySelector('.lg-other');
+      let pending=null;
+      const done=result=>{const address=email.value;form.reset();clearInterval(timer);try{localStorage.setItem('dm-signed-in','1');}catch(_){}
+        if(window.DmSplash)DmSplash.show('Loading… '+address);
+        layer.classList.add('lg-out');setTimeout(()=>layer.remove(),450);resolve(result);};
+      const withCode=on=>{codeField.hidden=!on;other.textContent=on?'Use my passkey instead':'Use a recovery code instead';label.textContent=on?'Sign in':'Use passkey';
+        form.querySelector('.lg-key').textContent=on?'Enter one of the recovery codes you saved when you added your passkey. Each works once.':'This mailbox has a passkey. Unlock it with your fingerprint, face or screen lock.';
+        alert.textContent='';if(on)code.focus({preventScroll:true});};
+      other.addEventListener('click',()=>withCode(codeField.hidden));
+      const second=async()=>{
+        const typed=codeField.hidden?null:code.value.trim();
+        if(typed===''){alert.textContent='Enter a recovery code.';shake();code.focus();return;}
+        btn.disabled=true;form.classList.add('is-busy');alert.textContent='';
+        try{ done(await this.request('login/passkey',typed?{pending:pending.pending,code:typed}:{pending:pending.pending,assertion:await Passkey.get(pending.options)})); }
+        catch(err){btn.disabled=false;form.classList.remove('is-busy');
+          if(/took too long/.test(err.message)){pending=null;go('password');alert.textContent=err.message;return;}   // the password again
+          alert.textContent=Passkey.message(err);if(typed){code.value='';shake();}}
+      };
       form.querySelector('.lg-change').addEventListener('click',()=>{pass.value='';go('email');});
       form.querySelector('.lg-eye').addEventListener('click',e=>{const show=pass.type==='password';pass.type=show?'text':'password';
         e.currentTarget.setAttribute('aria-pressed',show);e.currentTarget.setAttribute('aria-label',show?'Hide password':'Show password');});
@@ -146,13 +194,19 @@ const Live={enabled:!!window.DEJOIY_LIVE,csrf:'',more:false,avatars:{},
           form.querySelector('.lg-email').textContent=email.value;form.querySelector('.lg-avatar').textContent=email.value[0].toUpperCase();
           return go('password');
         }
+        if(step==='passkey') return second();
         if(!pass.value){alert.textContent='Enter your password.';shake();return;}
         btn.disabled=true;form.classList.add('is-busy');
         try{
           const result=await this.request('login',{email:email.value,password:pass.value});
-          const address=email.value;form.reset();clearInterval(timer);try{localStorage.setItem('dm-signed-in','1');}catch(_){}
-          if(window.DmSplash)DmSplash.show('Loading… '+address);
-          layer.classList.add('lg-out');setTimeout(()=>layer.remove(),450);resolve(result);
+          if(result.step==='passkey'){
+            pending=result;pass.value='';code.value='';btn.disabled=false;form.classList.remove('is-busy');go('passkey');
+            const can=Passkey.usable(result);other.hidden=!can;withCode(!can);
+            if(!can) alert.textContent=Passkey.supported()?'Your passkey was made on another address. Enter a recovery code here.':'This browser cannot use passkeys. Enter a recovery code.';
+            else second();   // ask straight away; if the browser wants a tap first, the button does it
+            return;
+          }
+          done(result);
         }catch(err){alert.textContent=err.message;pass.value='';btn.disabled=!config.configured;form.classList.remove('is-busy');shake();pass.focus();}
       });
       go('email');

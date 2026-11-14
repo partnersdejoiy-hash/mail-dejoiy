@@ -27,6 +27,7 @@ import zconsole
 from webhooks import Webhooks, WebhookError
 from newmail import NewMailWatcher
 import relay
+import passkeys
 from tickets import Tickets, TicketError, Who
 from automations import Automations, AutomationError
 from apitokens import ApiTokens, TokenError, SCOPES as API_SCOPES
@@ -655,6 +656,7 @@ class Provisioner:
 MAX_SESSION_SECONDS = 30*86400   # the longest a sign-in is kept, whatever the mail server says
 MAX_OTHER_ACCOUNTS = 4   # accounts that can wait signed in beside the open one
 SESSIONS = {}
+PENDING = {}   # sign-ins whose password was right and that now wait for the passkey step: id -> {...}, five minutes
 LOCK = threading.Lock()
 ROOT = Path(__file__).resolve().parent.parent / 'web'
 
@@ -2026,11 +2028,20 @@ class Handler(SimpleHTTPRequestHandler):
         if email.lower()==mine: raise APIError('You are already signed in to '+email+'.')
         waiting=[(o,x) for o,x in self.other_sessions() if o!=sid]
         if len([1 for o,x in waiting if x['user']['email'].lower()!=email.lower()])>=MAX_OTHER_ACCOUNTS: raise APIError(f'You can keep {MAX_OTHER_ACCOUNTS+1} accounts signed in. Sign out of one first.')
-        try: new,s=self.open_session(email,password)
+        try: s=self.build_session(email,password)
         except APIError:
             if EMAIL.fullmatch(email): self.log('signin_failed',email)
             raise
+        step=self.passkey_step(s,sid)
+        if step: return self.reply(200,step)
         self.log('signin',email)
+        return self.finish_add(sid,s)
+    def finish_add(self, sid, s):
+        """Keeps the newly signed-in account beside the open one (sid) and opens it."""
+        current,_=self.session()
+        if current!=sid: raise APIError('Sign in again.',400)   # the open account changed while the passkey step waited
+        email=s['user']['email']; waiting=[(o,x) for o,x in self.other_sessions() if o!=sid]
+        new=self.keep_session(s)
         with LOCK:
             for o,x in waiting:
                 if x['user']['email'].lower()==email.lower(): SESSIONS.pop(o,None)   # its older session
@@ -2701,36 +2712,119 @@ class Handler(SimpleHTTPRequestHandler):
     def account(self, session):
         # Sessions created before account ids were recorded fall back to the signed-in address.
         return session.get('account') or session['user']['email'].lower()
-    def open_session(self, email, password):
-        """Checks the password and makes a session beside any other. Returns (sid, session)."""
+    def build_session(self, email, password):
+        """Checks the password with the mail server. Returns the session, not yet kept: a passkey step may come first."""
         token,lifetime=self.server.zimbra.login(email,password)
         s={'token':token,'expires':time.time()+lifetime,'csrf':secrets.token_urlsafe(32),'user':{'email':email,'name':email.split('@')[0],'signature':''}}
         s['user'].update(self.server.zimbra.capabilities(token))
         account=self.server.zimbra.account_id(token)
         s['account']=account if isinstance(account,str) and account else email.lower()
+        return s
+    def keep_session(self, s, replaces=None):
         sid=secrets.token_urlsafe(32)
         with LOCK:
             for key in list(SESSIONS):
                 if SESSIONS[key]['expires'] <= time.time(): del SESSIONS[key]
             if len(SESSIONS)>=1000: raise APIError('Session capacity reached',503)
+            if replaces: SESSIONS.pop(replaces,None)
             SESSIONS[sid]=s
-        return sid,s
-    def start_session(self, email, password):
-        token,lifetime=self.server.zimbra.login(email,password)
-        s={'token':token,'expires':time.time()+lifetime,'csrf':secrets.token_urlsafe(32),'user':{'email':email,'name':email.split('@')[0],'signature':''}}
-        s['user'].update(self.server.zimbra.capabilities(token))
-        account=self.server.zimbra.account_id(token)
-        s['account']=account if isinstance(account,str) and account else email.lower()
-        sid=secrets.token_urlsafe(32)
-        with LOCK:
-            for key in list(SESSIONS):
-                if SESSIONS[key]['expires'] <= time.time(): del SESSIONS[key]
-            if len(SESSIONS)>=1000: raise APIError('Session capacity reached',503)
-            old=SimpleCookie(); old.load(self.headers.get('Cookie','')); oldsid=old.get('dejoiy_session')
-            if oldsid: SESSIONS.pop(oldsid.value,None)
-            SESSIONS[sid]=s
+        return sid
+    def finish_login(self, s):
+        """The password (and passkey, when the mailbox has one) is accepted: this browser is signed in."""
+        old=SimpleCookie(); old.load(self.headers.get('Cookie','')); oldsid=old.get('dejoiy_session')
+        sid=self.keep_session(s,oldsid.value if oldsid else None)
         secure='; Secure' if self.server.app_origin.startswith('https:') else ''
-        return self.reply(200,{'user':s['user'],'csrf':s['csrf']},f'dejoiy_session={sid}; Path=/; HttpOnly; SameSite=Strict; Max-Age={int(lifetime)}'+secure)
+        return self.reply(200,{'user':s['user'],'csrf':s['csrf']},f'dejoiy_session={sid}; Path=/; HttpOnly; SameSite=Strict; Max-Age={int(s["expires"]-time.time())}'+secure)
+    def start_session(self, email, password): return self.finish_login(self.build_session(email,password))
+    # ---- passkeys: the second step after the password (passkeys.py does the checking) ----
+    def passkey_site(self):
+        """(site id, origin) the passkey is tied to. The mail and admin addresses share their parent domain as the id,
+        so one passkey works on both; a company's own sign-in address is a site of its own."""
+        origin=self.headers.get('Origin') or self.server.app_origin   # already checked against our own addresses
+        host=urllib.parse.urlsplit(origin).hostname or ''
+        ours=[urllib.parse.urlsplit(o).hostname or '' for o in (self.server.app_origin,getattr(self.server,'admin_origin',None)) if o]
+        if host in ours and len(ours)==2:
+            a,b=ours[0].split('.'),ours[1].split('.'); shared=[]
+            while a and b and a[-1]==b[-1]: shared.insert(0,a.pop()); b.pop()
+            if len(shared)>=2: host='.'.join(shared)
+        return host,origin
+    def passkey_step(self, s, add=None):
+        """None when this mailbox has no passkey. Otherwise the sign-in waits: the browser gets a challenge and nothing else."""
+        keys=getattr(self.server,'passkeys',None)
+        if not keys: return None
+        options,state=keys.login_options(self.account(s),self.passkey_site()[0])
+        if not options: return None
+        pid=secrets.token_urlsafe(32); now=time.time()
+        with LOCK:
+            for key in [k for k,v in PENDING.items() if v['until']<now]: del PENDING[key]
+            if len(PENDING)>=500: raise APIError('Too many sign-ins are waiting. Try again in a minute.',503)
+            PENDING[pid]={'s':s,'state':state,'add':add,'until':now+300,'tries':0}
+        return {'step':'passkey','pending':pid,'options':options}
+    def passkey_finish(self, data):
+        pid=str(data.get('pending',''))
+        with LOCK:
+            p=PENDING.get(pid)
+            if p and (p['until']<time.time() or p['tries']>=5): del PENDING[pid]; p=None   # five tries, then the password again
+            if p: p['tries']+=1
+        if not p: raise APIError('That took too long. Sign in again.',400)
+        s=p['s']; email=s['user']['email']; keys=self.server.passkeys
+        try:
+            if data.get('code'): keys.use_code(self.account(s),str(data['code'])[:64]); self.log('passkey_code_used',email)
+            else: keys.login(self.account(s),p['state'],data.get('assertion'),self.passkey_site()[1])
+        except passkeys.PasskeyError as e:
+            self.log('signin_failed',email); raise APIError(str(e),400)
+        with LOCK:
+            if PENDING.pop(pid,None) is None: raise APIError('That took too long. Sign in again.',400)
+        self.log('signin',email)
+        return self.finish_add(p['add'],s) if p['add'] else self.finish_login(s)
+    def passkey_action(self, sid, s, data):
+        """Settings: see, add and remove your own passkeys, and get new recovery codes."""
+        keys=getattr(self.server,'passkeys',None)
+        if not keys: raise APIError('Passkeys are not switched on for this server.',503)
+        op=data.get('op'); who=self.account(s); email=s['user']['email']
+        try:
+            if op=='view': return keys.view(who)
+            if op in ('register_options','remove','fresh_codes'):   # changing how you sign in asks for the password again
+                password=str(data.get('password',''))
+                if not password or len(password)>4096: raise APIError('Enter your password.')
+                try: self.server.zimbra.login(email,password)
+                except APIError: raise APIError('That password is not right.',403)
+            if op=='register_options':
+                options,state=keys.register_options(who,s['user'].get('name') or email,self.passkey_site()[0],email.lower())
+                with LOCK:
+                    if sid not in SESSIONS: raise APIError('Sign in to your mailbox',401)
+                    s['passkey_new']=state; SESSIONS[sid]=s
+                return {'options':options}
+            if op=='register':
+                with LOCK:
+                    state=s.pop('passkey_new',None)
+                    if sid in SESSIONS: SESSIONS[sid]=s
+                out=keys.register(who,state,data.get('credential'),self.passkey_site()[1],data.get('name'))
+                self.log('passkey_added',email); return out
+            if op=='remove':
+                out=keys.remove(who,data.get('id')); self.log('passkey_removed',email); return out
+            if op=='fresh_codes':
+                out=keys.fresh_codes(who); self.log('passkey_codes_new',email); return out
+        except passkeys.PasskeyError as e: raise APIError(str(e),400)
+        raise APIError('Unknown action.')
+    def passkeys_reset(self, session, data):
+        """Admin console: someone lost their phone. Removes that mailbox's passkeys and recovery codes; the password still signs in."""
+        client,token,scope=self.admin_session(session)
+        keys=getattr(self.server,'passkeys',None)
+        if not keys: raise APIError('Passkeys are not switched on for this server.',503)
+        perms=client.actor_perms(token,session['user']['email'],scope)
+        if scope and perms is not None and 'mailboxes.manage' not in perms: raise APIError('Your role does not allow this. Ask an admin for "'+PERMISSIONS['mailboxes.manage']+'".',403)
+        ident=str(data.get('id',''))
+        if not re.fullmatch(r'[a-fA-F0-9-]{36}',ident): raise APIError('Invalid mailbox selection.')
+        lookup=node(ADMIN,'GetAccountRequest'); lookup.append(node(ADMIN,'account',{'by':'id'},ident))
+        account=client.call(lookup,token).find('{'+ADMIN+'}account')
+        if account is None: raise APIError('Mailbox not found.',404)
+        email=account.get('name','').lower()
+        if scope and not email.endswith('@'+scope): raise APIError('You can only manage addresses in '+scope+'.',403)
+        had=keys.needed(ident) or keys.needed(email)
+        keys.reset(ident); keys.reset(email)   # kept under the account id; under the address on servers that report none
+        self.log('admin:passkeys_reset',session['user']['email'],email)
+        return {'ok':True,'email':email,'had':had}
     def signup(self, op, data):
         provisioner=getattr(self.server,'provisioner',None)
         if not provisioner: raise APIError('Company sign-up is not open yet.',503)
@@ -3111,7 +3205,7 @@ class Handler(SimpleHTTPRequestHandler):
             if not isinstance(data,dict): raise APIError('JSON object required')
             if not self.server.zimbra: raise APIError('Mail server setup is pending. Contact your administrator.',503)
             booking=self.path.startswith('/api/public/booking/')
-            if self.path in ('/api/login','/api/admin/login','/api/accounts/add') or self.path.startswith('/api/signup/') or booking:
+            if self.path in ('/api/login','/api/login/passkey','/api/admin/login','/api/accounts/add') or self.path.startswith('/api/signup/') or booking:
                 with LOCK:
                     now=time.time(); attempts=self.server.attempts
                     for key in list(attempts):
@@ -3121,7 +3215,7 @@ class Handler(SimpleHTTPRequestHandler):
                     if ipaddress.ip_address(key).is_loopback and self.headers.get('X-Real-IP'):
                         key=str(ipaddress.ip_address(self.headers['X-Real-IP']))
                     # Sign-up polls DNS, so it gets its own, larger allowance than password attempts.
-                    signup=self.path.startswith('/api/signup/'); key+='#signup' if signup else '#book' if booking else ''
+                    signup=self.path.startswith('/api/signup/'); key+='#signup' if signup else '#book' if booking else '#key' if self.path=='/api/login/passkey' else ''   # the passkey step counts apart, so it does not halve an office's sign-ins
                     if len(attempts.get(key,[]))>=(30 if signup else 5 if booking else 10): raise APIError('Too many attempts; wait one minute',429)
                     attempts.setdefault(key,[]).append(now)
             if self.path.startswith('/api/signup/'): return self.signup(self.path[len('/api/signup/'):],data)
@@ -3132,12 +3226,15 @@ class Handler(SimpleHTTPRequestHandler):
                 if custom:  # on a company's own address only that company signs in; "priya" means priya@theirdomain
                     if '@' not in email: email=email+'@'+custom['domain']
                     if not email.lower().endswith('@'+custom['domain']): raise APIError('This sign-in page is for '+custom['domain']+' mailboxes. Others sign in at '+self.server.app_origin.split('//')[1]+'.',403)
-                try: out=self.start_session(email,password)
+                try: new=self.build_session(email,password)
                 except APIError:
                     if EMAIL.fullmatch(email): self.log('signin_failed',email)
                     raise
+                step=self.passkey_step(new)   # a mailbox with a passkey is not signed in yet
+                if step: return self.reply(200,step)
                 self.log('signin',email)
-                return out
+                return self.finish_login(new)
+            if self.path=='/api/login/passkey': return self.passkey_finish(data)
             sid,s=self.session()
             if not secrets.compare_digest(self.headers.get('X-CSRF-Token',''),s['csrf']): raise APIError('Invalid request token',403)
             if self.path=='/api/dns':
@@ -3151,6 +3248,7 @@ class Handler(SimpleHTTPRequestHandler):
                     return self.reply(200,{'ok':True,'next':following},self.account_cookies(waiting[0],waiting[1:]))
                 return self.reply(200,{'ok':True},self.account_cookies(None,[]))
             if self.path=='/api/accounts/add': return self.account_add(sid,data,custom)
+            if self.path=='/api/passkeys': return self.reply(200,self.passkey_action(sid,s,data))
             if self.path=='/api/accounts/switch': return self.account_switch(sid,data)
             if self.path=='/api/admin/login':
                 client=getattr(self.server,'admin',None)
@@ -3209,6 +3307,7 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.reply(200,self.automation_action(s,data))
             if self.path=='/api/admin/action' and data.get('op') in APITOKEN_OPS:
                 return self.reply(200,self.apitoken_action(s,data))
+            if self.path=='/api/admin/action' and data.get('op')=='passkeys_reset': return self.reply(200,self.passkeys_reset(s,data))
             if self.path=='/api/admin/action' and data.get('op')=='reports':
                 client,token,scope=self.admin_session(s)
                 audit=getattr(self.server,'audit',None)
@@ -3311,6 +3410,7 @@ def serve():
     server.hosts_file=os.environ.get('CUSTOM_HOSTS_FILE') or (str(Path(os.environ['SESSION_DB']).with_name('custom-hosts.txt')) if os.environ.get('SESSION_DB') else None)
     server.booking=AppearanceStore((str(Path(os.environ['SESSION_DB']).with_name('booking.sqlite')) if os.environ.get('SESSION_DB') else None),'booking')
     server.updates=AppearanceStore((str(Path(os.environ['SESSION_DB']).with_name('updates.sqlite')) if os.environ.get('SESSION_DB') else None),'updates')
+    server.passkeys=passkeys.Passkeys(AppearanceStore((str(Path(os.environ['SESSION_DB']).with_name('passkeys.sqlite')) if os.environ.get('SESSION_DB') else None),'passkeys'))
     server.ui_settings=AppearanceStore((str(Path(os.environ['SESSION_DB']).with_name('settings.sqlite')) if os.environ.get('SESSION_DB') else None),'ui_settings')
     server.mail_host=os.environ.get('MAIL_HOST') or parsed.hostname
     server.shine_origin=(os.environ.get('SHINE_ORIGIN') or 'https://app.shine.dejoiy.com').rstrip('/')

@@ -548,7 +548,9 @@ function manageUser(u, d){
       <label class="adm-check"><input type="checkbox" id="mu-keep" ${u.keepCopy?"checked":""}> Keep a copy in this mailbox</label><button class="adm-btn primary" id="mu-fwd-save">Save forwarding</button></section>
     <section data-panel="4" hidden><ul class="adm-list">${(u.aliases||[]).map((a,i)=>`<li><span>${esc(a)}</span><button class="adm-btn ghost sm" data-rm-alias="${i}">Remove</button></li>`).join("")||'<li class="adm-muted">No aliases yet.</li>'}</ul>
       <label>New alias<input id="mu-alias" type="email" placeholder="alias@${esc(u.email.split("@")[1])}"></label><button class="adm-btn primary" id="mu-alias-add">Add alias</button></section>
-    <section data-panel="5" hidden><label>New password<input id="mu-pass" type="password" autocomplete="new-password"></label><button class="adm-btn primary" id="mu-pass-save">Set password</button></section>
+    <section data-panel="5" hidden><label>New password<input id="mu-pass" type="password" autocomplete="new-password"></label><button class="adm-btn primary" id="mu-pass-save">Set password</button>
+      <h3>Passkey</h3><p class="adm-muted">Lost their phone and their recovery codes? This removes their passkeys, so the password alone signs in. They can add a new passkey in Settings → Accounts.</p>
+      <button class="adm-btn" id="mu-pk-reset" type="button">Remove this person's passkeys</button></section>
     <section data-panel="6" hidden>${self?'<p class="adm-muted">You cannot delete your own mailbox.</p>':`<p>Deleting removes this mailbox and all of its mail permanently.</p>
       <label>Type <b>${esc(u.email)}</b> to confirm<input id="mu-confirm" autocomplete="off"></label><button class="adm-btn danger" id="mu-delete">Delete mailbox</button>`}</section>
     <p role="alert" class="adm-error"></p>`});
@@ -581,6 +583,9 @@ function manageUser(u, d){
   run("mu-alias-add",()=>({op:"add_alias",id:u.id,alias:$("mu-alias").value}),"Alias added.");
   root.querySelectorAll("[data-rm-alias]").forEach(b=>b.addEventListener("click",async()=>{b.disabled=true;try{await act({op:"remove_alias",id:u.id,alias:u.aliases[+b.dataset.rmAlias]});$("adm-dialog-root").innerHTML="";await reload("Alias removed.");}catch(e){err.textContent=e.message;b.disabled=false;}}));
   run("mu-pass-save",()=>({op:"password",id:u.id,password:$("mu-pass").value}),"Password updated.");
+  $("mu-pk-reset").addEventListener("click",async e=>{ e.target.disabled=true;
+    try{ const out=await act({op:"passkeys_reset",id:u.id}); toast(out.had?"Passkeys removed. "+out.email+" now signs in with the password only.":out.email+" had no passkey."); }
+    catch(err){ toast(err.message); } e.target.disabled=false; });
   run("mu-delete",()=>({op:"delete_user",id:u.id,confirm:$("mu-confirm").value}),"Mailbox deleted.");
 }
 
