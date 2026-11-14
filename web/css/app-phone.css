@@ -70,24 +70,18 @@
   html[data-app-look="clean"] #bottomnav button.active .ui-icon{stroke-width:2.2}
   html[data-app-look="clean"] #view{padding-bottom:calc(64px + env(safe-area-inset-bottom))!important}
 
-  /* ---- reading: plain page, actions at the bottom ---- */
+  /* ---- reading: the colour card, actions at the bottom ---- */
   html[data-app-look="clean"] body.reader-open #topbar{display:none}
   html[data-app-look="clean"] body.reader-open .r-toolbar{min-height:calc(52px + env(safe-area-inset-top));padding:env(safe-area-inset-top) 6px 0;border:0;background:var(--surface)}
   html[data-app-look="clean"] .r-toolbar .icon-btn:not(#r-back){display:none}
   html[data-app-look="clean"] .r-toolbar #r-back{width:44px;height:44px}
-  html[data-app-look="clean"] .reader{padding:4px var(--ph-pad) calc(96px + env(safe-area-inset-bottom))}
-  html[data-app-look="clean"] .mail-card{margin:0;padding:0;border:0;border-radius:0;background:none!important;box-shadow:none;animation:none;--card-ink:var(--ink)}
-  html[data-app-look="clean"] .mc-tag{padding:3px 9px;background:var(--surface-2);color:var(--ink-2);font-size:11px;font-weight:600;transform:none}
-  html[data-app-look="clean"] .mc-tag::before{width:6px;height:6px;background:var(--accent)}
-  html[data-app-look="clean"] .mail-card .r-subject{margin:8px 0 14px;font-size:20px;font-weight:700;line-height:1.3;letter-spacing:-.01em}
-  html[data-app-look="clean"] .mail-card .thread-count{background:var(--surface-2);color:var(--ink-2);font-size:12px}
-  html[data-app-look="clean"] .mail-card .thread-messages{gap:0}
-  html[data-app-look="clean"] .mail-card .thread-message{padding:0;border-radius:0;background:none!important;color:var(--ink);border-top:1px solid var(--line)!important}
-  html[data-app-look="clean"] .mail-card .thread-message:first-child{border-top:0!important}
-  html[data-app-look="clean"] .mail-card .tm-head,html[data-app-look="clean"] .mail-card .tm-head:hover{padding-left:0;padding-right:0;background:none}
+  html[data-app-look="clean"] .reader{padding:0 0 calc(84px + env(safe-area-inset-bottom))}
+  /* an open mail is the same colour card as on the computer (its label's colour, sliding up as it opens);
+     only its own Reply/Forward row is left out, because those sit in the bar at the bottom */
+  html[data-app-look="clean"] .mail-card{margin:4px 10px 16px;padding:18px 12px 12px;border-radius:24px}
+  html[data-app-look="clean"] .mail-card .r-subject{font-size:24px}
   html[data-app-look="clean"] .r-body{font-size:var(--ph-read,15px);line-height:1.6}
   html[data-app-look="clean"] .mail-card .thread-actions{display:none!important}
-  html[data-app-look="clean"] .mail-card .lbl{background:var(--surface-2);color:var(--ink-2)}
   html[data-app-look="clean"] body.reader-open #ph-size{display:block;position:fixed;top:calc(4px + env(safe-area-inset-top));right:8px;z-index:43;min-width:44px;height:44px;border:0;border-radius:50%;background:none;color:var(--ink);font:inherit;font-size:19px;font-weight:600}
   html[data-app-look="clean"] :is(#ph-size,.ph-aa) small{font-size:.7em}
   html[data-app-look="clean"] body.reader-open #ph-readbar{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:42;padding:4px 4px calc(4px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:var(--surface)}
