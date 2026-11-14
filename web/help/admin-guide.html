@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dejoiy Mail: Admin guide · Dejoiy Mail</title>
+<meta name="color-scheme" content="light dark">
+<style>
+:root{--bg:#f7f7f9;--card:#fff;--ink:#1d1d24;--muted:#5b5b68;--line:#e2e2ea;--accent:#5b3cc4;--accent-ink:#fff;--soft:#f0ecfd}
+@media (prefers-color-scheme:dark){:root{--bg:#121218;--card:#1b1b23;--ink:#ececf2;--muted:#a9a9b8;--line:#2e2e3a;--accent:#a48cff;--accent-ink:#14121c;--soft:#251f3d}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow-wrap:anywhere}
+.guide{max-width:46rem;margin:0 auto;padding:24px 16px 64px}
+h1{font-size:1.9rem;line-height:1.2;margin:.2em 0 .6em}
+h2{font-size:1.4rem;line-height:1.3;margin:2em 0 .5em;padding-top:.6em;border-top:1px solid var(--line)}
+h3{font-size:1.15rem;margin:1.6em 0 .4em}
+h4{font-size:1rem;margin:1.2em 0 .3em}
+p,li{max-width:100%}
+ul,ol{padding-left:1.4em}
+li{margin:.25em 0}
+a{color:var(--accent)}
+code{font:.92em ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--soft);padding:.1em .35em;border-radius:5px}
+hr{border:0;border-top:1px solid var(--line);margin:2em 0}
+blockquote{margin:1em 0;padding:.6em 1em;border-left:4px solid var(--line);color:var(--muted)}
+.bug-box{margin:1.2em 0;padding:14px 16px;border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card)}
+.bug-box p{margin:.4em 0}
+.bug-btn{display:inline-block;margin-top:.3em;padding:.55em 1.1em;border-radius:999px;background:var(--accent);color:var(--accent-ink);font-weight:600;text-decoration:none}
+.toc{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 16px}
+.toc p{margin:.3em 0;font-weight:600}
+.table{overflow-x:auto;margin:1em 0}
+table{border-collapse:collapse;width:100%}
+th,td{border:1px solid var(--line);padding:.45em .6em;text-align:left;vertical-align:top}
+th{background:var(--soft)}
+</style>
+</head>
+<body>
+<main class="guide" id="guide">
+<h1 id="dejoiy-mail-admin-guide">Dejoiy Mail: Admin guide</h1>
+<aside class="bug-box"><p><strong>Found a bug or something that does not work as written here?</strong> Do not email it. Open the account menu (your photo, top right) → <strong>Report a bug</strong>, or <strong>Help desk</strong> → <strong>Report a bug</strong>, and describe what you did, what you expected and what happened. Your report goes to your Company admin; a company admin&#x27;s report goes to the Dejoiy team.</p><p><a class="bug-btn" href="/#/bug" data-report-bug>Report a bug</a></p></aside>
+<p>This guide is for <strong>company admins</strong>: the people who look after their company&#x27;s mailboxes in the <strong>admin console</strong>. It uses the words you see on screen. For reading and sending mail, see the <a href="/help/user-guide.html">User guide</a>.</p>
+<p>Features marked <em>(not yet tested on live)</em> are in the console, but nobody has tried them on the live server since they were added.</p>
+<nav class="toc" aria-label="Contents"><p>Contents</p><ul><li><a href="#opening-the-admin-console">Opening the admin console</a></li><li><a href="#accounts">Accounts</a></li><li><a href="#teams-roles">Teams &amp; roles</a></li><li><a href="#domains">Domains</a></li><li><a href="#help-desk-tickets-not-yet-tested-on-live">Help desk tickets <em>(not yet tested on live)</em></a></li><li><a href="#mailbox-policies">Mailbox policies</a></li><li><a href="#webhooks">Webhooks</a></li><li><a href="#api-tokens">API tokens</a></li><li><a href="#automations">Automations</a></li><li><a href="#undelivered-mail">Undelivered mail</a></li><li><a href="#reports">Reports</a></li><li><a href="#bulk-import">Bulk import</a></li><li><a href="#other-pages">Other pages</a></li><li><a href="#only-for-the-dejoiy-team">Only for the Dejoiy team</a></li></ul></nav>
+<h2 id="opening-the-admin-console">Opening the admin console</h2>
+<ol>
+<li>Sign in to Dejoiy Mail with an admin mailbox.</li>
+<li>Open <strong>Admin</strong> in the left menu. The console opens on its own site (admin-mail.dejoiy.com).</li>
+<li>For safety, it asks for your password again (<strong>Confirm it&#x27;s you</strong>). Admin access locks after 15 minutes; enter your password again to go on. <strong>Lock</strong> locks it at once.</li>
+</ol>
+<p>The menu on the left has five groups: <strong>Monitor</strong>, <strong>Manage</strong>, <strong>Configure</strong>, <strong>Tools</strong> and <strong>Search</strong>, and <strong>Help</strong> opens this guide. <strong>Open mail</strong> takes you back to your mailbox.</p>
+<p>Your <strong>role</strong> decides what you may do. If a page says &quot;Your role does not allow this&quot;, ask an admin who manages roles.</p>
+<h2 id="accounts">Accounts</h2>
+<p><strong>Where:</strong> Manage → <strong>Accounts</strong>.</p>
+<p><strong>What you can do:</strong> see every mailbox, <strong>Export CSV</strong>, create one with <strong>+ New mailbox</strong>, and use the two buttons on each mailbox. <strong>Details</strong> opens all its settings (profile, features, password rules, limits, <strong>Out of office</strong>). <strong>Manage</strong> has the tabs <strong>Profile</strong>, <strong>Access</strong>, <strong>Storage</strong>, <strong>Forwarding</strong> (up to 10 addresses), <strong>Aliases</strong>, <strong>Password</strong> and <strong>Delete</strong>.</p>
+<blockquote><p><strong>Keep in mind:</strong> <strong>Delete</strong> removes the mailbox and all its mail for ever. You must type the address to confirm.</p></blockquote>
+<h3 id="templates-onboard-offboard-suspend-reactivate">Templates: Onboard, Offboard, Suspend, Reactivate</h3>
+<p><strong>What it is:</strong> ready-made jobs that do several steps at once. Each step shows ✓ when it worked or ✗ when it did not.</p>
+<p><strong>Where:</strong> Manage → Accounts → <strong>Templates</strong> → <strong>Use</strong> next to the job.</p>
+<p><strong>Onboard a new employee</strong></p>
+<ol>
+<li>Fill in <strong>Full name</strong>, <strong>Email address</strong>, <strong>First password</strong>, <strong>Department</strong>, <strong>Designation</strong>, and tick the mailing lists under <strong>Add to mailing lists</strong>.</li>
+<li>Tap <strong>Create and set up</strong>.</li>
+</ol>
+<p>It creates the mailbox with that password and your company&#x27;s default mailbox policy, then sets the department and designation, then adds the person to the lists you ticked. If creating the mailbox fails, nothing else is done.</p>
+<blockquote><p><strong>Keep in mind:</strong> Onboard does not by itself make the person change the first password, and it sends no welcome mail. Give them the password yourself. To make them change it, open the mailbox&#x27;s <strong>Details</strong> → <strong>Password</strong> → tick <strong>Must change password at next sign-in</strong>. They can also change it in Settings → Accounts → <strong>Change password</strong>.</p></blockquote>
+<p><strong>Offboard an employee</strong></p>
+<ol>
+<li>Choose the mailbox. (Your own is not in the list.)</li>
+<li>Leave ticked, or untick: <strong>Lock sign-in</strong>; <strong>Sign them out everywhere</strong> (sets a new random password nobody is shown); <strong>Remove from their department and every mailing list</strong>.</li>
+<li>Optionally enter <strong>Forward their new mail to</strong>. A copy also stays in their mailbox.</li>
+<li>Tap <strong>Offboard</strong>.</li>
+</ol>
+<p>The steps run in this order: forwarding, removing from the department and lists, the new password, then the lock. The mailbox and its mail are kept; delete it later from <strong>Manage</strong> → <strong>Delete</strong> if you need to.</p>
+<blockquote><p><strong>Keep in mind:</strong> forwarding fails if the person&#x27;s mailbox policy does not allow forwarding. Offboard does not set an out-of-office reply; set one in the mailbox&#x27;s <strong>Details</strong> → <strong>Out of office</strong> if you want one.</p></blockquote>
+<p><strong>Suspend</strong> locks sign-in until you reactivate the mailbox. Mail keeps arriving. <strong>Reactivate</strong> makes a locked mailbox active again.</p>
+<blockquote><p><strong>Keep in mind:</strong> you cannot lock your own mailbox.</p></blockquote>
+<h2 id="teams-roles">Teams &amp; roles</h2>
+<p><strong>Where:</strong> Manage → <strong>Teams &amp; roles</strong>.</p>
+<h3 id="departments">Departments</h3>
+<p><strong>What it is:</strong> a department (IT, HR, Sales…) is a mailing list with its own address. People in a department see its tickets in <strong>Help desk</strong>, and others can mail them all with <code>@dept:&lt;department&gt;</code>.</p>
+<ol>
+<li>Tap <strong>+ New department</strong>, enter the <strong>Department name</strong> and <strong>Department email</strong>, and tap <strong>Create department</strong>.</li>
+<li>Tap <strong>People</strong> on a department to add or remove people. A person can be in only one department.</li>
+<li><strong>Delete</strong> removes the department. Its address stops working.</li>
+</ol>
+<h3 id="roles">Roles</h3>
+<p><strong>What it is:</strong> a role is a designation (like &quot;Team lead&quot;) with a set of permissions. A person&#x27;s role is their <strong>Designation</strong>.</p>
+<ol>
+<li>Tap <strong>+ Add role</strong> and type a name (up to 40 characters).</li>
+<li>Choose the access: <strong>Mail only</strong> or <strong>Company admin</strong>.</li>
+<li>Tick the permissions (see the table).</li>
+<li>Tap <strong>Save roles</strong>. <strong>Remove</strong> takes a role away.</li>
+</ol>
+<div class="table"><table><thead><tr><th>Permission</th><th>What it lets the person do</th></tr></thead><tbody><tr><td>Post in the company box</td><td>Post updates in the Company page everyone sees</td></tr><tr><td>Add and edit mailboxes</td><td>Create mailboxes and change their details</td></tr><tr><td>Delete mailboxes</td><td>Delete mailboxes for ever</td></tr><tr><td>Manage departments and team lists</td><td>Create and change departments and mailing lists</td></tr><tr><td>See the DNS setup</td><td>Open Domains → DNS setup</td></tr><tr><td>Manage roles, permissions and the company box</td><td>Change this page, policies, branding, mail service, webhooks and API tokens</td></tr><tr><td>See and handle every help desk ticket</td><td>See every ticket in the company, answer it and change it, like a company admin does</td></tr></tbody></table></div>
+<p>A <strong>Mail only</strong> role can have only &quot;Post in the company box&quot; and &quot;See and handle every help desk ticket&quot;. A company admin with no role gets every permission. The ready-made roles are Member, Team lead, Department head and IT admin.</p>
+<p>You can keep <strong>1 to 30 roles</strong>. <em>(30 roles is not yet tested on live.)</em></p>
+<blockquote><p><strong>Keep in mind:</strong> roles, policies and the company box name share one small space on the mail server. If you see &quot;That is more than the mail server can keep for one company&quot;, use shorter names or fewer roles.</p></blockquote>
+<h3 id="company-box">Company box</h3>
+<p>The <strong>Company box</strong> is the Company page every mailbox sees. Give it a name and tap <strong>Save name</strong>. Only people whose role has &quot;Post in the company box&quot; can post there.</p>
+<h2 id="domains">Domains</h2>
+<p><strong>Where:</strong> Manage → <strong>Domains</strong>. Each domain has the buttons <strong>Settings</strong>, <strong>DNS setup</strong>, <strong>Branding &amp; sign-in</strong> and <strong>Mail service</strong>.</p>
+<h3 id="dns-setup">DNS setup</h3>
+<p><strong>What it is:</strong> the records your domain needs so mail reaches you and leaves you safely.</p>
+<ol>
+<li>Tap <strong>DNS setup</strong>. You see the records: <strong>MX</strong>, <strong>SPF</strong>, <strong>DKIM</strong> and <strong>DMARC</strong>.</li>
+<li>Use <strong>Copy</strong> to copy each one into your domain provider&#x27;s DNS page.</li>
+<li>Tap <strong>Check again</strong>. Each record shows <strong>Live</strong>, <strong>Preparing</strong>, <strong>Needs a fix</strong> or <strong>Not found</strong>.</li>
+</ol>
+<blockquote><p><strong>Keep in mind:</strong> if you already have an SPF record, the one shown is your old one with Dejoiy Mail added. Replace the old one; never keep two SPF records. DKIM shows &quot;Preparing&quot; until its key is ready.</p></blockquote>
+<h3 id="branding-sign-in">Branding &amp; sign-in</h3>
+<p><strong>What it is:</strong> your company&#x27;s look on the sign-in page, and an optional sign-in address of your own (like <code>mail.yourcompany.com</code>).</p>
+<ol>
+<li>Enter the <strong>Name</strong>, <strong>One line on the sign-in page</strong>, and the <strong>Button colour on the sign-in page</strong>.</li>
+<li><strong>Choose logo</strong> (PNG or JPG, up to 200 KB) and <strong>Choose sign-in background</strong> (PNG or JPG, up to 600 KB).</li>
+<li>Tap <strong>Save name, logo and background</strong>. <strong>Remove logo</strong> and <strong>Remove picture</strong> take them away.</li>
+<li>For your own sign-in address: first add a <strong>CNAME</strong> record for it at your domain provider, pointing to the mail server. Then enter it in <strong>Your address</strong> and tap <strong>Save address</strong>.</li>
+</ol>
+<p>The server gets a security certificate for your address by itself, within about 10 minutes. Only mailboxes of your company can sign in there.</p>
+<blockquote><p><strong>Keep in mind:</strong> the address must be under your own domain, and its DNS must already point to the mail server when you save. You can have one such address. Logos and backgrounds are public pictures.</p></blockquote>
+<h3 id="mail-service-your-own-sending-service-not-yet-tested-on-live">Mail service (your own sending service) <em>(not yet tested on live)</em></h3>
+<p><strong>What it is:</strong> send your company&#x27;s mail to the outside world through a service you already pay for (Amazon SES, Resend, Brevo, Mailgun, Postmark, SendGrid or any SMTP server), so it carries your company&#x27;s sending reputation.</p>
+<ol>
+<li>Tap <strong>Mail service</strong>. Pick your provider in <strong>Quick fill</strong>, or type the details:
+<ul>
+<li><strong>SMTP server</strong>, for example <code>email-smtp.ap-south-1.amazonaws.com</code> or <code>smtp.resend.com</code></li>
+<li><strong>Port</strong>: 587 (with <strong>STARTTLS</strong>) or 465 (with <strong>SSL</strong>); 2587, 2465 and 25 also work</li>
+<li><strong>User name</strong> and <strong>Password or API key</strong>, as your provider gave them</li>
+</ul></li>
+<li>Under <strong>Who uses it</strong>, tick departments, or tick none so everyone uses it.</li>
+<li>Leave <strong>Switched on</strong> ticked and tap <strong>Save</strong>.</li>
+<li>Tap <strong>Send me a test mail</strong>. It goes to your own address.</li>
+</ol>
+<p>It is used only for mail to addresses <strong>outside</strong> your company. The sender&#x27;s copy still goes to their Sent folder. <strong>Remove</strong> goes back to Dejoiy Mail&#x27;s own sending.</p>
+<p><strong>How the password is kept:</strong> it is stored encrypted on the server, with the key in a separate file only the mail app can read. It is never sent back to your browser, so the box stays empty after you save. To keep the saved password, leave the box empty (this works only if the server and user name stay the same). Someone with full (root) access to the server could still read it.</p>
+<blockquote><p><strong>Keep in mind:</strong> the server must be reachable on the public internet. If your provider changes your key, enter the new one here, or mail to the outside will fail.</p></blockquote>
+<h2 id="help-desk-tickets-not-yet-tested-on-live">Help desk tickets <em>(not yet tested on live)</em></h2>
+<p><strong>What it is:</strong> the tickets your people raise to <strong>Company admin</strong> in <strong>Help desk</strong>. Every company has this team, even with no departments.</p>
+<p><strong>Where:</strong> Monitor → <strong>Help desk tickets</strong>. In your mailbox the same tickets are in <strong>Help desk</strong>, on the tabs <strong>Company admin queue</strong> and <strong>All company tickets</strong>.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li><strong>Waiting for your company&#x27;s admins</strong> lists open tickets raised to Company admin. <strong>Every ticket in your company</strong> lists all of them, finished ones too.</li>
+<li>Tap <strong>Open</strong> to answer a ticket. It opens in <strong>Help desk</strong> in your mailbox, where you set the status, assign it, change its priority or move it to a department. (How answering works is in the <a href="/help/user-guide.html#help-desk-not-yet-tested-on-live">User guide</a>.)</li>
+<li><strong>Open Help desk</strong> opens the whole Help desk.</li>
+</ol>
+<h3 id="raising-a-ticket-to-the-dejoiy-team">Raising a ticket to the Dejoiy team</h3>
+<ol>
+<li>In your mailbox open <strong>Help desk</strong> → <strong>New ticket</strong> (or <strong>Report a bug</strong>).</li>
+<li>In <strong>Which team should handle it?</strong> choose <strong>Dejoiy platform (the Dejoiy team)</strong>.</li>
+<li>Fill in the title, priority and details and tap <strong>Send ticket</strong>.</li>
+</ol>
+<p>These tickets have codes like <strong>P-0001</strong>. Only you and the Dejoiy team see them, and they cannot be moved to another team.</p>
+<blockquote><p><strong>Keep in mind:</strong> people whose role has &quot;See and handle every help desk ticket&quot; can also raise tickets to Dejoiy.</p></blockquote>
+<h2 id="mailbox-policies">Mailbox policies</h2>
+<p><strong>Where:</strong> Configure → <strong>Mailbox policies</strong>.</p>
+<p><strong>What it is:</strong> rules for every mailbox: password length and age, locking after wrong passwords, automatic sign-out, emptying Trash and Spam, and whether forwarding, IMAP and POP are allowed.</p>
+<ol>
+<li>Tap <strong>+ New policy</strong>, name it, set the rules and tap <strong>Create policy</strong>.</li>
+<li><strong>Make default</strong> makes new mailboxes follow it. <strong>Edit</strong>, then <strong>Save and apply</strong>, changes it.</li>
+<li><strong>Who follows which policy</strong> shows which mailboxes follow which policy.</li>
+</ol>
+<p>You can keep 1 to 20 policies.</p>
+<blockquote><p><strong>Keep in mind:</strong> saving applies the policy again to every mailbox. Turning forwarding off also removes forwarding addresses people already set.</p></blockquote>
+<h2 id="webhooks">Webhooks</h2>
+<p><strong>Where:</strong> Configure → <strong>Webhooks</strong>.</p>
+<p><strong>What it is:</strong> Dejoiy Mail tells your own system when something happens: mail received or sent, a sign-in that worked or failed, an admin sign-in or admin action.</p>
+<ol>
+<li>Tap <strong>Add webhook</strong>, enter an <code>https://</code> address and choose the events.</li>
+<li>Copy the <strong>signing secret</strong> (it starts with <code>whsec_</code>). It is shown only once. Your system checks the <code>X-Dejoiy-Signature</code> header with it.</li>
+<li><strong>Send test</strong> sends a test event. <strong>Switch off</strong>, <strong>Switch on</strong> and <strong>Remove</strong> do what they say.</li>
+</ol>
+<p>Up to 5 webhooks per company. A failed delivery is tried 3 times. After 20 failures in a row the webhook switches itself off.</p>
+<h2 id="api-tokens">API tokens</h2>
+<p><strong>Where:</strong> Configure → <strong>API tokens</strong>.</p>
+<p><strong>What it is:</strong> a key that lets your own programs send, read or label mail, or post to Shine, without a password.</p>
+<ol>
+<li>Tap <strong>Make token</strong>, choose what it may do (send mail, label mail, read mail, read mail text, post to Shine) and how long it lasts (7, 30, 90 or 365 days).</li>
+<li>Copy the token (it starts with <code>dmk_</code>). It is shown only once.</li>
+<li><strong>Revoke</strong> stops a token at once.</li>
+</ol>
+<p>Up to 10 tokens per company. Each token may make 60 calls a minute and send 100 mails an hour.</p>
+<blockquote><p><strong>Keep in mind:</strong> a token is as powerful as a password. Give each program its own token, with only what it needs.</p></blockquote>
+<h2 id="automations">Automations</h2>
+<p><strong>Where:</strong> Configure → <strong>Automations</strong>.</p>
+<ul>
+<li><strong>Important mail to Shine:</strong> mail from up to 50 chosen senders is announced in a Shine channel (at most 30 posts an hour; the mail&#x27;s text is never posted).</li>
+<li><strong>Follow-up reminder:</strong> if a mail someone sent gets no answer in 1, 2, 3, 5, 7 or 14 days, they get a reminder in their Inbox. It is checked every hour, and only for mail sent after you switched it on.</li>
+</ul>
+<h2 id="undelivered-mail">Undelivered mail</h2>
+<p><strong>Where:</strong> Monitor → <strong>Undelivered mail</strong>.</p>
+<p><strong>What it is:</strong> mail from the last 14 days that could not be delivered, with the reason. <strong>Nobody told</strong> shows the ones where the sender was not told.</p>
+<blockquote><p><strong>Keep in mind:</strong> the list is updated every few minutes, not at once. Some reasons are written in Hindi-English.</p></blockquote>
+<h2 id="reports">Reports</h2>
+<p><strong>Where:</strong> Monitor → <strong>Reports</strong>.</p>
+<p><strong>What it is:</strong> numbers for the last 14 days of mail sent from the web app and Dejoiy apps. Mail sent from other mail apps (IMAP) is not counted.</p>
+<h2 id="bulk-import">Bulk import</h2>
+<p><strong>Where:</strong> Tools → <strong>Bulk import</strong>.</p>
+<ol>
+<li>Make a CSV file with one mailbox per line: <code>email,display name,password</code>. A first line starting with <code>email</code> is skipped.</li>
+<li>Tap <strong>Choose CSV file</strong>, then <strong>Check and create</strong>.</li>
+</ol>
+<p>Up to 500 mailboxes at a time. They get the default mailbox policy.</p>
+<blockquote><p><strong>Keep in mind:</strong> names cannot contain commas.</p></blockquote>
+<h2 id="other-pages">Other pages</h2>
+<ul>
+<li><strong>Active sessions</strong> (Monitor): who is signed in. <strong>Sign out everywhere</strong> signs a person out on all devices.</li>
+<li><strong>Mailbox tools</strong> (Tools): rebuild a mailbox&#x27;s search, recount its storage, or sign it out everywhere.</li>
+<li><strong>Distribution lists</strong> and <strong>Resources</strong> (Manage): mailing lists and bookable rooms or equipment.</li>
+<li><strong>Search directory</strong> (Search): find accounts, aliases, lists and resources.</li>
+</ul>
+<h2 id="only-for-the-dejoiy-team">Only for the Dejoiy team</h2>
+<p>People on the Dejoiy team (the <strong>global admins</strong>) see more than a company admin:</p>
+<ul>
+<li>Every company and domain, with <strong>+ Add domain</strong>, <strong>Delete</strong> and the domain status, and <strong>Platform limits</strong> in a domain&#x27;s Settings.</li>
+<li>Server pages: <strong>Server status</strong>, <strong>Server statistics</strong>, <strong>Mail queues</strong>, <strong>Class of service</strong>, <strong>Global settings</strong>, <strong>Admins &amp; rights</strong>, <strong>Add-ons</strong>, <strong>Certificates</strong>, <strong>Retention</strong> and <strong>Server caches</strong>.</li>
+<li>A <strong>Company</strong> picker on Webhooks, API tokens and Automations, and Reports for every company.</li>
+<li><strong>Chat &amp; meetings</strong> for every company.</li>
+<li>In Help desk tickets: <strong>Raised to Dejoiy by company admins</strong> (and the <strong>From companies to Dejoiy</strong> tab in the mail app&#x27;s Help desk). Only the Dejoiy team works on P- tickets.</li>
+<li>Mailing every company at once with <code>@allS</code>.</li>
+</ul>
+<aside class="bug-box"><p><strong>Found a bug or something that does not work as written here?</strong> Do not email it. Open the account menu (your photo, top right) → <strong>Report a bug</strong>, or <strong>Help desk</strong> → <strong>Report a bug</strong>, and describe what you did, what you expected and what happened. Your report goes to your Company admin; a company admin&#x27;s report goes to the Dejoiy team.</p><p><a class="bug-btn" href="/#/bug" data-report-bug>Report a bug</a></p></aside>
+</main>
+</body>
+</html>

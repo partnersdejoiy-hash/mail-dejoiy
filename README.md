@@ -11,6 +11,13 @@ custom domains, per-user pricing, and a best-in-class interface with 24 themes.
 > browser (localStorage); the real mail backend (SMTP/IMAP, deliverability, multi-tenancy)
 > is tracked in `docs/ROADMAP.md`.
 
+## Guides
+
+- [User guide](docs/USER-GUIDE.md): reading and sending mail, Help desk, Report a bug, Joi, calendar and settings. In the app: account menu → **Help & guides**.
+- [Admin guide](docs/ADMIN-GUIDE.md): accounts, teams & roles, domains, mail service, help desk tickets and the other console pages. In the admin console: **Help** → **Admin guide**.
+
+The in-app pages (`web/help/`) are made from these files. After changing a guide, run `python3 tools/build-guides.py`; a test fails if the pages are out of date.
+
 ## Quick start
 
 ```bash
@@ -34,7 +41,8 @@ No build, no npm, no bundler. Just HTML + CSS + vanilla JS.
 | `web/js/mail.js` | Mailbox operations: send, reply, move, star, search, simulated fetch |
 | `web/js/view-*.js` | Views: Today, Mail (3-pane + tabs), Compose (rich text), Calendar, Contacts (CSV), Notes, Chat, Admin, Settings |
 | `web/js/app.js` | Router, dialogs, menus, keyboard shortcuts, sounds |
-| `docs/` | Architecture, roadmap, theme guide |
+| `docs/` | Architecture, roadmap, theme guide, user and admin guides |
+| `web/help/` | The guides as web pages (made by `tools/build-guides.py`) |
 
 ## Features (v0.1)
 

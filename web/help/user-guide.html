@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dejoiy Mail: User guide · Dejoiy Mail</title>
+<meta name="color-scheme" content="light dark">
+<style>
+:root{--bg:#f7f7f9;--card:#fff;--ink:#1d1d24;--muted:#5b5b68;--line:#e2e2ea;--accent:#5b3cc4;--accent-ink:#fff;--soft:#f0ecfd}
+@media (prefers-color-scheme:dark){:root{--bg:#121218;--card:#1b1b23;--ink:#ececf2;--muted:#a9a9b8;--line:#2e2e3a;--accent:#a48cff;--accent-ink:#14121c;--soft:#251f3d}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow-wrap:anywhere}
+.guide{max-width:46rem;margin:0 auto;padding:24px 16px 64px}
+h1{font-size:1.9rem;line-height:1.2;margin:.2em 0 .6em}
+h2{font-size:1.4rem;line-height:1.3;margin:2em 0 .5em;padding-top:.6em;border-top:1px solid var(--line)}
+h3{font-size:1.15rem;margin:1.6em 0 .4em}
+h4{font-size:1rem;margin:1.2em 0 .3em}
+p,li{max-width:100%}
+ul,ol{padding-left:1.4em}
+li{margin:.25em 0}
+a{color:var(--accent)}
+code{font:.92em ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--soft);padding:.1em .35em;border-radius:5px}
+hr{border:0;border-top:1px solid var(--line);margin:2em 0}
+blockquote{margin:1em 0;padding:.6em 1em;border-left:4px solid var(--line);color:var(--muted)}
+.bug-box{margin:1.2em 0;padding:14px 16px;border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--card)}
+.bug-box p{margin:.4em 0}
+.bug-btn{display:inline-block;margin-top:.3em;padding:.55em 1.1em;border-radius:999px;background:var(--accent);color:var(--accent-ink);font-weight:600;text-decoration:none}
+.toc{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 16px}
+.toc p{margin:.3em 0;font-weight:600}
+.table{overflow-x:auto;margin:1em 0}
+table{border-collapse:collapse;width:100%}
+th,td{border:1px solid var(--line);padding:.45em .6em;text-align:left;vertical-align:top}
+th{background:var(--soft)}
+</style>
+</head>
+<body>
+<main class="guide" id="guide">
+<h1 id="dejoiy-mail-user-guide">Dejoiy Mail: User guide</h1>
+<aside class="bug-box"><p><strong>Found a bug or something that does not work as written here?</strong> Do not email it. Open the account menu (your photo, top right) → <strong>Report a bug</strong>, or <strong>Help desk</strong> → <strong>Report a bug</strong>, and describe what you did, what you expected and what happened. Your report goes to your Company admin; a company admin&#x27;s report goes to the Dejoiy team.</p><p><a class="bug-btn" href="/#/bug" data-report-bug>Report a bug</a></p></aside>
+<p>This guide is for everyone who reads and sends mail in Dejoiy Mail. It uses the words you see on screen. &quot;Account menu&quot; always means the menu that opens when you tap your photo at the top right.</p>
+<p>Features marked <em>(not yet tested on live)</em> are in the app, but nobody has tried them on the live server since they were added.</p>
+<nav class="toc" aria-label="Contents"><p>Contents</p><ul><li><a href="#writing-a-mail-compose">Writing a mail (Compose)</a></li><li><a href="#reading-mail">Reading mail</a></li><li><a href="#several-accounts">Several accounts</a></li><li><a href="#help-desk-not-yet-tested-on-live">Help desk <em>(not yet tested on live)</em></a></li><li><a href="#report-a-bug-not-yet-tested-on-live">Report a bug <em>(not yet tested on live)</em></a></li><li><a href="#joi-the-ai-buddy">Joi, the AI buddy</a></li><li><a href="#calendar">Calendar</a></li><li><a href="#contacts">Contacts</a></li><li><a href="#filters-and-blocked-addresses">Filters and blocked addresses</a></li><li><a href="#settings">Settings</a></li><li><a href="#other-places-in-the-app">Other places in the app</a></li></ul></nav>
+<h2 id="writing-a-mail-compose">Writing a mail (Compose)</h2>
+<p><strong>What it is:</strong> the page where you write and send a mail.</p>
+<p><strong>Where:</strong> the <strong>Compose</strong> button. On a phone, the round Compose button, or the pencil at the top in the Clean look. On a computer you can also press <code>C</code>.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>In <strong>To</strong>, start typing a name or an address. Up to 6 suggestions appear: people whose name or address starts with what you typed come first, then the people you mail most. Click into an empty <strong>To</strong> box to see the people you write to most.</li>
+<li>Use the arrow keys to move through the suggestions and Enter to pick one. Esc closes the list.</li>
+<li>Tap <strong>Cc/Bcc</strong> if you need those rows. Put people in <strong>Bcc</strong> when the others should not see them.</li>
+<li>Write a <strong>Subject</strong> and your message. The bar above the text has bold, italic, underline, strike, lists and links.</li>
+<li>Choose a <strong>Label</strong> (see below), add files with the paperclip if you need them, then tap <strong>Send</strong>.</li>
+</ol>
+<h3 id="when-an-address-becomes-a-chip">When an address becomes a &quot;chip&quot;</h3>
+<p>A chip is the small rounded box an address turns into. Only chips get the mail.</p>
+<ul>
+<li><strong>Enter</strong>, <strong>comma</strong> or <strong>semicolon</strong>: what you typed becomes a chip.</li>
+<li><strong>Tab</strong>: makes a chip, but only if you typed something.</li>
+<li><strong>Space</strong>: makes a chip only when what you typed is a whole address (like <code>asha@company.com</code>). A half-typed address stays as text, so you can keep typing.</li>
+<li><strong>Leaving the box</strong>: a whole address is kept as a chip; half of one is not.</li>
+<li><strong>Pasting</strong> a list of addresses (separated by commas, semicolons or spaces) adds them all.</li>
+<li><strong>Backspace</strong> in an empty box removes the last chip. The <strong>×</strong> on a chip removes that one.</li>
+<li>A chip with a wrong address is marked &quot;This doesn&#x27;t look like an email address&quot;, and <strong>Send</strong> will not work until you fix it.</li>
+</ul>
+<h3 id="often-with">&quot;Often with&quot;</h3>
+<p>After you add someone in <strong>To</strong>, Dejoiy Mail may show up to 4 buttons like <strong>+ Ravi</strong>. These are people who were on the same mails as that person at least twice in your Sent mail. Each button shows <strong>To</strong>, <strong>Cc</strong> or <strong>Bcc</strong>: the box you usually used for them. Tap it to add them there.</p>
+<h3 id="mailing-a-whole-group">Mailing a whole group</h3>
+<p>Type one of these in <strong>To</strong> (they also appear in the suggestions):</p>
+<ul>
+<li><strong><code>@all</code></strong>: everyone with an active mailbox in your company.</li>
+<li><strong><code>@dept:&lt;department&gt;</code></strong>: everyone in one department, for example <code>@dept:customer-support</code> for &quot;Customer Support&quot;. The name is written in small letters with <code>-</code> instead of spaces. The suggestion shows how many people are in it.</li>
+<li><strong><code>@role:&lt;designation&gt;</code></strong>: everyone with that designation, written the same way, for example <code>@role:team-lead</code>.</li>
+</ul>
+<p>The people in the group get the mail as <strong>Bcc</strong>, so they do not see each other&#x27;s addresses. You are left out of the group. If <strong>To</strong> would be empty, your own address goes in <strong>To</strong>. If a group has nobody else in it, you see &quot;Nobody else is in …&quot; and the mail is not sent.</p>
+<h3 id="labels">Labels</h3>
+<p>Under the subject you choose one label: <strong>✨ Auto</strong> (the default: the app guesses from the subject and text), <strong>Important</strong>, <strong>Urgent</strong>, <strong>Work</strong>, <strong>Money</strong>, <strong>Personal</strong>, <strong>Ideas</strong>, or one of your own labels. The label decides the coloured band on the mail you send. It is also put on your copy in Sent. <strong>Important</strong> also marks the mail as important.</p>
+<h3 id="attachments-drafts-and-undo">Attachments, drafts and undo</h3>
+<ul>
+<li>Up to <strong>20 files</strong> per mail. The total size limit is set by the server (normally 15 MB). The <strong>×</strong> next to a file removes it.</li>
+<li>Drafts save by themselves every 15 seconds and when you leave the page. You can also tap <strong>Save draft</strong>. <strong>Discard</strong> asks before it throws the mail away.</li>
+<li><strong>Undo Send:</strong> while &quot;Sending…&quot; shows, you can tap <strong>Undo</strong>. How long you get is set in Settings → General → <strong>Undo Send</strong> (Off, 5, 10, 20 or 30 seconds).</li>
+<li>Your signature is added by itself to new mails and above the quoted text in replies.</li>
+<li><strong>Templates:</strong> first switch them on in Settings → Advanced → Templates. Then Compose shows a <strong>Templates</strong> button to insert a saved text or save the current mail as a template.</li>
+<li><strong>Send &amp; archive</strong> shows on replies when you switch it on in Settings → General.</li>
+</ul>
+<blockquote><p><strong>Keep in mind:</strong> a group like <code>@all</code> can reach many people. Check the number in the suggestion before you send.</p></blockquote>
+<h2 id="reading-mail">Reading mail</h2>
+<h3 id="coloured-cards">Coloured cards</h3>
+<p><strong>What it is:</strong> each mail gets a colour that says what kind of mail it is: <strong>Important</strong>, <strong>Urgent</strong>, <strong>Security</strong>, <strong>Money</strong>, <strong>Work</strong>, <strong>Personal</strong>, <strong>Ideas</strong> or <strong>Updates</strong>. The open mail always shows as a card in that colour, with the kind written on a small tag.</p>
+<p><strong>How the colour is chosen:</strong> first a mail marked important, then mail in Spam, then the mail&#x27;s labels, then a guess from the text (codes and sign-ins, money, work, newsletters).</p>
+<h3 id="the-code-card-otp">The code card (OTP)</h3>
+<p><strong>What it is:</strong> when a mail contains a one-time code (for example &quot;Your verification code is 482913&quot;), Dejoiy Mail shows the code on its own.</p>
+<p><strong>Where:</strong> in the list, a chip <strong>Copy code: 482913</strong>. In the open mail, a card <strong>Code requested</strong> with the code and a <strong>Copy code</strong> button.</p>
+<p><strong>How to use it:</strong> tap <strong>Copy code</strong>. You see &quot;Code copied.&quot; If copying does not work, the message shows the code so you can type it.</p>
+<blockquote><p><strong>Keep in mind:</strong> never give a code to anyone who asks for it, even if they say they are from your company. Codes are not looked for in Sent and Drafts.</p></blockquote>
+<h3 id="phone-look-clean-or-colourful">Phone look: Clean or Colourful</h3>
+<p><strong>Where:</strong> Settings → General → <strong>Phone app look</strong>.</p>
+<ul>
+<li><strong>Clean</strong> (the default): a calm white inbox, with Delete, Archive, Reply, Forward and More at the bottom while you read a mail. The <strong>aA</strong> button changes the text size.</li>
+<li><strong>Colourful</strong>: bright cards, one colour per kind of mail.</li>
+</ul>
+<h3 id="theme-background-on-phone">Theme background on phone</h3>
+<p><strong>Where:</strong> Settings → General → <strong>Theme background on phone</strong>.</p>
+<ul>
+<li><strong>Off</strong> (the default): a plain screen on your phone.</li>
+<li><strong>On</strong>: your theme&#x27;s picture shows behind your mail. This is for phones only; your computer keeps its own setting.</li>
+</ul>
+<h3 id="panel-transparency">Panel transparency</h3>
+<p><strong>What it is:</strong> how much of the theme&#x27;s picture shows through the panels, from 0% to 85%.</p>
+<p><strong>Where:</strong> the account menu → <strong>Themes</strong>, or Settings → Themes. The slider only shows for themes with a picture behind them.</p>
+<p><strong>How to use it:</strong> move the <strong>Panel transparency</strong> slider. On a phone it is called &quot;Panel transparency on phones&quot; and it is saved apart from your computer&#x27;s setting. If the slider is missing on your phone, first turn on Settings → General → Theme background on phone.</p>
+<blockquote><p><strong>Keep in mind:</strong> high transparency can make text harder to read on a busy picture. Lower it if text looks faint.</p></blockquote>
+<h3 id="working-with-a-mail">Working with a mail</h3>
+<ul>
+<li>At the top of an open mail: <strong>Reply</strong>, <strong>Reply all</strong>, <strong>Forward</strong>, <strong>Archive</strong>, <strong>Spam</strong>, <strong>Delete</strong>, <strong>Star</strong>, <strong>Mark unread</strong>, <strong>Print</strong>, and <strong>More</strong> (which also has <strong>Block</strong> for the sender).</li>
+<li><strong>Unsubscribe</strong> shows next to the sender when the mail has an unsubscribe link.</li>
+<li>Tap an address to <strong>Copy address</strong>, see <strong>Emails with</strong> that person, or <strong>Write to them</strong>.</li>
+<li>On a phone: swipe a mail in the Inbox to archive it (with <strong>Undo</strong>), press and hold to select several, and pull down to refresh.</li>
+<li>Search: type in the search box at the top. Press Enter for a results page. <strong>Advanced search</strong> lets you search by From, To, Subject, words, attachments and dates.</li>
+<li>Keyboard keys (computer): see Settings → <strong>Keyboard shortcuts</strong>.</li>
+</ul>
+<h2 id="several-accounts">Several accounts</h2>
+<p><strong>What it is:</strong> stay signed in to up to <strong>5</strong> Dejoiy Mail mailboxes in the same browser and switch between them.</p>
+<p><strong>Where:</strong> account menu → <strong>＋ Add another account</strong>.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Open the account menu and tap <strong>＋ Add another account</strong>.</li>
+<li>Enter the other mailbox&#x27;s <strong>Email address</strong> and <strong>Password</strong>, then <strong>Sign in</strong>.</li>
+<li>To switch, open the account menu and tap <strong>🔁 Switch to …</strong> for the account you want. The page reloads with that mailbox.</li>
+<li><strong>↩ Sign out of this account</strong> signs out only the open one.</li>
+</ol>
+<blockquote><p><strong>Keep in mind:</strong> with 5 accounts signed in you must sign out of one before adding another. On a company&#x27;s own sign-in page you can only add that company&#x27;s mailboxes.</p></blockquote>
+<h2 id="help-desk-not-yet-tested-on-live">Help desk <em>(not yet tested on live)</em></h2>
+<p><strong>What it is:</strong> a place to ask a team in your company for help (IT, HR, payroll, your admins…) and follow the request until it is done. Each request is a <strong>ticket</strong> with a code like <strong>T-0007</strong>.</p>
+<p><strong>Where:</strong> the left menu → <strong>Help desk</strong>.</p>
+<h3 id="raising-a-ticket">Raising a ticket</h3>
+<ol>
+<li>Open <strong>Help desk</strong> and tap <strong>New ticket</strong>.</li>
+<li><strong>What do you need?</strong> Write a short title, for example &quot;Laptop will not start&quot;.</li>
+<li><strong>Which team should handle it?</strong> Choose one of your company&#x27;s departments, or <strong>Company admin</strong> (your company&#x27;s mail admins). Company admins also see <strong>Dejoiy platform</strong> (the Dejoiy team).</li>
+<li><strong>How urgent is it?</strong> Choose a priority (see the table).</li>
+<li><strong>Details:</strong> what happened, since when, and what you already tried.</li>
+<li>Tap <strong>Send ticket</strong>. The ticket opens, and you see it under <strong>My tickets</strong>.</li>
+</ol>
+<div class="table"><table><thead><tr><th>Priority</th><th>The team should answer within</th></tr></thead><tbody><tr><td>Urgent</td><td>4 hours</td></tr><tr><td>High</td><td>8 hours</td></tr><tr><td>Normal (default)</td><td>24 hours</td></tr><tr><td>Low</td><td>72 hours</td></tr></tbody></table></div>
+<p>The time counts from when the ticket was raised. A ticket that is past its time and not finished shows <strong>Overdue</strong>.</p>
+<h3 id="what-the-status-means">What the status means</h3>
+<div class="table"><table><thead><tr><th>Status</th><th>Meaning</th></tr></thead><tbody><tr><td>Open</td><td>Raised, nobody has started on it yet.</td></tr><tr><td>In progress</td><td>Someone in the team is working on it.</td></tr><tr><td>Waiting for you</td><td>The team needs an answer from you. (The team sees this as &quot;Waiting for requester&quot;.)</td></tr><tr><td>Resolved</td><td>The team thinks it is done.</td></tr><tr><td>Closed</td><td>Finished.</td></tr></tbody></table></div>
+<h3 id="answering-closing-and-reopening">Answering, closing and reopening</h3>
+<ol>
+<li>Open the ticket from <strong>My tickets</strong>.</li>
+<li>Write in the box under the messages and tap <strong>Send</strong>. If the ticket was <strong>Waiting for you</strong>, your answer sends it back to the team.</li>
+<li>If you do not need it any more, tap <strong>Close: I no longer need this</strong>.</li>
+<li>If a resolved or closed ticket is not really solved, tap <strong>Reopen: this is not solved</strong>.</li>
+</ol>
+<p>You get a short mail in your Inbox titled <strong>Help desk: T-0007 · …</strong> when someone answers you or changes the status. Nobody gets a mail when a ticket is first raised.</p>
+<h3 id="if-you-work-in-the-team-that-handles-tickets">If you work in the team that handles tickets</h3>
+<ul>
+<li>Your queue is the second tab: <strong>&lt;your department&gt; queue</strong>. For company admins it is <strong>Company admin queue</strong> (or <strong>&lt;department&gt; + Company admin queue</strong>). The number shows how many wait.</li>
+<li>On a ticket you can set <strong>Status</strong>, <strong>Assigned to</strong>, <strong>Priority</strong> and <strong>Team</strong> (to move it to another team). When you set In progress or Resolved on a ticket with nobody assigned, it is assigned to you.</li>
+<li>Tick <strong>Team only</strong> before <strong>Send</strong> to write a note the person who raised it never sees.</li>
+<li>Company admins, and roles with &quot;See and handle every help desk ticket&quot;, also have <strong>All company tickets</strong>.</li>
+</ul>
+<blockquote><p><strong>Keep in mind:</strong> only the person who raised a ticket, the team it is for, the person it is assigned to and the company&#x27;s admins can see it. Moving a ticket to another team can take it out of your own view.</p></blockquote>
+<h2 id="report-a-bug-not-yet-tested-on-live">Report a bug <em>(not yet tested on live)</em></h2>
+<p><strong>What it is:</strong> a quick way to tell the people who can fix it that something in Dejoiy Mail does not work.</p>
+<p><strong>Where:</strong> account menu → <strong>🐞 Report a bug</strong>, or <strong>Help desk</strong> → <strong>Report a bug</strong>. The <strong>Report a bug</strong> button in this guide opens the same form.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Open <strong>Report a bug</strong>. A <strong>New ticket</strong> form opens with the title &quot;Bug: &quot; already filled in.</li>
+<li>Finish the title, for example &quot;Bug: attachments do not open on my phone&quot;.</li>
+<li>In <strong>Details</strong> write what you did, what you expected, and what happened instead. Add the page you were on and your phone or browser.</li>
+<li>Tap <strong>Send ticket</strong>.</li>
+</ol>
+<p>It goes to your <strong>Company admin</strong>. If you are a company admin, it goes to the <strong>Dejoiy platform</strong> team. You can follow it in <strong>Help desk</strong> → <strong>My tickets</strong>.</p>
+<blockquote><p><strong>Keep in mind:</strong> do not send bugs by mail. A ticket is tracked until it is fixed; a mail can get lost.</p></blockquote>
+<h2 id="joi-the-ai-buddy">Joi, the AI buddy</h2>
+<p><strong>What it is:</strong> Joi is Dejoiy&#x27;s AI assistant.</p>
+<p><strong>Where:</strong> the <strong>Joi</strong> button at the top, account menu → <strong>✨ Ask Joi, your AI buddy</strong>, or the keys Ctrl+J (Cmd+J on a Mac).</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Open Joi. A chat panel opens next to your mail.</li>
+<li>Ask your question. Joi sees the mail you have open and your newest mails (up to 15 from the Inbox and 5 from Sent), so you can ask things like &quot;what does this mail want from me?&quot;.</li>
+<li>To bring Joi into a mail conversation, type <strong>@Joi</strong> in the text of your mail. Joi is then added in <strong>Cc</strong>.</li>
+</ol>
+<p>Mails written by Joi carry an <strong>AI</strong> badge and the line &quot;Joi is an AI. It can make mistakes.&quot;</p>
+<blockquote><p><strong>Keep in mind:</strong> Joi can make mistakes. Check what Joi says before you act on it. Joi can read your mailbox for 12 hours after you open it; signing out ends that. (How and when Joi answers a mail is decided by Joi&#x27;s own service, not described here.)</p></blockquote>
+<h2 id="calendar">Calendar</h2>
+<p><strong>Where:</strong> the left menu → <strong>Calendar</strong>.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Choose <strong>Agenda</strong> or <strong>Month</strong>. <strong>Today</strong> jumps back to today.</li>
+<li>Tap <strong>Event</strong> to add one. Fill in the times, <strong>Repeat</strong>, <strong>Reminder</strong>, <strong>Location or video link</strong> (or tick <strong>Add a Shine video meeting</strong>), <strong>Guests</strong> and <strong>Notes</strong>, then <strong>Add event</strong>.</li>
+<li>Guests get an invitation by mail (&quot;Saved. Invites sent.&quot;).</li>
+</ol>
+<h3 id="booking-link">Booking link</h3>
+<ol>
+<li>Tap <strong>Booking link</strong> and switch on <strong>People can book time with me</strong>.</li>
+<li>Set the <strong>Meeting length</strong>, the <strong>Days</strong>, the <strong>From</strong> and <strong>To</strong> hours, how much <strong>Notice</strong> you need, how far ahead people may <strong>Book up to</strong>, and a <strong>Break after</strong> each meeting.</li>
+<li><strong>Copy</strong> or <strong>Share</strong> your link. People pick a day and time, enter their name and email, and tap <strong>Book it</strong>.</li>
+</ol>
+<blockquote><p><strong>Keep in mind:</strong> anyone with your booking link can book a time, so share it only where you want bookings.</p></blockquote>
+<h2 id="contacts">Contacts</h2>
+<p><strong>Where:</strong> the left menu → <strong>Contacts</strong>.</p>
+<ul>
+<li><strong>+ Add</strong> a contact, or search with <strong>Search contacts…</strong>.</li>
+<li><strong>Import CSV</strong> and <strong>Export CSV</strong> move contacts in and out.</li>
+<li>Contacts are grouped as <strong>Work family</strong>, <strong>Others</strong> and <strong>Other companies</strong>.</li>
+</ul>
+<h2 id="filters-and-blocked-addresses">Filters and blocked addresses</h2>
+<p><strong>What it is:</strong> rules that sort new mail by themselves, and a list of senders you never want to hear from.</p>
+<p><strong>Where:</strong> Settings → <strong>Filters and blocked addresses</strong>.</p>
+<p><strong>How to use it:</strong></p>
+<ol>
+<li>Tap <strong>Create a new filter</strong>, say which mail it is for and what should happen, and save it.</li>
+<li><strong>Pause</strong> a filter to stop it for a while, <strong>Resume</strong> to start it again, or <strong>Delete</strong> it.</li>
+<li>To block someone, add their address under <strong>Blocked addresses</strong> and tap <strong>Block</strong>. You can also block a sender from an open mail: <strong>More</strong> → <strong>Block</strong>.</li>
+</ol>
+<blockquote><p><strong>Keep in mind:</strong> a filter only acts on mail that arrives after you save it.</p></blockquote>
+<h2 id="settings">Settings</h2>
+<p><strong>Where:</strong> account menu → <strong>⚙️ Settings</strong>, or <strong>Settings</strong> in the left menu.</p>
+<div class="table"><table><thead><tr><th>Section</th><th>What you change there</th></tr></thead><tbody><tr><td>General</td><td>Language, page size, undo send, signature, phone look and more</td></tr><tr><td>Labels</td><td>Show, hide and organise labels</td></tr><tr><td>Inbox</td><td>Inbox order and reading pane</td></tr><tr><td>Accounts</td><td>Name, password (<strong>Change password</strong>), reply-to and storage</td></tr><tr><td>Filters and blocked addresses</td><td>See above</td></tr><tr><td>Forwarding and POP/IMAP</td><td>Forward mail and use other mail apps</td></tr><tr><td>Out of office</td><td>Automatic replies while you are away</td></tr><tr><td>Advanced</td><td>Auto-advance, templates and unread badge</td></tr><tr><td>Themes</td><td>Colours, photos and brightness</td></tr><tr><td>Keyboard shortcuts</td><td>Keys for working faster</td></tr></tbody></table></div>
+<h2 id="other-places-in-the-app">Other places in the app</h2>
+<ul>
+<li><strong>Home:</strong> a greeting, your unread mail, and what is new from Dejoiy and your company.</li>
+<li><strong>Dejoiy Updates</strong> and <strong>Company:</strong> news from Dejoiy and from your company. Only people allowed by their role can post in Company.</li>
+<li><strong>Chat:</strong> the <strong>Chat</strong> bubble (or the Chat tab on a phone) opens Shine chat next to your mail, when your company uses Shine.</li>
+<li><strong>Your status:</strong> the status line in the account menu sets you as available, busy, away or offline (when Shine is connected).</li>
+<li><strong>Profile photo:</strong> account menu → <strong>📷 Change profile photo</strong>.</li>
+<li><strong>Admins:</strong> see the <a href="/help/admin-guide.html">Admin guide</a>.</li>
+</ul>
+<aside class="bug-box"><p><strong>Found a bug or something that does not work as written here?</strong> Do not email it. Open the account menu (your photo, top right) → <strong>Report a bug</strong>, or <strong>Help desk</strong> → <strong>Report a bug</strong>, and describe what you did, what you expected and what happened. Your report goes to your Company admin; a company admin&#x27;s report goes to the Dejoiy team.</p><p><a class="bug-btn" href="/#/bug" data-report-bug>Report a bug</a></p></aside>
+</main>
+</body>
+</html>
