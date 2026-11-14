@@ -149,7 +149,12 @@ It is used only for mail to addresses **outside** your company. The sender's cop
 
 **How to use it:**
 
-1. **Waiting for your company's admins** lists open tickets raised to Company admin. **Every ticket in your company** lists all of them, finished ones too.
+1. The page shows three lists:
+   - **Waiting for your company's admins**: open tickets in your queue (raised to Company admin, or assigned to you).
+   - **Open in your company, not picked up by anyone yet**: every open ticket nobody is assigned to, for any team. This catches tickets for a department nobody is in yet.
+   - **Every ticket in your company**: all of them, finished ones too.
+
+   The number at the top counts the tickets in the first two lists.
 2. Tap **Open** to answer a ticket. It opens in **Help desk** in your mailbox, where you set the status, assign it, change its priority or move it to a department. (How answering works is in the [User guide](USER-GUIDE.md#help-desk-not-yet-tested-on-live).)
 3. **Open Help desk** opens the whole Help desk.
 
