@@ -57,7 +57,7 @@ android {
         applicationId "com.dejoiy.mail"
         minSdkVersion 21
         targetSdkVersion 36
-        versionCode (System.getenv('DMAIL_VERSION_CODE') ?: '1').toInteger()
+        versionCode((System.getenv('DMAIL_VERSION_CODE') ?: '1').toInteger())
         versionName System.getenv("DMAIL_VERSION_NAME") ?: "1.0.0"
 
         // The name for the application
