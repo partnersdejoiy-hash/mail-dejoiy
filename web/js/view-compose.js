@@ -230,10 +230,11 @@ let PEOPLE = [];           // everyone Compose can suggest, the ones you write t
 let SENT = new Map();      // address -> how often you wrote to it
 let PAIRS = new Map();     // address in To -> Map(other address -> {n, to, cc, bcc}) from your Sent mail
 const ADDRESS = /^[^\s<>@,;]+@[^\s<>@,;]+\.[^\s<>@,;]+$/;
-/* group mentions: @all = everyone on your domain, @allS = everyone on Dejoiy Mail (DEJOIY super admins and IT) */
-const GROUP = /^@alls?$/i;
+/* group mentions: @all = everyone on your domain, @allS = everyone on Dejoiy Mail (DEJOIY super admins and IT),
+   @dept:sales = one department of your company, @role:manager = everyone with that designation */
+const GROUP = /^@(alls?|(dept|role):[a-z0-9][a-z0-9-]{0,59})$/i;
 const okAddress = a => ADDRESS.test(a) || GROUP.test(a);
-const GROUP_LABEL = a => /^@alls$/i.test(a) ? "🌐 @allS · everyone, every domain" : "👥 @all · everyone on your domain";
+const GROUP_LABEL = a => /^@alls$/i.test(a) ? "🌐 @allS · everyone, every domain" : /^@all$/i.test(a) ? "👥 @all · everyone on your domain" : "👥 "+(NAMES.get(a.toLowerCase())||a);
 
 /* Who to offer for what is typed: a match at the start of a name or address first, then the ones you mail most. */
 function matches(typed, taken, limit=6){
@@ -324,7 +325,7 @@ function suggestions(el, named){
       .filter(p=>p.email && !seen.has(p.email.toLowerCase()) && seen.add(p.email.toLowerCase()));
     const often=p=>SENT.get(p.email.toLowerCase())||0;
     people.sort((x,y)=>often(y)-often(x) || GROUP.test(y.email)-GROUP.test(x.email));   // sort is stable: equal ones keep their order
-    for(const p of people) if(p.name && p.name!==p.email && !GROUP.test(p.email)) NAMES.set(p.email.toLowerCase(), p.name);
+    for(const p of people) if(p.name && p.name!==p.email && (!GROUP.test(p.email) || p.team)) NAMES.set(p.email.toLowerCase(), p.name);
     PEOPLE=people.slice(0,800);
     named();
   };
@@ -335,7 +336,9 @@ function suggestions(el, named){
   if(window.Live?.enabled){
     // contacts used to load only when the Contacts page was opened, so Compose had nobody to suggest
     Live.request("contacts").then(r=>{ Store.state.contacts=r.contacts; fillAll(); }).catch(()=>{});
-    if(window.Contacts) Contacts.supervisors().then(more=>{ extra=more; fillAll(); });
+    if(window.Contacts) Contacts.supervisors().then(more=>{ extra=[...extra, ...more]; fillAll(); });
+    // your company's departments and designations, each as one address
+    Live.request("groups").then(r=>{ extra=[...extra, ...(r.groups||[]).map(g=>({email:g.mention, team:true, name:`${g.name} ${g.kind==="dept"?"department":"(everyone with this designation)"} · ${g.count} ${g.count===1?"person":"people"}`}))]; fillAll(); }).catch(()=>{});
   }
 }
 

@@ -436,6 +436,25 @@ def clean_brand(data):
     colour=str(data.get('colour') or '').strip().lower()
     if colour and not re.fullmatch(r'#[0-9a-f]{6}',colour): raise APIError('Pick the colour as #rrggbb, like #1f5ce0.')
     return {'name':text(data.get('name'),60),'tagline':text(data.get('tagline'),120),'colour':colour}
+def group_slug(text):
+    """A department or designation as it is typed in a mention: 'Customer Support' -> 'customer-support'."""
+    return re.sub(r'[^a-z0-9]+','-',str(text or '').lower()).strip('-')[:60]
+TEAM_MENTION=re.compile(r'@(dept|role):([a-z0-9][a-z0-9-]{0,59})',re.I)
+TEAM_FIELD={'dept':'ou','role':'title'}
+def team_groups(people, domain):
+    """One company's departments and designations as mail groups: [{'mention','name','kind','count'}], biggest first.
+    people: the mailboxes() list. Only active mailboxes of that domain count."""
+    seen={}
+    for p in people:
+        if not p['active'] or p['email'].rsplit('@',1)[1]!=domain: continue
+        for kind,field in TEAM_FIELD.items():
+            name=(p['a'].get(field) or '').strip(); slug=group_slug(name)
+            if not slug: continue
+            g=seen.setdefault((kind,slug),{'mention':f'@{kind}:{slug}','name':name,'kind':kind,'count':0}); g['count']+=1
+    return sorted(seen.values(),key=lambda g:(-g['count'],g['mention']))
+def team_members(people, domain, kind, slug):
+    """The active mailboxes of one company in one department or with one designation."""
+    return [p['email'] for p in people if p['active'] and p['email'].rsplit('@',1)[1]==domain and group_slug(p['a'].get(TEAM_FIELD[kind]))==slug.lower()]
 def host_points_here(host, mail_host, lookup=None):
     """True when the address reaches this mail server: a CNAME to it, or the same A records."""
     lookup=lookup or dns_lookup
@@ -2016,6 +2035,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if self.path=='/api/labels': return self.reply(200,self.server.zimbra.labels(s['token']))
                 if self.path=='/api/filters': return self.reply(200,self.server.zimbra.filters(s['token']))
                 if self.path=='/api/supervisors': return self.reply(200,self.supervisors(s))
+                if self.path=='/api/groups': return self.reply(200,self.team_groups(s))
                 if self.path=='/api/joi': return self.reply(200,self.joi(s,sid))
                 if self.path=='/api/avatars': return self.reply(200,{'avatars':self.avatar_versions()})
                 if self.path.startswith('/api/bimi?'):
@@ -2159,9 +2179,11 @@ class Handler(SimpleHTTPRequestHandler):
         brand=store.get('brands').get(domain)
         if not isinstance(brand,dict):  # set before brands had their own place: it lived with the sign-in address
             brand=next((e.get('brand') for e in store.get('all').values() if isinstance(e,dict) and e.get('domain')==domain and isinstance(e.get('brand'),dict)),None)
-        if not isinstance(brand,dict) or not (brand.get('name') or brand.get('logo')): return {}
+        if not isinstance(brand,dict) or not (brand.get('name') or brand.get('logo') or brand.get('background')): return {}
         logo=brand.get('logo') if MEDIA_NAME.fullmatch(str(brand.get('logo') or '')) else ''
-        return {'name':brand.get('name',''),'tagline':brand.get('tagline',''),'colour':brand.get('colour',''),'logo':self.server.app_origin+'/media/'+logo if logo else '','domain':domain}
+        background=brand.get('background') if MEDIA_NAME.fullmatch(str(brand.get('background') or '')) else ''
+        return {'name':brand.get('name',''),'tagline':brand.get('tagline',''),'colour':brand.get('colour',''),'logo':self.server.app_origin+'/media/'+logo if logo else '','domain':domain,
+            **({'background':self.server.app_origin+'/media/'+background} if background else {})}  # the picture behind the sign-in form
     def custom_host(self):
         """The company whose own sign-in address this request came in on, or None."""
         host=(self.headers.get('Host') or '').split(':')[0].lower()
@@ -2190,8 +2212,13 @@ class Handler(SimpleHTTPRequestHandler):
                 if current: hosts.pop(current,None)
                 current=None
             if op=='brand_set':
-                brands=store.get('brands'); brand={**clean_brand(data),'logo':(brands.get(domain) or {}).get('logo','')}
+                brands=store.get('brands'); old=brands.get(domain) or {}
+                brand={**clean_brand(data),'logo':old.get('logo',''),'background':old.get('background','')}
                 if data.get('removeLogo') is True: brand['logo']=''
+                if data.get('removeBackground') is True: brand['background']=''
+                if data.get('background'):
+                    ext,raw=decode_image(data.get('background'),('png','jpeg'),600*1024,'The background picture')
+                    brand['background']=self.server.media.save('brandbg:'+domain,ext,raw)
                 if data.get('logo'):
                     ext,raw=decode_image(data.get('logo'),('png','jpeg'),200*1024,'The logo')
                     brand['logo']=self.server.media.save('brand:'+domain,ext,raw)
@@ -2380,16 +2407,26 @@ class Handler(SimpleHTTPRequestHandler):
         """Group mentions in a mail, like in Shine chat:
         @all  in To/Cc/Bcc = every mailbox on your own domain;
         @allS              = every mailbox on Dejoiy Mail, every domain (DEJOIY super admins and IT only);
+        @dept:sales        = everyone in your company's Sales department; @role:manager = everyone with that designation;
         @Joi  in the text  = Joi is copied in (Cc) and answers everyone on the mail.
         The group goes in Bcc, so nobody sees the whole list; the mail is To you when there's no one else."""
-        data=dict(data); me=session['user']['email'].lower(); fields={}; groups=set()
+        data=dict(data); me=session['user']['email'].lower(); fields={}; groups=set(); teams=[]
         for kind in ('to','cc','bcc'):
             keep=[]
             for address in re.split(r'[,;\n]+',str(data.get(kind,''))):
                 address=address.strip()
+                team=TEAM_MENTION.fullmatch(address)
                 if address.lower() in ('@all','@alls'): groups.add('allS' if address.lower()=='@alls' else 'all')
+                elif team: teams.append((team.group(1).lower(),team.group(2).lower()))
                 elif address: keep.append(address)
             fields[kind]=keep
+        if teams:
+            people=self.mailboxes(); mine=self.domain(session); have={a.lower() for k in fields for a in fields[k]}
+            for kind,slug in teams:
+                members=[e for e in team_members(people,mine,kind,slug) if e!=me and e not in JOI_MAILBOXES]
+                if not members: raise APIError(f'Nobody else is in @{kind}:{slug}. Check the name in Compose\'s suggestions.')
+                fields['bcc']+=[e for e in members if e not in have]; have.update(members)
+            if not fields['to']: fields['to']=[me]
         if groups:
             user=session['user']; mine=self.domain(session)
             if 'allS' in groups and not (user.get('canManageRoles') is True or (user.get('isAdmin') is True and mine in getattr(self.server,'joi_internal',[]))):
@@ -2404,6 +2441,10 @@ class Handler(SimpleHTTPRequestHandler):
             fields['cc'].append(joi)
         for kind in fields: data[kind]=', '.join(fields[kind])
         return data
+    def team_groups(self, session):
+        """The departments and designations of the signed-in person's company, for Compose's suggestions."""
+        if not getattr(self.server,'provisioner',None): return {'groups':[]}
+        return {'groups':team_groups(self.mailboxes(),self.domain(session))[:200]}
     def mailboxes(self):
         """Every real mailbox (system and spam-training boxes left out)."""
         provisioner=getattr(self.server,'provisioner',None)

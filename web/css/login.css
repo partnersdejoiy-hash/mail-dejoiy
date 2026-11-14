@@ -121,3 +121,8 @@ form.is-busy .lg-btn:disabled{opacity:1}
   .lg-step,.lg-slide{transition:opacity .2s linear,visibility .2s;transform:none!important}
 }
 .lg-foot a{color:inherit;font-weight:600}
+
+/* a company's own picture behind the sign-in form (admin console > Branding) */
+.lg-bg.lg-photo{position:fixed;inset:0;background-size:cover;background-position:center}
+.lg-bg.lg-photo::after{content:"";position:absolute;inset:0;background:rgba(18,18,24,.28)}
+.lg-bg.lg-photo i{display:none}

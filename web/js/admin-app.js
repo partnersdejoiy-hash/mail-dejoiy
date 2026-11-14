@@ -345,7 +345,7 @@ async function reports(main, d){
 
 function users(main, d){
   const plans=d.plans||[], planName=id=>{const n=(id&&plans.find(p=>p.id===id)?.name)||"default";return n.charAt(0).toUpperCase()+n.slice(1);};
-  main.innerHTML=head("Accounts",`${d.users.length} mailboxes`,`<input type="search" id="u-search" placeholder="Search name or email" aria-label="Search mailboxes"><button class="adm-btn ghost" id="u-export">Export CSV</button>${can("mailboxes.manage")?'<button class="adm-btn primary" id="u-add">+ New mailbox</button>':""}`)+`
+  main.innerHTML=head("Accounts",`${d.users.length} mailboxes`,`<input type="search" id="u-search" placeholder="Search name or email" aria-label="Search mailboxes"><button class="adm-btn ghost" id="u-export">Export CSV</button>${can("mailboxes.manage")?'<button class="adm-btn" id="u-templates">Templates</button><button class="adm-btn primary" id="u-add">+ New mailbox</button>':""}`)+`
     <div class="adm-card adm-flush"><table class="adm-table" id="u-table"><thead><tr><th>Mailbox</th><th>Status</th><th>Department</th><th>Role</th><th>Plan</th><th>Storage</th><th>Last sign-in</th><th></th></tr></thead><tbody>
     ${d.users.map((u,i)=>`<tr data-q="${esc((u.name+" "+u.email+" "+(u.department||"")+" "+(u.title||"")).toLowerCase())}"><td><b>${esc(u.name)}</b><small>${esc(u.email)}</small></td>
       <td><span class="adm-pill ${u.status==="active"?"good":"warn"}">${esc(u.status)}</span></td><td>${esc(u.department||"—")}</td><td>${esc(u.title||u.role)}${u.title?`<small>${esc(u.role)}</small>`:""}</td><td>${esc(planName(u.cosId))}</td>
@@ -353,6 +353,7 @@ function users(main, d){
       <td class="adm-right"><button class="adm-btn ghost sm" data-edit="${i}">Manage</button> <a class="adm-btn ghost sm" href="/admin/manage/accounts/${esc(u.id)}">Details</a></td></tr>`).join("")}
     </tbody></table></div>`;
   $("u-export").addEventListener("click",()=>exportUsers(d));
+  $("u-templates")?.addEventListener("click",()=>templates(d));
   $("u-search").addEventListener("input",e=>{const q=e.target.value.trim().toLowerCase();main.querySelectorAll("#u-table tbody tr").forEach(r=>r.hidden=!r.dataset.q.includes(q));});
   $("u-add")?.addEventListener("click",()=>dialog({title:"New mailbox",body:`
     <label>Display name<input id="nu-name" maxlength="200" required></label>
@@ -363,6 +364,89 @@ function users(main, d){
       await act({op:"create_user",name:$("nu-name").value,email:$("nu-email").value,password:$("nu-pass").value,role:$("nu-role").value});
       await reload("Mailbox created.");}}]}));
   main.querySelectorAll("[data-edit]").forEach(b=>b.addEventListener("click",()=>manageUser(d.users[+b.dataset.edit], d)));
+}
+
+/* Templates: the common people jobs as one form each. A template runs the same actions as the buttons on this
+   page, one after the other, and lists what happened at every step, so nothing is done behind your back. */
+const TEMPLATES=[
+  ["onboard","Onboard a new employee","Creates the mailbox, puts it in a department, gives it a designation and adds it to mailing lists."],
+  ["offboard","Offboard an employee","Locks sign-in, signs them out everywhere, forwards their mail to a colleague and takes them off every list. Nothing is deleted."],
+  ["suspend","Suspend a mailbox","Blocks sign-in until you reactivate it. Mail keeps arriving."],
+  ["reactivate","Reactivate a mailbox","Lets a locked or suspended mailbox sign in again."]];
+function templates(d){
+  const root=dialog({title:"Templates",wide:true,body:`<ul class="adm-list adm-templates">${TEMPLATES.map(([id,name,what])=>`<li><span><b>${esc(name)}</b><small>${esc(what)}</small></span><button class="adm-btn" data-tpl="${id}">Use</button></li>`).join("")}</ul>`});
+  root.querySelectorAll("[data-tpl]").forEach(b=>b.addEventListener("click",()=>({onboard:tplOnboard,offboard:tplOffboard,suspend:u=>tplStatus(u,"locked"),reactivate:u=>tplStatus(u,"active")})[b.dataset.tpl](d)));
+}
+/* Runs [label, fn, stopOnFail] steps in order into the dialog's step list. True when every step worked. */
+async function runSteps(root, steps){
+  const list=root.querySelector("#tp-steps"); list.hidden=false; list.innerHTML=""; let ok=true;
+  for(const [label,fn,stop] of steps){
+    const li=document.createElement("li"); li.textContent="… "+label; list.appendChild(li);
+    try{ await fn(); li.textContent="✓ "+label; }
+    catch(e){ ok=false; li.textContent="✗ "+label+": "+e.message; li.className="adm-error"; if(stop) break; }
+  }
+  return ok;
+}
+const pickMailbox=(d,keep)=>`<label>Mailbox<select id="tp-who" required><option value="">Choose a mailbox…</option>${d.users.map((u,i)=>keep(u)?`<option value="${i}">${esc(u.name)} · ${esc(u.email)}</option>`:"").join("")}</select></label>`;
+const strongPassword=()=>{ const a=new Uint8Array(24); crypto.getRandomValues(a); return "Aa1!"+btoa(String.fromCharCode(...a)).replace(/[^A-Za-z0-9]/g,"x"); };   // never shown or kept: it only ends the old password
+const doneFoot=(root,text)=>{ root.querySelector(".adm-dialog-foot").innerHTML=`<button class="adm-btn primary" id="tp-done">Done</button>`; $("tp-done").addEventListener("click",()=>{ $("adm-dialog-root").innerHTML=""; reload(text); }); };
+
+function tplOnboard(d){
+  const depts=d.departments||[], lists=d.lists||[], domain=d.scope||d.domains[0]?.domain||"example.com";
+  const root=dialog({title:"Onboard a new employee",wide:true,body:`<div class="adm-form">
+    <label>Full name<input id="tp-name" maxlength="200" required></label>
+    <label>Email address<input id="tp-email" type="email" placeholder="name@${esc(domain)}" required></label>
+    <label>First password (they change it after signing in)<input id="tp-pass" type="password" autocomplete="new-password" required></label>
+    <label>Department<select id="tp-dept"><option value="">No department</option>${depts.map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join("")}</select></label>
+    <label>Designation<input id="tp-title" maxlength="64" list="tp-titles" placeholder="e.g. Support Agent"><datalist id="tp-titles">${[...new Set(d.users.map(u=>u.title).filter(Boolean))].map(t=>`<option value="${esc(t)}">`).join("")}</datalist></label>
+    ${lists.length?`<fieldset class="adm-fieldset"><legend>Add to mailing lists</legend><div class="adm-chips">${lists.map(l=>`<label class="adm-check"><input type="checkbox" name="tp-list" value="${esc(l.id)}"> ${esc(l.email)}</label>`).join("")}</div></fieldset>`:""}
+    </div><p role="alert" class="adm-error"></p><ul class="adm-list adm-steps" id="tp-steps" hidden></ul>`,
+    actions:[{label:"Cancel"},{label:"Create and set up",primary:true,fn:async root=>{
+      const v=id=>$(id).value.trim(), email=v("tp-email").toLowerCase(), name=v("tp-name"), pass=$("tp-pass").value, dept=$("tp-dept").value, title=v("tp-title");
+      if(!name||!email||!pass) throw new Error("Fill in the name, the email address and a first password.");
+      const chosen=[...root.querySelectorAll("[name=tp-list]:checked")].map(c=>c.value); let id="";
+      const steps=[["Create the mailbox "+email,async()=>{ await act({op:"create_user",name,email,password:pass,role:"User"});
+          id=((await api("admin")).users.find(u=>u.email.toLowerCase()===email)||{}).id||""; if(!id) throw new Error("The mailbox was created but could not be found again. Finish it from Accounts."); },true]];
+      if(dept) steps.push(["Put in "+depts.find(x=>x.id===dept).name,()=>act({op:"set_department",id,department:dept})]);
+      if(title) steps.push(["Set designation: "+title,()=>act({op:"set_title",id,title})]);
+      for(const l of chosen) steps.push(["Add to "+lists.find(x=>x.id===l).email,()=>act({op:"add_member",id:l,member:email})]);
+      const ok=await runSteps(root,steps); if(id) doneFoot(root,ok?"Employee onboarded.":"Mailbox created; some steps need another look.");
+      return false; }}]});
+}
+
+function tplOffboard(d){
+  const me=(state.user?.email||"").toLowerCase();
+  const root=dialog({title:"Offboard an employee",wide:true,body:`<div class="adm-form">
+    ${pickMailbox(d,u=>u.email.toLowerCase()!==me)}
+    <label class="adm-check"><input type="checkbox" id="tp-lock" checked> Lock sign-in</label>
+    <label class="adm-check"><input type="checkbox" id="tp-signout" checked> Sign them out everywhere (sets a new random password nobody is shown)</label>
+    <label>Forward their new mail to (optional)<input id="tp-fwd" type="email" placeholder="manager@${esc(d.scope||d.domains[0]?.domain||"example.com")}"></label>
+    <label class="adm-check"><input type="checkbox" id="tp-lists" checked> Remove from their department and every mailing list</label>
+    </div><p class="adm-muted">The mailbox and its mail are kept. Delete it later from Manage → Delete when you no longer need it.</p>
+    <p role="alert" class="adm-error"></p><ul class="adm-list adm-steps" id="tp-steps" hidden></ul>`,
+    actions:[{label:"Cancel"},{label:"Offboard",danger:true,fn:async root=>{
+      const u=d.users[+$("tp-who").value]; if(!u||$("tp-who").value==="") throw new Error("Choose the mailbox to offboard.");
+      const fwd=$("tp-fwd").value.trim(), steps=[];
+      if(fwd) steps.push(["Forward new mail to "+fwd,()=>act({op:"forward",id:u.id,forward:fwd,keepCopy:true})]);
+      if($("tp-lists").checked){
+        if(u.department) steps.push(["Remove from "+u.department,()=>act({op:"set_department",id:u.id,department:""})]);
+        for(const l of d.lists||[]) steps.push(["Check "+l.email,async()=>{ const m=(await act({op:"list_members",id:l.id})).members||[];
+          if(m.some(x=>x.toLowerCase()===u.email.toLowerCase())) await act({op:"remove_member",id:l.id,member:u.email}); }]);
+      }
+      if($("tp-signout").checked) steps.push(["Sign out everywhere",()=>act({op:"password",id:u.id,password:strongPassword()})]);
+      if($("tp-lock").checked) steps.push(["Lock sign-in",()=>act({op:"status",id:u.id,status:"locked"})]);
+      if(!steps.length) throw new Error("Tick at least one thing to do.");
+      const ok=await runSteps(root,steps); doneFoot(root,ok?u.email+" offboarded.":"Offboarding finished with problems. Check the steps.");
+      return false; }}]});
+}
+
+function tplStatus(d, status){
+  const lock=status==="locked", me=(state.user?.email||"").toLowerCase();
+  dialog({title:lock?"Suspend a mailbox":"Reactivate a mailbox",body:`<div class="adm-form">${pickMailbox(d,u=>lock?u.status==="active"&&u.email.toLowerCase()!==me:u.status!=="active")}</div>
+    <p class="adm-muted">${lock?"They cannot sign in until you reactivate the mailbox. Their mail keeps arriving.":"They can sign in again with their password."}</p><p role="alert" class="adm-error"></p>`,
+    actions:[{label:"Cancel"},{label:lock?"Suspend":"Reactivate",primary:!lock,danger:lock,fn:async()=>{
+      const u=d.users[+$("tp-who").value]; if(!u||$("tp-who").value==="") throw new Error("Choose a mailbox.");
+      await act({op:"status",id:u.id,status}); await reload(u.email+(lock?" suspended.":" reactivated.")); }}]});
 }
 
 function manageUser(u, d){
@@ -527,7 +611,7 @@ async function loginHost(domain){
   const root=dialog({title:"Branding & sign-in address · "+domain, wide:true, body:`<p class="adm-muted">Loading…</p>`});
   const body=root.querySelector(".adm-dialog-body");
   const draw=(out,note)=>{
-    const b=out.brand||{}, suggested="mail."+domain; let logoData="", removeLogo=false;
+    const b=out.brand||{}, suggested="mail."+domain; let logoData="", removeLogo=false, bgData="", removeBg=false;
     body.innerHTML=`${note?`<p class="${note.bad?"adm-error":"adm-muted"}" role="status">${esc(note.text)}</p>`:""}
       <h3 class="adm-h3">Your name and logo</h3>
       <p class="adm-muted">Shown to everyone with a ${esc(domain)} mailbox, wherever they open mail: the name at the top, the browser tab and your sign-in page. A small Dejoiy mark and the Dejoiy tab icon stay.</p>
@@ -538,8 +622,11 @@ async function loginHost(domain){
         <div class="adm-logo"><span id="lh-preview">${b.logo?`<img src="${esc(b.logo)}" alt="Current logo">`:`<i>No logo</i>`}</span>
           <label class="adm-btn ghost">Choose logo<input id="lh-logo" type="file" accept="image/png,image/jpeg" hidden></label>
           ${b.logo?`<button class="adm-btn ghost" id="lh-nologo" type="button">Remove logo</button>`:""}<small class="adm-muted">PNG or JPG, square works best, up to 200 KB.</small></div>
+        <div class="adm-logo"><span id="lh-bgpreview" class="adm-bgpreview">${b.background?`<img src="${esc(b.background)}" alt="Current sign-in background">`:`<i>No picture</i>`}</span>
+          <label class="adm-btn ghost">Choose sign-in background<input id="lh-bg" type="file" accept="image/png,image/jpeg" hidden></label>
+          ${b.background?`<button class="adm-btn ghost" id="lh-nobg" type="button">Remove picture</button>`:""}<small class="adm-muted">Fills the page behind the sign-in form on your own sign-in address. PNG or JPG, wide works best, up to 600 KB.</small></div>
       </div>
-      <div class="adm-dialog-actions"><button class="adm-btn primary" id="lh-brand">Save name and logo</button></div>
+      <div class="adm-dialog-actions"><button class="adm-btn primary" id="lh-brand">Save name, logo and background</button></div>
       <h3 class="adm-h3">Your own sign-in address (optional)</h3>
       <p class="adm-muted">Let your team sign in at your own address instead of ${esc(out.target)}. Only ${esc(domain)} mailboxes can sign in there.</p>
       <div class="adm-form"><label>Your address<input id="lh-host" value="${esc(out.host||suggested)}" placeholder="${esc(suggested)}" autocapitalize="off" spellcheck="false"></label></div>
@@ -555,8 +642,12 @@ async function loginHost(domain){
       if(!/^image\/(png|jpeg)$/.test(f.type)||f.size>200*1024){ fail(new Error("Choose a PNG or JPG logo of up to 200 KB.")); e.target.value=""; return; }
       const reader=new FileReader(); reader.onload=()=>{ logoData=String(reader.result); removeLogo=false; const img=document.createElement("img"); img.src=logoData; img.alt="New logo"; $("lh-preview").replaceChildren(img); }; reader.readAsDataURL(f); });
     const nl=$("lh-nologo"); if(nl) nl.addEventListener("click",()=>{ removeLogo=true; logoData=""; $("lh-preview").innerHTML="<i>No logo</i>"; });
+    $("lh-bg").addEventListener("change",e=>{ const f=e.target.files[0]; if(!f) return;
+      if(!/^image\/(png|jpeg)$/.test(f.type)||f.size>600*1024){ fail(new Error("Choose a PNG or JPG picture of up to 600 KB.")); e.target.value=""; return; }
+      const reader=new FileReader(); reader.onload=()=>{ bgData=String(reader.result); removeBg=false; const img=document.createElement("img"); img.src=bgData; img.alt="New sign-in background"; $("lh-bgpreview").replaceChildren(img); }; reader.readAsDataURL(f); });
+    const nb=$("lh-nobg"); if(nb) nb.addEventListener("click",()=>{ removeBg=true; bgData=""; $("lh-bgpreview").innerHTML="<i>No picture</i>"; });
     $("lh-brand").addEventListener("click",async()=>{ const btn=$("lh-brand"); btn.disabled=true;
-      try{ draw(await act({op:"brand_set",domain,name:$("lh-name").value,tagline:$("lh-tag").value,colour:$("lh-colour").value,...(logoData?{logo:logoData}:{}),...(removeLogo?{removeLogo:true}:{})}),{text:"Saved. Your team sees it the next time they open or refresh mail."}); }
+      try{ draw(await act({op:"brand_set",domain,name:$("lh-name").value,tagline:$("lh-tag").value,colour:$("lh-colour").value,...(logoData?{logo:logoData}:{}),...(removeLogo?{removeLogo:true}:{}),...(bgData?{background:bgData}:{}),...(removeBg?{removeBackground:true}:{})}),{text:"Saved. Your team sees it the next time they open or refresh mail."}); }
       catch(e){ btn.disabled=false; fail(e); } });
     $("lh-save").addEventListener("click",async()=>{ const btn=$("lh-save"); btn.disabled=true;
       try{ draw(await act({op:"login_host_set",domain,host:$("lh-host").value}),{text:"Saved. Your address will be ready in about 10 minutes."}); }

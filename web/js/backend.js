@@ -125,6 +125,7 @@ const Live={enabled:!!window.DEJOIY_LIVE,csrf:'',more:false,avatars:{},
         sub.textContent=b.tagline||('with your '+b.domain+' mailbox');
         if(em) em.placeholder='you@'+b.domain;
         if(/^#[0-9a-f]{6}$/.test(b.colour||'')) layer.style.setProperty('--lg-pink',b.colour);
+        if(/^https:\/\/[^"'<>\s()]+\/media\/[a-f0-9]{32}\.(png|jpg)$/.test(b.background||'')){ const bg=layer.querySelector('.lg-bg'); bg.classList.add('lg-photo'); bg.style.backgroundImage='url("'+b.background+'")'; }
         if(/^https:\/\/[^"'<>\s]+\/media\/[a-f0-9]{32}\.(png|jpg)$/.test(b.logo||'')){ const img=document.createElement('img'); img.src=b.logo; img.alt=b.name||''; img.className='lg-company-logo'; h1.before(img); } }
       Themes.apply();
       document.body.appendChild(layer); if(window.DmSplash)DmSplash.hide(); if(window.DejoiyAccent)DejoiyAccent.recolour(layer);
