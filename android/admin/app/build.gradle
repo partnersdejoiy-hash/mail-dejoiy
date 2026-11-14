@@ -25,7 +25,7 @@ def twaManifest = [
     hostName: 'admin-mail.dejoiy.com', // The domain being opened in the TWA.
     launchUrl: '/admin?source=android', // The start path for the TWA. Must be relative to the domain.
     name: 'Dejoiy Mail Admin', // The application name.
-    launcherName: 'Mail Admin', // The name shown on the Android Launcher.
+    launcherName: 'Dejoiy Mail Admin', // The name shown on the Android Launcher.
     themeColor: '#121212', // The color used for the status bar.
     themeColorDark: '#121212', // The color used for the dark status bar.
     navigationColor: '#121212', // The color used for the navigation bar.

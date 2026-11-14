@@ -1,7 +1,7 @@
 {
  "id": "/admin",
  "name": "Dejoiy Mail Admin",
- "short_name": "Mail Admin",
+ "short_name": "Dejoiy Mail Admin",
  "description": "Run your company's Dejoiy Mail from your phone: mailboxes, departments, roles, permissions and DNS.",
  "lang": "en-IN",
  "dir": "ltr",

@@ -23,7 +23,7 @@
   "packageId": "com.dejoiy.mail.admin",
   "host": "admin-mail.dejoiy.com",
   "name": "Dejoiy Mail Admin",
-  "launcherName": "Mail Admin",
+  "launcherName": "Dejoiy Mail Admin",
   "themeColor": "#121212",
   "themeColorDark": "#121212",
   "navigationColor": "#121212",
