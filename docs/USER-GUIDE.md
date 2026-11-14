@@ -269,6 +269,22 @@ Mails written by Joi carry an **AI** badge and the line "Joi is an AI. It can ma
 | Themes | Colours, photos and brightness |
 | Keyboard shortcuts | Keys for working faster |
 
+## Android app *(not yet tested on live)*
+
+**What it is:** Dejoiy Mail as an app on an Android phone. It is the same mail as on the website, full screen, with its own icon.
+
+**Where:** your company admin gives you the file `dejoiy-mail-<version>.apk` (or a link to it). The app will also come to Google Play.
+
+**How to use it:**
+
+1. Open the `.apk` file on your phone.
+2. If Android says it may not install apps from this source, tap **Settings**, switch on **Allow from this source**, go back and tap **Install**.
+3. Open **Dejoiy Mail** from your home screen and sign in.
+
+Inside the app, **Admin** opens the Dejoiy Mail Admin app if you have it, and your browser if you do not.
+
+> **Keep in mind:** install only the file your admin gives you. For a while the app may show a small address bar at the top; it works the same.
+
 ## Other places in the app
 
 - **Home:** a greeting, your unread mail, and what is new from Dejoiy and your company.

@@ -247,6 +247,22 @@ Up to 500 mailboxes at a time. They get the default mailbox policy.
 - **Distribution lists** and **Resources** (Manage): mailing lists and bookable rooms or equipment.
 - **Search directory** (Search): find accounts, aliases, lists and resources.
 
+## Android app *(not yet tested on live)*
+
+**What it is:** two Android apps, **Dejoiy Mail** (for everyone) and **Dejoiy Mail Admin** (this console). Both can be on the same phone.
+
+**Where:** the newest **Dejoiy Mail Android** release from the Dejoiy team has the files `dejoiy-mail-<version>.apk` and `dejoiy-mail-admin-<version>.apk`.
+
+**How to use it:**
+
+1. Send your people the `dejoiy-mail-<version>.apk` file (or a link to it). Install `dejoiy-mail-admin-<version>.apk` yourself.
+2. On the phone, open the file. If Android asks, allow installing from this source (Settings → Apps → Special app access → **Install unknown apps**), then tap **Install**.
+3. Open **Dejoiy Mail Admin** and sign in with your admin mailbox.
+
+In the admin app, **Open mail** and the **Open** buttons on Help desk tickets open the Dejoiy Mail app if it is installed, and the browser if not.
+
+> **Keep in mind:** only share files from the official release. Each file's SHA-256 is in the release notes, so the Dejoiy team can confirm a file is the real one.
+
 ## Only for the Dejoiy team
 
 People on the Dejoiy team (the **global admins**) see more than a company admin:
