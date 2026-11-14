@@ -1,0 +1,43 @@
+# Dmail: bounce sent to OUR user when amavis stops their outgoing mail.
+# amavis template syntax: see README.customize. Do not use | [ ] in plain text.
+# Category order of [:ccat|major]: catchall, clean, mta, oversized,
+# bad-header, spammy, spam, unchecked, banned, virus.
+#
+Subject: Mail nahi bheji gayi - Message not sent: [:mime_decode|[:header_field_octets|Subject]|100]
+[? %m  |#|In-Reply-To: [:mail_addr_decode|%m]]
+Message-ID: <VS%i@%h>
+
+Aapki mail NAHI bheji gayi. / Your message was NOT sent.
+
+Wajah / Reason:
+  [? [:ccat|major] |Mail server ne mail rok di.\
+|Mail server ne mail rok di.\
+|Mail server ne mail rok di.\
+|Mail bahut badi hai, size limit se upar.\
+|Mail ke headers galat hain.\
+|Mail spam jaisi lagi, isliye nahi bheji gayi.\
+|Mail spam jaisi lagi, isliye nahi bheji gayi.\
+|Mail ki jaanch nahi ho saki, isliye nahi bheji gayi.\
+|Attachment ka file type allowed nahi hai, isliye mail nahi bheji gayi: %F\
+|Attachment mein virus mila, isliye mail nahi bheji gayi: %V\
+]
+
+Subject: [:mime_decode|[:header_field_octets|Subject]|100]
+Kisko / To:[%R|\n  - [:mail_addr_decode|%R]|]
+
+Ab kya karein / What to do:
+[? [:ccat|major] |  Dobara bhejne se pehle admin se baat karein.\
+|  Dobara bhejne se pehle admin se baat karein.\
+|  Dobara bhejne se pehle admin se baat karein.\
+|  Attachment chhota karein ya file ka link bhejein.\
+|  Mail dobara likh ke bhejein.\
+|  Mail ka text badal ke dobara bhejein, ya admin se baat karein.\
+|  Mail ka text badal ke dobara bhejein, ya admin se baat karein.\
+|  Thodi der baad dobara bhejein.\
+|  Ye file hata ke dobara bhejein, ya file ka link bhejein.\
+|  File ko antivirus se saaf karein aur saaf file ke saath dobara bhejein.\
+]
+  Madad: admin@corp.dejoiy.com  (Reference: %n/%i)
+
+Is mail ki copy aapke Sent folder mein ho sakti hai, par ye mail
+paane wale tak nahi pahunchi.

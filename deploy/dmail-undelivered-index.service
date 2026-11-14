@@ -1,0 +1,8 @@
+[Unit]
+Description=Dmail: index undelivered mail from the mail logs (admin Monitor > Undelivered mail)
+
+[Service]
+Type=oneshot
+# root reads /var/log; the index it writes is root:dmail 0640 and holds envelope data only
+ExecStart=/usr/bin/python3 -I /opt/mail-dejoiy/server/undelivered.py --index
+Nice=10

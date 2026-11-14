@@ -118,9 +118,19 @@ OP_PERMS = {
     'z_config': None, 'z_config_update': None, 'z_cos': None, 'z_cos_update': None, 'z_cos_create': None, 'z_cos_copy': None,
     'z_admins': None, 'z_grants': None, 'z_grant': None, 'z_rights': None, 'z_zimlets': None, 'z_zimlet_status': None,
     'z_certs': None, 'z_retention': None, 'z_flush_cache': None,
+    'z_undelivered': 'mailboxes.manage',
 }
 LOOKUPS = {'z_account', 'z_resources', 'z_list', 'z_domain', 'z_search', 'z_sessions', 'z_overview', 'z_server_stats', 'z_queues',
-    'z_queue', 'z_config', 'z_cos', 'z_admins', 'z_grants', 'z_rights', 'z_zimlets', 'z_certs', 'z_retention'}
+    'z_queue', 'z_config', 'z_cos', 'z_admins', 'z_grants', 'z_rights', 'z_zimlets', 'z_certs', 'z_retention', 'z_undelivered'}
+
+# why a web send was refused, in plain words, for the Undelivered mail page
+SEND_FAILURE_REASONS = {
+    'mail.MESSAGE_TOO_BIG': 'Mail size limit se badi thi', 'upload_too_big': 'Attachment upload limit se bada tha',
+    'mail.SEND_ABORTED_ADDRESS_FAILURE': 'Recipient address mail server ne nahi maana',
+    'mail.SEND_PARTIAL_ADDRESS_FAILURE': 'Kuch recipient address mail server ne nahi maane',
+    'mail.QUOTA_EXCEEDED': 'Bhejne wale ka mailbox bhara hua tha', 'transport': 'Mail server ne jawab nahi diya',
+    'mail.TRY_AGAIN': 'Mail server busy tha', 'service.TRY_AGAIN': 'Mail server busy tha',
+}
 
 PERMISSION_NAMES = {'mailboxes.manage': 'Add and edit mailboxes', 'teams.manage': 'Manage departments and team lists',
     'domain.view': 'See the DNS setup', 'roles.manage': 'Manage roles, permissions and the company box'}
@@ -312,6 +322,28 @@ class Console:
         q.append(a); s.append(q); r.append(s)
         self.call(r, timeout=120)
         return {'ok': True}
+
+    def z_undelivered(self, data):
+        """Every message of the last 14 days that was stopped, bounced, rejected or is still waiting, from the
+        real mail logs (see undelivered.py), plus web sends the server refused. Company admins: own domain only."""
+        source = getattr(self, 'undelivered', None)
+        got = source.query(self.scope) if source else {'rows': [], 'indexedAt': None, 'available': False}
+        rows = list(got['rows'])
+        failed = getattr(self, 'failed_sends', None)
+        for f in (failed(self.scope) if failed else []):
+            code = f['code']
+            rows.append({'ts': f['ts'], 'qid': '', 'from': f['from'], 'to': f['to'] or '', 'outcome': 'refused', 'action': 'kept in Drafts',
+                'direction': 'outbound', 'reason': SEND_FAILURE_REASONS.get(code, 'Mail server ne mail nahi li') + (f' ({code})' if code else ''),
+                'notified': 'sender (on screen, saved in Drafts)'})
+        if self.scope:
+            mine = lambda a: (a or '').lower().endswith('@' + self.scope)
+            rows = [r for r in rows if mine(r['from']) or any(mine(x) for x in str(r['to']).split(','))]
+        rows.sort(key=lambda r: -r['ts'])
+        for r in rows: r['at'] = int(r.pop('ts') * 1000)
+        counts = {}
+        for r in rows: counts[r['outcome']] = counts.get(r['outcome'], 0) + 1
+        silent = sum(1 for r in rows if r['notified'] in ('no', 'not yet'))
+        return {'rows': rows[:500], 'counts': counts, 'notToldCount': silent, 'indexedAt': got.get('indexedAt'), 'available': got.get('available', False)}
 
     # ----- Manage: accounts -----
     def z_account(self, data):

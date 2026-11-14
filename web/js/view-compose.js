@@ -67,7 +67,9 @@ Views.compose = function(el, arg){
     const files=[...ev.target.files];ev.target.value="";
     if(!window.Live?.enabled){files.forEach(f=>attachments.push({name:f.name,size:fmtSize(f.size)}));renderAtt();return;}
     if(attachments.length+files.length>20){App.toast('Select up to 20 attachments.');return;}
-    if(attachments.reduce((sum,a)=>sum+(a.bytes||Number(a.size)||0),0)+files.reduce((sum,f)=>sum+f.size,0)>15*1024*1024){App.toast('Attachments must total 15 MB or less.');return;}
+    /* The real limit comes from the mail server (encoded size of the whole message), not a fixed number. */
+    const limit=Settings.account?.limits?.attachmentBytes||15*1024*1024;
+    if(attachments.reduce((sum,a)=>sum+(a.bytes||Number(a.size)||0),0)+files.reduce((sum,f)=>sum+f.size,0)>limit){App.toast(`Attachments must total ${fmtSize(limit)} or less: that is the most the mail server can send. Share a link for bigger files.`);return;}
     pendingFiles++;$("c-send").disabled=true;$("c-savedraft").disabled=true;
     try{
       const added=await Promise.all(files.map(file=>new Promise((resolve,reject)=>{
@@ -120,13 +122,21 @@ Views.compose = function(el, arg){
     const raw = {...d}; d.body = styled(d.body);
     const wait = Settings.ui.undoSendOn===false ? 0 : Number(Settings.ui.undoSend)||0;
     const back = archiveAfter ? "mail:"+(App.ui.folder||"inbox") : App.ui.folder ? "mail:"+App.ui.folder : "mail:inbox";
-    if(!wait){
+    let hold = wait;
+    /* A big message (attachments) cannot be sent reliably while the tab is closing, so during Undo Send
+       it is kept in Drafts first: if the page goes away, it is still there, never silently lost. */
+    if(hold && window.Live?.enabled && JSON.stringify(d).length>60000){
+      try{ const em=await Mail.saveDraft(Object.assign({...raw},{id:draftId})); draftId=em.id; d.id=draftId; }
+      catch(_){ hold=0; }  // could not keep a copy: send straight away instead of holding it
+    }
+    if(!hold){
       const button=$("c-send"); button.disabled=true;
-      try{ await deliver(d, archiveAfter); }catch(error){ App.toast(error.message); button.disabled=false; done=false; App.leaveGuard=()=>autosave(false); return; }
+      try{ await deliver(d, archiveAfter); }
+      catch(error){ if(error.draftId) draftId=error.draftId; App.toast(error.message, {label:"OK", fn:()=>{}, duration:10000}); button.disabled=false; rearm(); return; }
       App.go(archiveAfter?back:"mail:sent"); App.toast(/(^|\s)@joi\b/i.test(strip(d.body)) ? "Message sent ✓ Joi is copied in and will answer." : "Message sent ✓"); return;
     }
     /* Undo Send: the message waits a few seconds on this device before it goes to the server. */
-    App.queueSend({deliver:()=>deliver(d, archiveAfter), restore:{data:raw, draftId, mode, srcId}, seconds:wait});
+    App.queueSend({deliver:()=>deliver(d, archiveAfter), restore:{data:raw, draftId, mode, srcId}, seconds:hold});
     App.go(back);
   };
   $("c-send").addEventListener("click", ()=> send(false));
@@ -173,10 +183,16 @@ Views.compose = function(el, arg){
       .finally(()=>{ saving=null; });
     return saving;
   };
-  const timer=setInterval(()=>{ if(!document.getElementById("c-subj")){ clearInterval(timer); return; } autosave(); }, 15000);
-  App.leaveGuard=()=>{ clearInterval(timer); if(!done) autosave(false); };
+  let timer=null;
   const unload=e=>{ if(!done && typedNow() && JSON.stringify(collect())!==lastSaved){ autosave(); e.preventDefault(); e.returnValue=""; } };
-  window.addEventListener("beforeunload", unload);
+  /* (Re)start the safety net: autosave, save on leaving, warn before closing. Also after a failed send. */
+  const rearm=()=>{
+    done=false; clearInterval(timer);
+    timer=setInterval(()=>{ if(!document.getElementById("c-subj")){ clearInterval(timer); return; } autosave(); }, 15000);
+    App.leaveGuard=()=>{ clearInterval(timer); if(!done) autosave(false); };
+    window.removeEventListener("beforeunload", unload); window.addEventListener("beforeunload", unload);
+  };
+  rearm();
   const finish=()=>{ done=true; clearInterval(timer); App.leaveGuard=null; window.removeEventListener("beforeunload", unload); };
   /* Leaving with something written keeps it as a draft, like the Gmail app's back arrow. */
   $("c-back").addEventListener("click", async ()=>{

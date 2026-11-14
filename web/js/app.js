@@ -217,15 +217,17 @@ const App = {
   queueSend({deliver, restore, seconds}){
     if(this.pendingSend) this.pendingSend.run();
     const job = {done:false};
-    const finish = ()=>{ job.done=true; clearTimeout(job.timer); document.removeEventListener("visibilitychange", onHide); window.removeEventListener("pagehide", job.run); if(this.pendingSend===job) this.pendingSend=null; };
+    // while a message is held, closing the tab asks first (desktop browsers); it is also in Drafts when large
+    const warn = e=>{ e.preventDefault(); e.returnValue=""; };
+    const finish = ()=>{ job.done=true; clearTimeout(job.timer); document.removeEventListener("visibilitychange", onHide); window.removeEventListener("pagehide", job.run); window.removeEventListener("beforeunload", warn); if(this.pendingSend===job) this.pendingSend=null; };
     const onHide = ()=>{ if(document.hidden) job.run(); };
     job.run = async ()=>{
       if(job.done) return; finish(); if(job.toast) job.toast.remove();
       try{ await deliver(); this.toast("Message sent.", {label:"View", fn:()=> this.go("mail:sent")}); this.sound("sent"); }
-      catch(error){ this.undoneSend=restore; this.toast(error.message+" Your message is back in Compose.", {label:"Open", fn:()=> this.go("compose:restore"), duration:10000}); }
+      catch(error){ if(error.draftId) restore.draftId=error.draftId; this.undoneSend=restore; this.toast(error.message+" Open it to fix and send again.", {label:"Open", fn:()=> this.go("compose:restore"), duration:15000}); }
     };
     job.timer = setTimeout(job.run, seconds*1000);
-    document.addEventListener("visibilitychange", onHide); window.addEventListener("pagehide", job.run);
+    document.addEventListener("visibilitychange", onHide); window.addEventListener("pagehide", job.run); window.addEventListener("beforeunload", warn);
     job.toast = this.toast("Sending…", {label:"Undo", duration:seconds*1000, fn:()=>{ if(job.done) return; finish(); this.undoneSend=restore; this.go("compose:restore"); }});
     this.pendingSend = job;
   },

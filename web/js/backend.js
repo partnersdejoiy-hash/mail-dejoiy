@@ -47,9 +47,23 @@ function loginMarkup(admin,configured){
 const Live={enabled:!!window.DEJOIY_LIVE,csrf:'',more:false,avatars:{},
   async request(path,data){
     const response=await fetch('/api/'+path,{method:data===undefined?'GET':'POST',credentials:'same-origin',headers:data===undefined?{}:{'Content-Type':'application/json','X-CSRF-Token':this.csrf},body:data===undefined?undefined:JSON.stringify(data)});
-    const result=await response.json();
-    if(!response.ok){ if(response.status===401&&!['login','session'].includes(path)&&!path.startsWith('admin')) location.reload(); throw new Error(result.error||'Mail request failed'); }
+    // nginx answers some failures itself with an HTML page (too large, timeout); never show "Unexpected token <".
+    let result;
+    try{ result=await response.json(); }
+    catch(_){ result={error:Live.statusMessage(response.status,path)}; }
+    if(!response.ok){
+      if(response.status===401&&!['login','session'].includes(path)&&!path.startsWith('admin')) location.reload();
+      const error=new Error(result.error||Live.statusMessage(response.status,path));
+      error.status=response.status; if(result.draftId) error.draftId=result.draftId; if(result.notSent) error.notSent=true;
+      throw error;
+    }
     return result;
+  },
+  statusMessage(status,path){
+    const sending=path==='send';
+    if(status===413) return sending?'This message is too large to send. Remove or shrink attachments, or share a link instead. It was not sent.':'This is too large for the mail server.';
+    if(status===502||status===503||status===504) return sending?'The mail server did not answer, so we cannot tell if the message went out. Check Sent before sending it again.':'The mail server did not answer. Try again in a minute.';
+    return sending?'The message was not sent (error '+status+'). Try again.':'Mail request failed (error '+status+').';
   },
   async sync(offset=0){
     const result=await this.request(offset?'mail?offset='+offset:'mail');
@@ -164,7 +178,11 @@ const Live={enabled:!!window.DEJOIY_LIVE,csrf:'',more:false,avatars:{},
     Mail.emptyTrash=()=>mutate({op:'empty_trash'},()=>{Store.state.emails=Store.state.emails.filter(e=>e.folder!=='trash');});
     Mail.addLabel=(value,label)=>mutate({ids:ids(value),op:'label',label},()=>local.addLabel(value,label));
     Mail.checkMail=async()=>{const result=await this.sync();App.render();if(this.more)App.toast('More messages are available. Use Load more to include them in search and counts.');return result;};
-    Mail.send=async data=>{const result=await this.request('send',data);try{await this.sync();}catch(_){App.toast('Message accepted; refresh the mailbox to see it.');}return result;};
+    Mail.send=async data=>{
+      let result;
+      try{ result=await this.request('send',data); }
+      catch(error){ if(error.draftId){ try{ await this.sync(); }catch(_){} } throw error; }  // it shows in Drafts, never in Sent
+      try{await this.sync();}catch(_){App.toast('Message accepted; refresh the mailbox to see it.');}return result;};
     Mail.saveDraft=async data=>{const result=await this.request('draft',data);try{await this.sync();}catch(_){App.toast('Draft accepted; refresh the mailbox to see it.');}return result;};
     Mail.storage=()=>{const a=Settings.account;if(!a||!a.quota)return {used:a?(a.used/1048576).toFixed(1):'—',total:0,pct:0};const mb=a.used/1048576;return {used:mb.toFixed(1),total:a.quota/1048576,pct:Math.min(100,Math.round(a.used/a.quota*1000)/10)};};
     const original=App.render.bind(App);

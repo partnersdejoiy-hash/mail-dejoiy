@@ -615,6 +615,35 @@ async function automations(main, d, h, rest, picked){
   draw(r);
 }
 
-window.AdminPages = { servers, statistics, queues, sessions, usersDetail, listsDetail, resources, domainsDetail, cos, cosDetail:cos,
+/* ---------- Monitor > Undelivered mail: every stopped, bounced, rejected or waiting message (real logs) ---------- */
+const UNDELIVERED_LABEL = {stopped:"Stopped by filter", bounced:"Bounced", expired:"Gave up (expired)", waiting:"Still waiting", rejected:"Refused at send", refused:"Not sent (web)"};
+async function undelivered(main, d, h){
+  loading(h,main,"Undelivered mail","Reading the mail server logs…");
+  let r; try{ r=await h.act({op:"z_undelivered"}); }catch(e){ main.innerHTML=h.head("Undelivered mail","")+`<div class="adm-card adm-error">${h.esc(e.message)}</div>`; return; }
+  const when=r.indexedAt?new Date(r.indexedAt*1000).toLocaleString():"never";
+  const told=x=>x.notified==="no"||x.notified==="not yet";
+  const kinds=Object.keys(UNDELIVERED_LABEL).filter(k=>r.counts[k]);
+  let filter="all";
+  const draw=()=>{
+    const rows=r.rows.filter(x=>filter==="all"?true:filter==="silent"?told(x):x.outcome===filter);
+    h.$("u-list").innerHTML=rows.length?`<div class="adm-card adm-flush"><table class="adm-table adm-table-all"><thead><tr><th>When</th><th>From</th><th>To</th><th>What happened</th><th>Why</th><th>Told?</th></tr></thead><tbody>
+      ${rows.map(x=>`<tr${told(x)?' class="adm-warn-row"':''}><td><small>${h.esc(new Date(x.at).toLocaleString())}</small></td><td>${h.esc(x.from)}</td><td>${h.esc(String(x.to).split(",").join(", "))}</td>
+        <td>${h.esc(UNDELIVERED_LABEL[x.outcome]||x.outcome)}<br><small class="adm-muted">${h.esc(x.direction)}${x.qid?" · "+h.esc(x.qid):""}</small></td>
+        <td>${h.esc(x.reason)}</td><td>${told(x)?`<b>${h.esc(x.notified==="no"?"No":"Not yet")}</b>`:h.esc(x.notified)}</td></tr>`).join("")}
+      </tbody></table></div>`:`<div class="adm-card adm-muted">${filter==="all"?"Nothing undelivered in the last 14 days.":"Nothing in this group."}</div>`;
+  };
+  main.innerHTML=h.head("Undelivered mail",`Last 14 days, from the mail server's own logs · updated ${h.esc(when)}`,`<button class="adm-btn ghost" id="u-refresh">${h.icon("refresh")} Refresh</button>`)+
+    (r.available?"":`<div class="adm-card adm-error">The log index has not been built yet. It is refreshed every 5 minutes by the server.</div>`)+`
+    <div class="adm-stats adm-stats-5">
+      <button class="adm-card adm-stat adm-queue on" data-u="all"><b>${r.rows.length}</b><span>All</span></button>
+      <button class="adm-card adm-stat adm-queue" data-u="silent"><b>${r.notToldCount}</b><span>Nobody told</span></button>
+      ${kinds.map(k=>`<button class="adm-card adm-stat adm-queue" data-u="${k}"><b>${r.counts[k]}</b><span>${h.esc(UNDELIVERED_LABEL[k])}</span></button>`).join("")}</div>
+    <div id="u-list"></div>`;
+  h.$("u-refresh").addEventListener("click",()=>undelivered(main,d,h));
+  main.querySelectorAll("[data-u]").forEach(b=>b.addEventListener("click",()=>{ filter=b.dataset.u; main.querySelectorAll("[data-u]").forEach(x=>x.classList.toggle("on",x===b)); draw(); }));
+  draw();
+}
+
+window.AdminPages = { servers, statistics, queues, undelivered, sessions, usersDetail, listsDetail, resources, domainsDetail, cos, cosDetail:cos,
   globalSettings, rights, zimlets, certs, retention, webhooks, apiTokens, automations, bulkImport, mailboxTools, caches, search };
 })();

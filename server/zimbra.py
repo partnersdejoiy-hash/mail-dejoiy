@@ -16,6 +16,7 @@ import binascii
 from collections.abc import MutableMapping
 import urllib.request
 import urllib.error
+import http.client
 import urllib.parse
 import xml.etree.ElementTree as ET
 from http.cookies import SimpleCookie
@@ -27,6 +28,7 @@ from webhooks import Webhooks, WebhookError
 from newmail import NewMailWatcher
 from automations import Automations, AutomationError
 from apitokens import ApiTokens, TokenError, SCOPES as API_SCOPES
+from undelivered import Undelivered
 from html.parser import HTMLParser
 
 SOAP = 'http://www.w3.org/2003/05/soap-envelope'
@@ -36,6 +38,21 @@ ADMIN = 'urn:zimbraAdmin'
 FOLDERS = {'inbox':'2','sent':'5','drafts':'6','spam':'4','trash':'3'}
 MAX_ATTACHMENT_BYTES=15*1024*1024
 MAX_REQUEST_BYTES=22*1024*1024
+
+def attachment_limits(message_bytes, upload_bytes):
+    """What a person can really attach, from the server's own limits (Zimbra GetInfo attSizeLimit =
+    MTA message limit, docSizeLimit = upload limit). Attachments grow ~37% when encoded for mail
+    (base64 + line breaks) and the text/HTML body needs room, so 10 MB of MTA limit is ~7 MB of files."""
+    def num(v):
+        try: return int(v) if v is not None and int(v)>0 else 0
+        except (TypeError,ValueError): return 0
+    mta, upload = num(message_bytes), num(upload_bytes)
+    usable = MAX_ATTACHMENT_BYTES
+    if mta: usable = min(usable, int((mta-256*1024)/1.37))
+    if upload: usable = min(usable, upload)
+    return {'messageBytes':mta or None,'uploadBytes':upload or None,'attachmentBytes':max(usable,0)}
+
+SEND_FAILED_KIND='send_failed'  # audit kind for a web send the server refused (kept in Drafts)
 class SessionStore(MutableMapping):
     """Private SQLite token store; parent directory must be owned by the service."""
     def __init__(self, path):
@@ -199,6 +216,17 @@ class AuditLog:
                 self.db.execute('INSERT INTO events VALUES (?,?,?,?,?,?,?)',(now,kind,actor,actor.rsplit('@',1)[-1] if '@' in actor else '',str(target or '')[:320],str(ip or '')[:45],int(n)))
                 self.db.execute('DELETE FROM events WHERE ts<?',(now-self.KEEP,)); self.db.commit()
         except sqlite3.Error: pass  # the log must never break sign-in or sending
+    def failures(self, scope=None, days=14, now=None):
+        """Web sends the mail server refused (kept in Drafts), for the Undelivered mail page."""
+        now=now or time.time(); where,args=('AND domain=?',(scope,)) if scope else ('',())
+        with self.lock:
+            rows=self.db.execute(f'SELECT ts,actor,target FROM events WHERE kind=? AND ts>=? {where} ORDER BY ts DESC LIMIT 500',
+                                 (SEND_FAILED_KIND,now-days*86400,*args)).fetchall()
+        out=[]
+        for ts,actor,target in rows:
+            code,_,to=str(target or '').partition('|')
+            out.append({'ts':ts,'from':actor,'to':to,'code':code})
+        return out
     def report(self, scope=None, days=14, now=None):
         """Numbers for the last `days` days and the newest events; a company admin (scope) sees only its own domain."""
         now=now or time.time(); since=now-days*86400; where,args=('AND domain=?',(scope,)) if scope else ('',())
@@ -805,8 +833,9 @@ class Zimbra:
                 raw=response.read(8*1024*1024+1)
         except urllib.error.HTTPError as e:
             raw=e.read(65536)
-        except (urllib.error.URLError, TimeoutError):
-            raise APIError('Mail server is unavailable. Try again later.',502)
+        except (urllib.error.URLError, TimeoutError, http.client.HTTPException, ConnectionError):
+            # 'transport': we never got an answer, so a send may or may not have gone out
+            raise APIError('Mail server is unavailable. Try again later.',502,'transport')
         if len(raw)>8*1024*1024 or b'<!DOCTYPE' in raw.upper():
             raise APIError('Invalid mail server response',502)
         try: doc=ET.fromstring(raw)
@@ -824,7 +853,14 @@ class Zimbra:
                 'account.INVALID_PASSWORD':'The password does not meet the mailbox password policy.',
                 'mail.QUOTA_EXCEEDED':'Mailbox storage is full. Free space before sending.',
                 'mail.SEND_ABORTED_ADDRESS_FAILURE':'The mail server rejected a recipient address. Check the recipients.',
-                'mail.MESSAGE_TOO_BIG':'The message exceeds the mail server size limit.',
+                'mail.MESSAGE_TOO_BIG':'The message is larger than the mail server allows. Remove or shrink attachments, or share a link instead.',
+                'mail.SEND_PARTIAL_ADDRESS_FAILURE':'Some recipient addresses were rejected, so the message was not sent. Check the recipients.',
+                'mail.SEND_FAILURE':'The mail server could not send this message.',
+                'mail.TRY_AGAIN':'The mail server is busy. Try again in a minute.',
+                'service.TRY_AGAIN':'The mail server is busy. Try again in a minute.',
+                'mail.NO_SUCH_MSG':'The draft or original message no longer exists. Copy your text and start a new message.',
+                'mail.UPLOAD_REJECTED':'An attachment was rejected by the mail server.',
+                'service.INVALID_REQUEST':'The mail server could not accept this message. Check the recipients and attachments.',
                 'account.DISTRIBUTION_LIST_EXISTS':'A mailing list or mailbox with this address already exists.',
                 'account.NO_SUCH_ACCOUNT':'Mailbox not found.',
                 'account.NO_SUCH_DISTRIBUTION_LIST':'Mailing list not found.',
@@ -961,20 +997,34 @@ class Zimbra:
             if uploads: attach.set('aid',','.join(self.upload(token,*item) for item in uploads))
             for item in existing: attach.append(node(MAIL,'mp',{'mid':str(item['mid']),'part':str(item['part'])}))
             m.append(attach)
-        request.append(m); out=self.call(request,token); message=out.find('{'+MAIL+'}m')
+        request.append(m); out=self.call(request,token,timeout=25 if draft else 60); message=out.find('{'+MAIL+'}m')
         if label and label!='Important' and not draft and message is not None and message.get('id'):
             # The sent copy carries the label; a failed tag never fails a message that already went out.
             try: self.action(token,{'ids':[message.get('id')],'op':'label','label':label})
             except APIError: pass
         return {'id':message.get('id') if message is not None else None,'accepted':not draft,'draftRemoved':bool(not draft and data.get('id'))}
+    def sent_copy(self, token, data, since):
+        """After a send timed out, look for the copy Zimbra files in Sent once a message is accepted:
+        same subject, same To, dated after we started. Found -> it went out; do not send it again."""
+        r=node(MAIL,'SearchRequest',{'types':'message','limit':'10','sortBy':'dateDesc','recip':'1'}); r.append(node(MAIL,'query',text='in:sent'))
+        want_to={a.strip().lower() for a in re.split(r'[,;\n]+',str(data.get('to',''))) if a.strip()}
+        want_su=str(data.get('subject',''))
+        for m in self.call(r,token).findall('{'+MAIL+'}m'):
+            if int(m.get('d','0'))<since*1000-5000: break
+            su=m.find('{'+MAIL+'}su'); to={e.get('a','').lower() for e in m.findall('{'+MAIL+'}e') if e.get('t')=='t'}
+            if (su.text if su is not None else '')==want_su and to==want_to: return m.get('id')
+        return None
     def upload(self, token, raw, name, mime):
         filename=html.escape(name,quote=True).encode('ascii','xmlcharrefreplace').decode()
         request=urllib.request.Request(self.origin+'/service/upload?fmt=raw,extended',raw,
             {'Content-Type':mime,'Content-Disposition':'attachment; filename="'+filename+'"','Cookie':'ZM_AUTH_TOKEN='+token},method='POST')
         try:
             with self.opener.open(request,timeout=60) as response: value=response.read(65536).decode()
-            status,_,payload=value.split(',',2)
+            status=value.split(',',1)[0]
+            if status.strip()=='413':
+                raise APIError(f'The attachment "{name[:80]}" is larger than the mail server allows. Your message has not been sent.',413,'upload_too_big')
             if status.strip()!='200': raise ValueError()
+            _,_,payload=value.split(',',2)
             items=json.loads(payload); aid=items[0]['aid']
             if not isinstance(aid,str) or not re.fullmatch(r'[a-zA-Z0-9:-]+',aid): raise ValueError()
             return aid
@@ -1152,12 +1202,14 @@ class Zimbra:
         out=self.call(node(ACCOUNT,'GetInfoRequest',{'sections':'mbox,attrs'}),token)
         attrs={a.get('name'):a.text or '' for a in out.findall('.//{'+ACCOUNT+'}attr')}
         used=out.find('{'+ACCOUNT+'}used'); name=out.find('{'+ACCOUNT+'}name')
+        limits=attachment_limits(out.get('attSizeLimit'),out.get('docSizeLimit'))
         try: quota=int(attrs.get('zimbraMailQuota') or 0)
         except ValueError: quota=0
         flag=lambda key: attrs.get(key)=='TRUE'
         return {'email':name.text if name is not None else '','used':int(used.text) if used is not None and (used.text or '').isdigit() else 0,'quota':quota,
             'features':{'forwarding':flag('zimbraFeatureMailForwardingEnabled'),'filters':flag('zimbraFeatureFiltersEnabled'),'vacation':flag('zimbraFeatureOutOfOfficeReplyEnabled'),
                 'changePassword':flag('zimbraFeatureChangePasswordEnabled'),'pop':flag('zimbraPop3Enabled'),'imap':attrs.get('zimbraImapEnabled')!='FALSE'},
+            'limits':limits,
             'passwordMinLength':max(PASSWORD_MIN,int(attrs.get('zimbraPasswordMinLength') or 0) if (attrs.get('zimbraPasswordMinLength') or '0').isdigit() else 0)}
     def change_password(self, token, email, data):
         current=data.get('current'); new=data.get('password')
@@ -2061,6 +2113,36 @@ class Handler(SimpleHTTPRequestHandler):
             if ipaddress.ip_address(ip).is_loopback and self.headers.get('X-Real-IP'): ip=str(ipaddress.ip_address(self.headers['X-Real-IP']))
         except ValueError: pass
         return ip
+    def send_failed(self, s, data, error, started):
+        """A web send the server refused must never vanish: record it for the admin's Undelivered page,
+        keep the message in Drafts (never Sent), and tell the person exactly that."""
+        z=self.server.zimbra; token=s['token']; email=s['user']['email']
+        if error.status==400 and not error.code:
+            # our own input check (no recipient, address typo): nothing reached the mail server; Compose stays open
+            return self.reply(400,{'error':str(error)})
+        if error.code=='transport':
+            # no answer from Zimbra: it may have gone out anyway. Look in Sent before calling it a failure.
+            try: sent=z.sent_copy(token,data,started)
+            except APIError: sent=None
+            if sent:
+                self.log('send',email,n=1)
+                return self.reply(200,{'id':sent,'accepted':True,'draftRemoved':bool(data.get('id')),'confirmedLate':True})
+        recipients=','.join(a.strip() for k in ('to','cc','bcc') for a in re.split(r'[,;\n]+',str(data.get(k,''))) if a.strip())
+        self.log(SEND_FAILED_KIND,email,f'{error.code or error.status}|{recipients}'[:320])
+        dropped=[]
+        try: draft_id=z.write_message(token,data,True).get('id')  # updates the open draft when data has its id
+        except APIError:
+            # Zimbra applies the same size limit to drafts: keep the text (and attachments already on the
+            # server) without the new files, so the message itself is never lost.
+            attachments=data.get('attachments') if isinstance(data.get('attachments'),list) else []
+            dropped=[str(a.get('name') or 'attachment')[:80] for a in attachments if isinstance(a,dict) and a.get('data')]
+            try: draft_id=z.write_message(token,dict(data,attachments=[a for a in attachments if isinstance(a,dict) and not a.get('data')]),True).get('id') if dropped else None
+            except APIError: draft_id=None
+        note=' We could not confirm it was sent, and it is not in Sent.' if error.code=='transport' else ''
+        if draft_id and dropped: kept=' Your text is saved in Drafts and was not sent; attach '+', '.join(dropped)+' again (or share a link) before sending.'
+        elif draft_id: kept=' Your message is saved in Drafts and was not sent.'
+        else: kept=' The message was not sent. Copy your text before leaving this page.'
+        self.reply(error.status if error.status>=400 else 502,{'error':str(error)+note+kept,'draftId':draft_id,'notSent':True})
     def log(self, kind, actor, target='', n=1):
         audit=getattr(self.server,'audit',None)
         if audit: audit.add(kind,actor,target,self.client_ip(),n)
@@ -2857,7 +2939,10 @@ class Handler(SimpleHTTPRequestHandler):
                     lookup=node(ADMIN,'GetAccountRequest'); lookup.append(node(ADMIN,'account',{'by':'name'},s['user']['email']))
                     account=client.call(lookup,token).find('{'+ADMIN+'}account')
                     if account is None or attr(account,'zimbraIsAdminAccount')!='TRUE': raise APIError('Only a full administrator can change this.',403)
-                out=zconsole.Console(client,token,s['user']['email'],scope,perms,APIError,global_admin).run(data)
+                console=zconsole.Console(client,token,s['user']['email'],scope,perms,APIError,global_admin)
+                console.undelivered=getattr(self.server,'undelivered',None)
+                console.failed_sends=self.server.audit.failures if getattr(self.server,'audit',None) else None
+                out=console.run(data)
                 if data['op'] not in zconsole.LOOKUPS:
                     self.log('admin:'+data['op'],s['user']['email'],str(data.get('email') or data.get('id') or data.get('domain') or data.get('name') or data.get('grantee') or data.get('queue') or '')[:200])
                 return self.reply(200,out)
@@ -2887,7 +2972,10 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.reply(200,out)
             if self.path=='/api/send':
                 data=self.mention_recipients(s,data)
-                result=self.server.zimbra.write_message(s['token'],data,sender=s['user']['email'])
+                started=time.time()
+                try: result=self.server.zimbra.write_message(s['token'],data,sender=s['user']['email'])
+                except APIError as e:
+                    return self.send_failed(s,data,e,started)
                 self.log('send',s['user']['email'],n=max(1,sum(len([a for a in re.split(r'[,;\n]+',str(data.get(k,''))) if a.strip()]) for k in ('to','cc','bcc'))))
                 try: self.server.zimbra.remember_recipients(s['token'],data,s['user']['email'])
                 except APIError: pass  # the message went out; a missed contact is not worth an error
@@ -2954,6 +3042,7 @@ def serve():
     url=os.environ.get('ZIMBRA_URL'); server.zimbra=Zimbra(url) if url else None
     server.update_files=AppearanceStore((str(Path(os.environ['SESSION_DB']).with_name('update-files.sqlite')) if os.environ.get('SESSION_DB') else None),'files')
     server.audit=AuditLog(str(Path(os.environ['SESSION_DB']).with_name('audit.sqlite')) if os.environ.get('SESSION_DB') else None)
+    server.undelivered=Undelivered()
     server.hosts=AppearanceStore((str(Path(os.environ['SESSION_DB']).with_name('login-hosts.sqlite')) if os.environ.get('SESSION_DB') else None),'hosts')
     server.hosts_file=os.environ.get('CUSTOM_HOSTS_FILE') or (str(Path(os.environ['SESSION_DB']).with_name('custom-hosts.txt')) if os.environ.get('SESSION_DB') else None)
     server.booking=AppearanceStore((str(Path(os.environ['SESSION_DB']).with_name('booking.sqlite')) if os.environ.get('SESSION_DB') else None),'booking')

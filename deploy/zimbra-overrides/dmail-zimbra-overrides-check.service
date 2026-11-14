@@ -1,0 +1,7 @@
+[Unit]
+Description=Dmail: check Zimbra mail-delivery overrides are still in place
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/mail-dejoiy/deploy/zimbra-overrides/apply.sh --check --notify

@@ -295,3 +295,14 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;backgrou
 .adm-wh-ev input{width:16px;height:16px;margin:2px 0 0;flex:none}
 .adm-wh-ev small{color:var(--adm-muted,#6b6b76);margin-left:4px}
 #wh-secret{word-break:break-all}
+
+/* Undelivered mail: rows where nobody was told stand out; on small screens every column stays (the reason matters most) */
+.adm-table tr.adm-warn-row td{background:var(--warn-bg)}
+.adm-table tr.adm-warn-row td b{color:var(--warn)}
+@media (max-width:900px){.adm-table.adm-table-all th:nth-child(n+3),.adm-table.adm-table-all td:nth-child(n+3){display:table-cell}}
+@media (max-width:640px){.adm-table.adm-table-all td:nth-child(n+3){display:block}.adm-table.adm-table-all td{grid-column:1/-1}}
+.adm-table.adm-table-all{table-layout:fixed}
+.adm-table.adm-table-all td{overflow-wrap:anywhere}
+.adm-table.adm-table-all th:nth-child(1){width:15%}.adm-table.adm-table-all th:nth-child(2),.adm-table.adm-table-all th:nth-child(3){width:17%}
+.adm-table.adm-table-all th:nth-child(4){width:13%}.adm-table.adm-table-all th:nth-child(6){width:15%}
+@media (max-width:640px){.adm-table tr.adm-warn-row{background:var(--warn-bg)}.adm-table tr.adm-warn-row td{background:transparent}}

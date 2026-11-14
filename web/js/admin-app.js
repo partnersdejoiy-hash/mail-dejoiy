@@ -15,6 +15,7 @@ const P = true;
 const TREE = [
   ["Monitor",[["monitor/overview","home","Overview","overview"],["monitor/servers","settings","Server status","servers",P],
     ["monitor/statistics","refresh","Server statistics","statistics",P],["monitor/mail-queues","mail","Mail queues","queues",P],
+    ["monitor/undelivered","mail","Undelivered mail","undelivered"],
     ["monitor/sessions","contacts","Active sessions","sessions"],["monitor/reports","note","Reports","reports"]]],
   ["Manage",[["manage/accounts","contacts","Accounts","users"],["manage/teams","tag","Teams & roles","org"],
     ["manage/lists","mail","Distribution lists","lists"],["manage/resources","calendar","Resources","resources"],
