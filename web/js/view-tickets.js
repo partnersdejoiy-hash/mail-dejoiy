@@ -33,7 +33,7 @@ async function list(el){
     : view==="platform" ? "No company admin has raised a ticket to Dejoiy." : "No tickets in your company yet.";
   el.innerHTML = `<div class="tk">
     <div class="view-head"><div><h1>Help desk</h1><p class="sub">Ask any team in your company for help, and follow it until it is done.</p></div>
-      <span class="spacer"></span><button class="btn primary" id="tk-new">${Icons.get("compose")} New ticket</button></div>
+      <span class="spacer"></span><button class="btn" id="tk-bug">Report a bug</button><button class="btn primary" id="tk-new">${Icons.get("compose")} New ticket</button></div>
     <div class="seg tk-tabs" role="tablist">${tabs.map(([id,label])=>`<button role="tab" aria-selected="${id===view}" class="${id===view?"on":""}" data-view="${id}">${esc(label)}</button>`).join("")}</div>
     ${data.tickets.length ? `<div class="tk-list" role="list">${data.tickets.map(t=>`<button class="tk-row ${t.late?"late":""}" role="listitem" data-open="${esc(t.code)}">
         <span class="tk-code">${esc(t.code)}</span>
@@ -45,9 +45,18 @@ async function list(el){
   el.querySelectorAll("[data-view]").forEach(b=>b.addEventListener("click",()=>{ view=b.dataset.view; list(el).catch(e=>App.toast(e.message)); }));
   el.querySelectorAll("[data-open]").forEach(b=>b.addEventListener("click",()=>App.go("desk:"+b.dataset.open)));
   el.querySelector("#tk-new").addEventListener("click",()=>create());
+  el.querySelector("#tk-bug").addEventListener("click",()=>Views.deskReport());
 }
 
-function create(){
+/* "Report a bug" (account menu): a ticket to the people who can fix it. Employees reach their company's admins;
+   a company admin reaches the Dejoiy team. */
+Views.deskReport = async function(){
+  try{ if(!meta) meta = await Live.request("tickets/meta"); }catch(error){ App.toast(error.message); return; }
+  create({team: meta.raiseTo.includes("Dejoiy platform") ? "Dejoiy platform" : "Company admin", subject:"Bug: ",
+    hint:"What did you do, what did you expect, and what happened instead? Add the page you were on and your phone or browser."});
+};
+
+function create(preset={}){
   const send = ()=>{
     const get=id=>document.getElementById(id).value, note=document.getElementById("tn-note"), button=document.querySelector(".dlg-foot .primary");
     if(!get("tn-subject").trim() || !get("tn-body").trim()){ note.textContent="Write a short title and what you need."; return false; }
@@ -58,10 +67,10 @@ function create(){
     return false;
   };
   App.dialog({title:"New ticket", wide:true, body:`
-    <div class="field"><label for="tn-subject">What do you need? (short title)</label><input type="text" id="tn-subject" maxlength="160" placeholder="Laptop will not start"></div>
-    <div class="grid c2"><div class="field"><label for="tn-team">Which team should handle it?</label><select id="tn-team">${meta.raiseTo.map(t=>`<option value="${esc(t)}">${esc(t==="Company admin"?"Company admin (your company's mail admins)":t==="Dejoiy platform"?"Dejoiy platform (the Dejoiy team)":t)}</option>`).join("")}</select></div>
+    <div class="field"><label for="tn-subject">What do you need? (short title)</label><input type="text" id="tn-subject" maxlength="160" placeholder="Laptop will not start" value="${esc(preset.subject||"")}"></div>
+    <div class="grid c2"><div class="field"><label for="tn-team">Which team should handle it?</label><select id="tn-team">${meta.raiseTo.map(t=>`<option value="${esc(t)}" ${t===preset.team?"selected":""}>${esc(t==="Company admin"?"Company admin (your company's mail admins)":t==="Dejoiy platform"?"Dejoiy platform (the Dejoiy team)":t)}</option>`).join("")}</select></div>
       <div class="field"><label for="tn-priority">How urgent is it?</label><select id="tn-priority">${Object.entries(PRIORITY).map(([id,label])=>`<option value="${id}" ${id==="normal"?"selected":""}>${label} · answer within ${meta.priorities?.[id]||""} hours</option>`).join("")}</select></div></div>
-    <div class="field"><label for="tn-body">Details</label><textarea id="tn-body" rows="6" maxlength="8000" placeholder="What happened, since when, and what you already tried."></textarea></div>
+    <div class="field"><label for="tn-body">Details</label><textarea id="tn-body" rows="6" maxlength="8000" placeholder="${esc(preset.hint||"What happened, since when, and what you already tried.")}"></textarea></div>
     <p id="tn-note" role="alert" class="field-error"></p>`,
     actions:[{label:"Cancel"},{label:"Send ticket", primary:true, fn:send}]});
 }

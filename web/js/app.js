@@ -391,6 +391,7 @@ const App = {
         {label:"✨ Ask Joi, your AI buddy", fn:()=>JoiDock.open()},
         {label:"🎨 Themes", fn:()=>Themes.openPicker()},
         {label:"⚙️ Settings", fn:()=>this.go("settings")},
+        ...(Live.enabled ? [{label:"🐞 Report a bug", fn:()=>Views.deskReport()}] : []),
         {sep:true},
         ...others.map(a=>({label:`🔁 Switch to ${a.name||a.email.split("@")[0]} — ${a.email}`, fn:()=>switchTo(a.email)})),
         ...(Live.enabled ? [{label:"＋ Add another account", fn:()=>this.addAccount()}] : []),
