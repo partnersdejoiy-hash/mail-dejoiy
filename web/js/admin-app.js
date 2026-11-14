@@ -15,7 +15,7 @@ const P = true;
 const TREE = [
   ["Monitor",[["monitor/overview","home","Overview","overview"],["monitor/servers","settings","Server status","servers",P],
     ["monitor/statistics","refresh","Server statistics","statistics",P],["monitor/mail-queues","mail","Mail queues","queues",P],
-    ["monitor/undelivered","mail","Undelivered mail","undelivered"],
+    ["monitor/undelivered","mail","Undelivered mail","undelivered"],["monitor/tickets","note","Help desk tickets","tickets"],
     ["monitor/sessions","contacts","Active sessions","sessions"],["monitor/reports","note","Reports","reports"]]],
   ["Manage",[["manage/accounts","contacts","Accounts","users"],["manage/teams","tag","Teams & roles","org"],
     ["manage/lists","mail","Distribution lists","lists"],["manage/resources","calendar","Resources","resources"],
@@ -113,7 +113,7 @@ async function load(){
 function renderSection(){
   const main=$("adm-main"), found=findRoute(state.section);
   if(!found){ navigate("monitor/overview",true); return; }
-  const pages={overview,users,org,domains,lists,policies,reports,shine,plans,settings,...(window.AdminPages||{})};
+  const pages={overview,users,org,domains,lists,policies,reports,shine,plans,settings,tickets,...(window.AdminPages||{})};
   const fn=(found.rest&&pages[found.item[3]+"Detail"])||pages[found.item[3]]||overview;
   document.title=found.item[2]+" · Dejoiy Mail Admin";
   Promise.resolve(fn(main, state.data, helpers, found.rest)).catch(e=>{ main.innerHTML=head(found.item[2])+`<div class="adm-card adm-error">${esc(e.message)}</div>`; });
@@ -342,6 +342,26 @@ async function reports(main, d){
         return `<tr><td><small>${at(x.at)}</small></td><td>${esc(x.actor)}</td><td>${op==="_signin"?"Opened the admin console":op==="_signin_failed"?`<span class="adm-pill bad">Wrong admin password</span>`:esc(OPS[op]||op.replace(/_/g," "))}</td><td>${esc(who(x.target)||"—")}</td><td><small>${esc(x.ip||"—")}</small></td></tr>`; }).join("")}</tbody></table>`
         :`<p class="adm-muted adm-pad">No admin changes recorded yet. Every change made here is listed from now on.</p>`}</div>
     <p class="adm-muted">Kept for 90 days. Passwords and the contents of mail are never recorded.</p>`;
+}
+
+/* Help desk tickets that wait for an admin: what the company's people raised to "Company admin" (and everything else in the
+   company), and for the Dejoiy team what company admins raised to Dejoiy. Tickets are answered in the mail app's Help desk. */
+async function tickets(main){
+  main.innerHTML=head("Help desk tickets","Loading…");
+  const meta=await api("tickets/meta"), mailApp=$("adm-open-mail").href.replace(/\/?$/,"/");
+  const views=[...(meta.platform?[["platform","Raised to Dejoiy by company admins"]]:[]),["team","Waiting for your company's admins"],["all","Every ticket in your company"]];
+  const lists=await Promise.all(views.map(([v])=>api("tickets?view="+v)));
+  const when=ts=>new Date(ts*1000).toLocaleString([], {day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
+  const table=rows=>rows.length?`<table class="adm-table"><thead><tr><th>Ticket</th><th>From</th><th>For</th><th>Priority</th><th>Status</th><th>Updated</th><th></th></tr></thead><tbody>${rows.map(t=>`<tr>
+      <td><b>${esc(t.subject)}</b><small>${esc(t.code)}</small></td><td>${esc(t.requester)}</td><td>${esc(t.team)}${t.assignee?`<small>with ${esc(t.assignee)}</small>`:""}</td>
+      <td><span class="adm-pill ${t.priority==="urgent"||t.priority==="high"?"warn":""}">${esc(t.priority)}</span></td>
+      <td><span class="adm-pill ${t.status==="resolved"||t.status==="closed"?"good":t.late?"bad":""}">${esc(t.late?"Overdue · ":"")}${esc(t.statusName)}</span></td><td><small>${esc(when(t.updated))}</small></td>
+      <td class="adm-right"><a class="adm-btn ghost sm" href="${esc(mailApp)}#/desk:${esc(t.code)}" target="_blank" rel="noopener">Open</a></td></tr>`).join("")}</tbody></table>`
+    :`<p class="adm-muted adm-pad">Nothing here.</p>`;
+  const waiting=meta.waiting+(meta.waitingPlatform||0);
+  main.innerHTML=head("Help desk tickets",waiting?`${waiting} waiting for an answer`:"Nothing is waiting",`<a class="adm-btn primary" href="${esc(mailApp)}#/desk" target="_blank" rel="noopener">Open Help desk</a>`)
+    +`<p class="adm-muted">Your people raise tickets from Help desk in their mail. Tickets for a department go to that department; tickets for “Company admin” come to you.${meta.platform?"":" As a company admin you can raise a ticket to the Dejoiy team from the same page."}</p>`
+    +views.map(([,title],i)=>`<div class="adm-card adm-flush"><div class="adm-card-head adm-pad"><h2>${esc(title)}</h2></div>${table(i===views.length-1?lists[i].tickets:lists[i].tickets.filter(t=>t.status!=="resolved"&&t.status!=="closed"))}</div>`).join("");
 }
 
 function users(main, d){

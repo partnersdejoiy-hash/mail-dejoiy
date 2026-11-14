@@ -2,7 +2,7 @@
 import sys, unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'server'))
-from tickets import Tickets, TicketError, Who
+from tickets import Tickets, TicketError, Who, ADMIN_TEAM, PLATFORM_TEAM
 
 TEAMS = ['IT Support', 'Human Resources', 'Operations']
 PEOPLE = ['asha@acme.in', 'it1@acme.in', 'it2@acme.in', 'hr1@acme.in', 'boss@acme.in']
@@ -73,5 +73,35 @@ class Desk(unittest.TestCase):
     def test_late(self):
         self.assertFalse(self.d.get(asha, 1)['late']); self.clock[0] += 9 * 3600; self.assertTrue(self.d.get(asha, 1)['late'])
         self.act(it1, op='status', status='resolved'); self.assertFalse(self.d.get(asha, 1)['late'])
+
+class AdminRoads(unittest.TestCase):
+    """Employees can always reach their company's admins; a company admin can reach the Dejoiy team; nobody else sees those."""
+    def setUp(self):
+        self.d = Tickets(None); self.admin = Who('boss@acme.in', '', True); self.dejoiy = Who('it@dejoiy.com', '', True, True); self.other_admin = Who('root@other.in', '', True)
+    def test_to_the_company_admins_even_without_departments(self):
+        t, _ = self.d.create(asha, {'subject': 'Need a new mailbox', 'body': 'For the night shift lead.', 'team': ADMIN_TEAM}, [])
+        self.assertEqual((t['team'], t['platform']), (ADMIN_TEAM, False))
+        self.assertEqual([x['code'] for x in self.d.list(self.admin, 'team')['tickets']], ['T-0001']); self.assertEqual(self.d.waiting_on_me(self.admin), 1)
+        self.assertEqual(self.d.list(it1, 'team')['tickets'], [])                                    # not a department's business
+        for who in (self.other_admin, self.dejoiy):                                                   # another company's admin and the Dejoiy team do not see company tickets
+            with self.assertRaises(TicketError): self.d.get(who, 'T-0001')
+        self.assertEqual(self.d.act(self.admin, {'code': 'T-0001', 'op': 'status', 'status': 'resolved'}, PEOPLE, [])[0]['status'], 'resolved')
+    def test_company_admin_to_dejoiy(self):
+        with self.assertRaises(TicketError) as e: self.d.create(asha, {'subject': 's', 'body': 'b', 'team': PLATFORM_TEAM}, TEAMS)
+        self.assertEqual(e.exception.status, 403)                                                     # employees go through their own admin
+        self.d.create(asha, {'subject': 'local', 'body': 'b', 'team': 'Operations'}, TEAMS)
+        t, _ = self.d.create(self.admin, {'subject': 'Raise our storage', 'body': 'We are at 90%.', 'team': 'dejoiy-platform', 'priority': 'high'}, TEAMS)
+        code = t['code']; self.assertTrue(code.startswith('P-')); self.assertTrue(t['platform'])
+        self.assertEqual([x['code'] for x in self.d.list(self.dejoiy, 'platform')['tickets']], [code]); self.assertEqual(self.d.waiting_platform(self.dejoiy), 1)
+        self.assertEqual([x['code'] for x in self.d.list(self.admin, 'mine')['tickets']], [code])
+        self.assertEqual([x['subject'] for x in self.d.list(self.admin, 'all')['tickets']], ['local'])   # the company's own list stays the company's
+        for who in (asha, it1, self.other_admin):
+            with self.assertRaises(TicketError): self.d.get(who, code)
+        with self.assertRaises(TicketError): self.d.list(self.admin, 'platform')
+        t, notices = self.d.act(self.dejoiy, {'code': code, 'op': 'status', 'status': 'in_progress'}, [], [])
+        self.assertEqual((t['assignee'], notices[0][0]), ('it@dejoiy.com', 'boss@acme.in'))
+        with self.assertRaises(TicketError): self.d.act(self.admin, {'code': code, 'op': 'priority', 'priority': 'urgent'}, PEOPLE, TEAMS)   # the requester does not work it
+        with self.assertRaises(TicketError): self.d.act(self.dejoiy, {'code': code, 'op': 'team', 'team': 'Operations'}, [], TEAMS)
+        self.assertEqual(self.d.act(self.admin, {'code': code, 'op': 'comment', 'text': 'Thanks'}, PEOPLE, TEAMS)[1][0][0], 'it@dejoiy.com')
 
 if __name__ == '__main__': unittest.main()

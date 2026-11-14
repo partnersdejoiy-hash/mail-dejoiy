@@ -457,9 +457,6 @@ def team_groups(people, domain):
 def team_members(people, domain, kind, slug):
     """The active mailboxes of one company in one department or with one designation."""
     return [p['email'] for p in people if p['active'] and p['email'].rsplit('@',1)[1]==domain and group_slug(p['a'].get(TEAM_FIELD[kind]))==slug.lower()]
-def desk_priorities():
-    from tickets import PRIORITIES
-    return PRIORITIES
 def host_points_here(host, mail_host, lookup=None):
     """True when the address reaches this mail server: a CNAME to it, or the same A records."""
     lookup=lookup or dns_lookup
@@ -2248,11 +2245,12 @@ class Handler(SimpleHTTPRequestHandler):
         account=admin.call(lookup,token).find('{'+ADMIN+'}account')
         found=node(ADMIN,'GetDomainRequest'); found.append(node(ADMIN,'domain',{'by':'name'},domain))
         notes=attr(admin.call(found,token).find('{'+ADMIN+'}domain'),'zimbraNotes')
-        manage='tickets.manage' in role_perms(read_roles(notes),attr(account,'title') if account is not None else '',bool(session['user'].get('isAdmin')))
+        # a company's admins always get their company's tickets; a role can give the same to others. The Dejoiy team gets what company admins raise to Dejoiy.
+        user=session['user']; manage=bool(user.get('isAdmin')) or 'tickets.manage' in role_perms(read_roles(notes),attr(account,'title') if account is not None else '',False)
         lists=node(ADMIN,'GetAllDistributionListsRequest'); lists.append(node(ADMIN,'domain',{'by':'name'},domain))
         teams=sorted({attr(d,'displayName') or d.get('name','').split('@')[0] for d in admin.call(lists,token).findall('{'+ADMIN+'}dl') if attr(d,'zimbraNotes')==DEPARTMENT_MARK})
         people=sorted(a.lower() for a in domain_mailboxes(provisioner,domain) if a.lower() not in JOI_MAILBOXES)
-        who=Who(me,attr(account,'ou') if account is not None else '',manage)
+        who=Who(me,attr(account,'ou') if account is not None else '',manage,user.get('canManageRoles') is True)
         session['desk']={'at':time.time(),'who':who,'teams':teams,'people':people}
         return desk,who,teams,people
     def desk_notify(self, notices):
@@ -2267,10 +2265,13 @@ class Handler(SimpleHTTPRequestHandler):
     def desk_get(self, session, path):
         desk,who,teams,people=self.desk_context(session)
         try:
-            if path=='/api/tickets/meta': return {'teams':teams,'people':people,'department':who.department,'manage':who.manage,'waiting':desk.waiting_on_me(who),'priorities':list(desk_priorities())}
+            if path=='/api/tickets/meta':
+                from tickets import ADMIN_TEAM, PLATFORM_TEAM, PRIORITIES
+                return {'teams':[*teams,ADMIN_TEAM],'raiseTo':[*teams,ADMIN_TEAM,*([PLATFORM_TEAM] if who.manage and not who.platform else [])],'people':people,
+                    'department':who.department,'manage':who.manage,'platform':who.platform,'waiting':desk.waiting_on_me(who),'waitingPlatform':desk.waiting_platform(who),'priorities':PRIORITIES}
             if path.startswith('/api/tickets?'):
                 view=urllib.parse.parse_qs(urllib.parse.urlsplit(path).query).get('view',['mine'])[0]
-                return desk.list(who,view if view in ('mine','team','all') else 'mine')
+                return desk.list(who,view if view in ('mine','team','all','platform') else 'mine')
             return desk.get(who,path.rsplit('/',1)[1])
         except TicketError as e: raise APIError(str(e),e.status)
     def desk_post(self, session, data):
