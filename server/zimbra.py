@@ -2157,7 +2157,7 @@ class Handler(SimpleHTTPRequestHandler):
                 except APIError: return self.redirect('/signin?next=admin') if page else self.send_error(404)
                 if s['user'].get('isAdmin') is not True: return self.redirect(self.server.app_origin+'/') if page else self.send_error(404)
                 if page: self.path='/admin.html'
-            elif not (path.startswith(('/css/','/js/','/assets/')) or path in ('/admin-home.html','/sw.js','/manifest.webmanifest','/admin.webmanifest','/offline.html','/runtime-config.js')):
+            elif not (path.startswith(('/css/','/js/','/assets/','/help/')) or path in ('/admin-home.html','/sw.js','/manifest.webmanifest','/admin.webmanifest','/offline.html','/runtime-config.js')):
                 return self.redirect(self.server.app_origin+self.path)
             return super().do_GET()
         if (path in ('/admin','/admin/') or ADMIN_PAGE.fullmatch(path)) and getattr(self.server,'admin_origin',None):

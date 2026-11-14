@@ -53,6 +53,8 @@ const App = {
       else if(r==="news") Views.updates(el, "dejoiy");
       else if(r==="company") Views.updates(el, "company");
       else if(r==="desk") Views.desk(el, a||undefined);
+      else if(r==="help") Views.help(el);
+      else if(r==="bug"){ history.replaceState(null,"","#/desk"); this.route="desk"; Views.desk(el); Views.deskReport(); }   // the guides' Report a bug button
       else if(r==="settings") Views.settings(el, a||undefined);
       else if(r==="search") this.renderSearch(el, a);
       else Views.today(el);
@@ -391,6 +393,7 @@ const App = {
         {label:"✨ Ask Joi, your AI buddy", fn:()=>JoiDock.open()},
         {label:"🎨 Themes", fn:()=>Themes.openPicker()},
         {label:"⚙️ Settings", fn:()=>this.go("settings")},
+        {label:"📖 Help & guides", fn:()=>this.go("help")},
         ...(Live.enabled ? [{label:"🐞 Report a bug", fn:()=>Views.deskReport()}] : []),
         {sep:true},
         ...others.map(a=>({label:`🔁 Switch to ${a.name||a.email.split("@")[0]} — ${a.email}`, fn:()=>switchTo(a.email)})),

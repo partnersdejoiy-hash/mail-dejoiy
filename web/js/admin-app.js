@@ -26,7 +26,8 @@ const TREE = [
     ["configure/retention","archive","Retention","retention",P],["configure/webhooks","refresh","Webhooks","webhooks"],["configure/api-tokens","shield","API tokens","apiTokens"],["configure/automations","refresh","Automations","automations"]]],
   ["Tools",[["tools/bulk-import","compose","Bulk import","bulkImport"],["tools/mailbox","inbox","Mailbox tools","mailboxTools"],
     ["tools/caches","refresh","Server caches","caches",P]]],
-  ["Search",[["search","search","Search directory","search"]]]
+  ["Search",[["search","search","Search directory","search"]]],
+  ["Help",[["help","note","Admin guide","help"]]]
 ];
 // old #/links keep working
 const LEGACY = {overview:"monitor/overview",users:"manage/accounts",org:"manage/teams",domains:"manage/domains",lists:"manage/lists",
@@ -113,7 +114,7 @@ async function load(){
 function renderSection(){
   const main=$("adm-main"), found=findRoute(state.section);
   if(!found){ navigate("monitor/overview",true); return; }
-  const pages={overview,users,org,domains,lists,policies,reports,shine,plans,settings,tickets,...(window.AdminPages||{})};
+  const pages={overview,users,org,domains,lists,policies,reports,shine,plans,settings,tickets,help,...(window.AdminPages||{})};
   const fn=(found.rest&&pages[found.item[3]+"Detail"])||pages[found.item[3]]||overview;
   document.title=found.item[2]+" · Dejoiy Mail Admin";
   Promise.resolve(fn(main, state.data, helpers, found.rest)).catch(e=>{ main.innerHTML=head(found.item[2])+`<div class="adm-card adm-error">${esc(e.message)}</div>`; });
@@ -342,6 +343,26 @@ async function reports(main, d){
         return `<tr><td><small>${at(x.at)}</small></td><td>${esc(x.actor)}</td><td>${op==="_signin"?"Opened the admin console":op==="_signin_failed"?`<span class="adm-pill bad">Wrong admin password</span>`:esc(OPS[op]||op.replace(/_/g," "))}</td><td>${esc(who(x.target)||"—")}</td><td><small>${esc(x.ip||"—")}</small></td></tr>`; }).join("")}</tbody></table>`
         :`<p class="adm-muted adm-pad">No admin changes recorded yet. Every change made here is listed from now on.</p>`}</div>
     <p class="adm-muted">Kept for 90 days. Passwords and the contents of mail are never recorded.</p>`;
+}
+
+/* Help: the admin guide (web/help/admin-guide.html, made from docs/ADMIN-GUIDE.md by tools/build-guides.py).
+   Our own static page with no scripts. Its Report a bug buttons open the dialog in the mail app. */
+async function help(main){
+  main.innerHTML=head("Admin guide","Loading…");
+  const res=await fetch("/help/admin-guide.html",{cache:"no-cache",credentials:"same-origin"});
+  const page=res.ok?new DOMParser().parseFromString(await res.text(),"text/html").getElementById("guide"):null;
+  if(!page) throw new Error("The guide could not be loaded. Try again in a moment.");
+  page.querySelectorAll("script,iframe,object,embed").forEach(n=>n.remove());
+  const mailApp=$("adm-open-mail").href.replace(/\/?$/,"/");
+  page.querySelectorAll("[data-report-bug]").forEach(a=>{ a.href=mailApp+"#/bug"; a.target="_blank"; a.rel="noopener"; });
+  const box=document.createElement("div"); box.className="adm-guide";
+  box.innerHTML=`<p class="adm-muted"><a href="/help/admin-guide.html" target="_blank" rel="noopener">Open in a new tab</a> · <a href="/help/user-guide.html" target="_blank" rel="noopener">User guide</a></p>`;
+  box.append(...page.childNodes);
+  main.replaceChildren(box);
+  box.addEventListener("click",e=>{   // places in the guide: scroll there instead of changing the console's address
+    const a=e.target.closest("a[href^='#']"); if(!a) return; e.preventDefault();
+    const t=a.getAttribute("href").slice(1); const to=t&&box.querySelector("#"+CSS.escape(t)); if(to) to.scrollIntoView({behavior:"smooth",block:"start"});
+  });
 }
 
 /* Help desk tickets that wait for an admin: what the company's people raised to "Company admin" (and everything else in the

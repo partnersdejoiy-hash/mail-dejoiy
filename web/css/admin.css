@@ -312,3 +312,12 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;backgrou
 .adm-steps{margin-top:12px}.adm-steps li{justify-content:flex-start}
 .adm-fieldset{border:1px solid var(--line);border-radius:10px;padding:10px 12px}.adm-fieldset legend{padding:0 6px;font-size:12.5px;color:var(--ink-2)}
 .adm-logo .adm-bgpreview{width:96px}.adm-logo .adm-bgpreview img{object-fit:cover}
+/* Help → Admin guide (made from docs/ADMIN-GUIDE.md): plain reading, 16px, no sideways scroll on a phone */
+.adm-guide{max-width:46rem;font-size:16px;line-height:1.6;overflow-wrap:anywhere}
+.adm-guide h1{font-size:1.7rem;line-height:1.2;margin:.3em 0 .6em}.adm-guide h2{font-size:1.3rem;margin:1.8em 0 .5em;padding-top:.6em;border-top:1px solid var(--line)}
+.adm-guide h3{font-size:1.1rem;margin:1.4em 0 .4em}.adm-guide p{margin:.6em 0}.adm-guide ul,.adm-guide ol{padding-left:1.4em}.adm-guide li{margin:.25em 0}
+.adm-guide code{font-family:ui-monospace,Menlo,monospace;font-size:.92em;background:var(--line);padding:.1em .35em;border-radius:5px}
+.adm-guide .toc,.adm-guide .bug-box{border:1px solid var(--line);border-radius:10px;padding:10px 16px;margin:1em 0}.adm-guide .bug-box{border-left:4px solid var(--accent)}
+.adm-guide .bug-btn{display:inline-block;padding:.5em 1.1em;border-radius:999px;background:var(--accent);color:#fff;font-weight:600;text-decoration:none}
+.adm-guide blockquote{margin:1em 0;padding:.5em 1em;border-left:4px solid var(--line)}
+.adm-guide .table{overflow-x:auto}.adm-guide table{border-collapse:collapse;width:100%}.adm-guide th,.adm-guide td{border:1px solid var(--line);padding:.45em .6em;text-align:left;vertical-align:top}
