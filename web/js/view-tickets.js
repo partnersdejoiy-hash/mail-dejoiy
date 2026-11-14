@@ -10,6 +10,10 @@ const STATUS = {open:"Open", in_progress:"In progress", waiting:"Waiting for req
 const when = ts => new Date(ts*1000).toLocaleString([], {day:"numeric", month:"short", hour:"2-digit", minute:"2-digit"});
 const who = email => (email||"").split("@")[0];
 let meta = null, view = "mine";
+/* Common things people ask for: picking one fills the title and, when the company has that department, the team. */
+const TOPICS = [["Laptop, computer or internet","IT Support"],["Password or sign-in","IT Support"],["Email or app not working","IT Support"],
+  ["Leave or attendance","Human Resources"],["Salary, payslip or reimbursement","Finance & Accounts"],["Letter or document from HR","Human Resources"],
+  ["ID card, seat or office facility","Admin & Facilities"],["Shift or roster","Workforce Management"],["Training","Training"],["Something else",""]];
 
 const pill = (kind, value, text) => `<span class="tk-pill tk-${kind}-${esc(value)}">${esc(text)}</span>`;
 
@@ -67,13 +71,24 @@ function create(preset={}){
       .catch(error=>{ button.disabled=false; note.textContent=error.message; });
     return false;
   };
+  const onlyAdmins = meta.raiseTo.every(t=>t==="Company admin"||t==="Dejoiy platform");
   App.dialog({title:"New ticket", wide:true, body:`
+    ${preset.subject?"":`<div class="field"><label for="tn-topic">What is it about?</label><select id="tn-topic"><option value="">Choose a topic…</option>${TOPICS.map(([name])=>`<option>${esc(name)}</option>`).join("")}</select></div>`}
     <div class="field"><label for="tn-subject">What do you need? (short title)</label><input type="text" id="tn-subject" maxlength="160" placeholder="Laptop will not start" value="${esc(preset.subject||"")}"></div>
-    <div class="grid c2"><div class="field"><label for="tn-team">Which team should handle it?</label><select id="tn-team">${meta.raiseTo.map(t=>`<option value="${esc(t)}" ${t===preset.team?"selected":""}>${esc(t==="Company admin"?"Company admin (your company's mail admins)":t==="Dejoiy platform"?"Dejoiy platform (the Dejoiy team)":t)}</option>`).join("")}</select></div>
+    <div class="grid c2"><div class="field"><label for="tn-team">Which team should handle it?</label><select id="tn-team">${meta.raiseTo.map(t=>`<option value="${esc(t)}" ${t===preset.team?"selected":""}>${esc(t==="Company admin"?"Company admin (your company's mail admins)":t==="Dejoiy platform"?"Dejoiy platform (the Dejoiy team)":t)}</option>`).join("")}</select>
+        ${onlyAdmins?`<p class="hint">Your company has not set up departments yet, so tickets go to its mail admins.</p>`:""}</div>
       <div class="field"><label for="tn-priority">How urgent is it?</label><select id="tn-priority">${Object.entries(PRIORITY).map(([id,label])=>`<option value="${id}" ${id==="normal"?"selected":""}>${label} · answer within ${meta.priorities?.[id]||""} hours</option>`).join("")}</select></div></div>
     <div class="field"><label for="tn-body">Details</label><textarea id="tn-body" rows="6" maxlength="8000" placeholder="${esc(preset.hint||"What happened, since when, and what you already tried.")}"></textarea></div>
     <p id="tn-note" role="alert" class="field-error"></p>`,
     actions:[{label:"Cancel"},{label:"Send ticket", primary:true, fn:send}]});
+  document.getElementById("tn-topic")?.addEventListener("change", e=>{
+    const [name, team] = TOPICS.find(([n])=>n===e.target.value) || [];
+    if(!name) return;
+    const subject=document.getElementById("tn-subject"), teams=document.getElementById("tn-team");
+    if(name!=="Something else" && (!subject.value.trim() || TOPICS.some(([n])=>subject.value===n+": "))) subject.value=name+": ";
+    if(team && meta.raiseTo.includes(team)) teams.value=team;
+    subject.focus(); subject.setSelectionRange(subject.value.length, subject.value.length);
+  });
 }
 
 async function ticket(el, number){

@@ -60,3 +60,16 @@ class PhoneSettings(unittest.TestCase):
     def test_only_known_values(self):
         for bad in ({'phoneBg': 'yes'}, {'phoneBg': True}, {'appLook': 'neon'}):
             with self.assertRaises(z.APIError): z.clean_ui_settings(bad)
+
+
+class OutOfOfficeDays(unittest.TestCase):
+    """The first and last day are the person's own days, not UTC days."""
+    def test_a_day_in_india_starts_at_indian_midnight(self):
+        import zimbra as z
+        self.assertEqual(z.Zimbra.day_to_utc('2026-11-15', False, 330), '20261114183000Z')   # 00:00 IST
+        self.assertEqual(z.Zimbra.day_to_utc('2026-11-17', True, 330), '20261117182959Z')    # 23:59:59 IST
+        self.assertEqual(z.Zimbra.utc_to_day('20261114183000Z', 330), '2026-11-15')
+        self.assertEqual(z.Zimbra.utc_to_day('20261117182959Z', 330), '2026-11-17')
+        self.assertEqual(z.Zimbra.day_to_utc('2026-11-15', False, -480), '20261115080000Z')  # behind UTC
+        self.assertEqual(z.Zimbra.day_to_utc('2026-11-15', False, 0), '20261115000000Z')
+        with self.assertRaises(ValueError): z.Zimbra.day_to_utc('2026-02-31', False, 330)

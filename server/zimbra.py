@@ -5,6 +5,7 @@ import os
 import re
 import secrets
 import time
+import calendar
 import threading
 import sqlite3
 import ipaddress
@@ -1174,7 +1175,16 @@ class Zimbra:
     # ---------- mailbox settings ----------
     # Each setting the web app offers maps onto a real mailbox preference, so it follows the
     # user to every device and to other mail apps. Only these keys can be written.
-    def account_settings(self, token):
+    # Out-of-office days are the person's own days: "from the 15th" starts at their midnight, not London's.
+    # tz is their clock's distance from UTC in minutes (India: 330).
+    @staticmethod
+    def day_to_utc(day, end, tz):
+        local=calendar.timegm(time.strptime(day+(' 23:59:59' if end else ' 00:00:00'),'%Y-%m-%d %H:%M:%S'))
+        return time.strftime('%Y%m%d%H%M%SZ',time.gmtime(local-tz*60))
+    @staticmethod
+    def utc_to_day(value, tz):
+        return time.strftime('%Y-%m-%d',time.gmtime(calendar.timegm(time.strptime(value,'%Y%m%d%H%M%SZ'))+tz*60))
+    def account_settings(self, token, tz=0):
         out=self.call(node(ACCOUNT,'GetPrefsRequest'),token)
         prefs={p.get('name'):p.text or '' for p in out.findall('{'+ACCOUNT+'}pref')}
         result={}
@@ -1182,13 +1192,13 @@ class Zimbra:
             value=prefs.get(name,'')
             if kind=='bool': result[key]=value=='TRUE'
             elif kind=='notbool': result[key]=value!='TRUE'
-            elif kind=='date': result[key]=f'{value[:4]}-{value[4:6]}-{value[6:8]}' if re.fullmatch(r'\d{14}Z',value) else ''
+            elif kind=='date': result[key]=self.utc_to_day(value,tz) if re.fullmatch(r'\d{14}Z',value) else ''
             else: result[key]=value
         suppress=prefs.get('zimbraPrefOutOfOfficeSuppressExternalReply')=='TRUE'
         senders=prefs.get('zimbraPrefExternalSendersType','ALL')
         result['vacationAudience']='everyone' if not suppress else 'contacts' if senders=='ALLNOTINAB' else 'company'
         return result
-    def save_account_settings(self, token, data):
+    def save_account_settings(self, token, data, tz=0):
         if not isinstance(data,dict) or not data or len(data)>len(PREF_FIELDS)+1: raise APIError('Choose a setting to change.')
         values={}
         for key,value in data.items():
@@ -1221,15 +1231,14 @@ class Zimbra:
             elif kind=='date':
                 if value=='': values[name]=''
                 elif isinstance(value,str) and re.fullmatch(r'\d{4}-\d{2}-\d{2}',value):
-                    try: time.strptime(value,'%Y-%m-%d')
+                    try: values[name]=self.day_to_utc(value,rest[0]=='235959Z',tz)
                     except ValueError: raise APIError(label+' is not a valid date.')
-                    values[name]=value.replace('-','')+rest[0]
                 else: raise APIError(label+' is not a valid date.')
         if values.get('zimbraPrefOutOfOfficeFromDate') and values.get('zimbraPrefOutOfOfficeUntilDate') and values['zimbraPrefOutOfOfficeUntilDate']<values['zimbraPrefOutOfOfficeFromDate']:
             raise APIError('The last day must be on or after the first day.')
         r=node(ACCOUNT,'ModifyPrefsRequest')
         for key,value in values.items(): r.append(node(ACCOUNT,'pref',{'name':key},value))
-        self.call(r,token); return self.account_settings(token)
+        self.call(r,token); return self.account_settings(token,tz)
     def account_info(self, token):
         out=self.call(node(ACCOUNT,'GetInfoRequest',{'sections':'mbox,attrs'}),token)
         attrs={a.get('name'):a.text or '' for a in out.findall('.//{'+ACCOUNT+'}attr')}
@@ -1996,6 +2005,10 @@ class Handler(SimpleHTTPRequestHandler):
             # Pages are re-checked on every visit, so a deploy shows up at once; their CSS/JS carry ?v= and may cache.
             self.send_header('Cache-Control','no-cache')
         super().end_headers()
+    def tz_minutes(self):
+        """The browser's clock, minutes ahead of UTC (sent with every request). India's when a page does not say."""
+        raw=self.headers.get('X-Timezone-Offset','')
+        return int(raw) if re.fullmatch(r'-?\d{1,3}',raw) and -840<=int(raw)<=840 else 330
     def reply(self, status, data, cookie=None):
         raw=json.dumps(data).encode(); self.send_response(status)
         self.send_header('Content-Type','application/json'); self.send_header('Cache-Control','no-store')
@@ -2109,7 +2122,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if self.path=='/api/preferences': return self.reply(200,self.server.zimbra.preferences(s['token']))
                 if self.path=='/api/appearance': return self.reply(200,self.server.appearance.get(self.account(s)))
                 if self.path=='/api/settings':
-                    return self.reply(200,{'mailbox':self.server.zimbra.account_settings(s['token']),'ui':self.server.ui_settings.get(self.account(s)),
+                    return self.reply(200,{'mailbox':self.server.zimbra.account_settings(s['token'],self.tz_minutes()),'ui':self.server.ui_settings.get(self.account(s)),
                         'account':self.server.zimbra.account_info(s['token']),'server':{'host':self.server.mail_host}})
                 if self.path=='/api/account': return self.reply(200,self.server.zimbra.account_info(s['token']))
                 if self.path=='/api/labels': return self.reply(200,self.server.zimbra.labels(s['token']))
@@ -3357,7 +3370,7 @@ class Handler(SimpleHTTPRequestHandler):
             if self.path=='/api/preferences': return self.reply(200,self.server.zimbra.save_preferences(s['token'],data))
             if self.path=='/api/settings':
                 result={}
-                if 'mailbox' in data: result['mailbox']=self.server.zimbra.save_account_settings(s['token'],data['mailbox'])
+                if 'mailbox' in data: result['mailbox']=self.server.zimbra.save_account_settings(s['token'],data['mailbox'],self.tz_minutes())
                 if 'ui' in data:
                     merged={**self.server.ui_settings.get(self.account(s)),**clean_ui_settings(data['ui'])}
                     self.server.ui_settings.put(self.account(s),clean_ui_settings(merged)); result['ui']=merged

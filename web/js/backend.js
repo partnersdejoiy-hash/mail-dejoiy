@@ -75,7 +75,7 @@ const Passkey={
 window.Passkey=Passkey;
 const Live={enabled:!!window.DEJOIY_LIVE,csrf:'',more:false,avatars:{},
   async request(path,data){
-    const response=await fetch('/api/'+path,{method:data===undefined?'GET':'POST',credentials:'same-origin',headers:data===undefined?{}:{'Content-Type':'application/json','X-CSRF-Token':this.csrf},body:data===undefined?undefined:JSON.stringify(data)});
+    const response=await fetch('/api/'+path,{method:data===undefined?'GET':'POST',credentials:'same-origin',headers:{'X-Timezone-Offset':String(-new Date().getTimezoneOffset()),...(data===undefined?{}:{'Content-Type':'application/json','X-CSRF-Token':this.csrf})},body:data===undefined?undefined:JSON.stringify(data)});
     // nginx answers some failures itself with an HTML page (too large, timeout); never show "Unexpected token <".
     let result;
     try{ result=await response.json(); }
