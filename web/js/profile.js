@@ -23,8 +23,8 @@ const Profile = {
      mailboxes see their colleagues' photos; the demo only knows your own. */
   photo(email){
     const key=String(email||"").toLowerCase(); if(!key) return "";
+    if(JOI.has(key)) return "/assets/brand/joi-profile.png?v=9";  // Joi always looks like her letters, even if her mailbox has an old upload
     if(window.Live?.enabled){ const v=Live.avatars?.[key]; if(v) return `/api/avatar?email=${encodeURIComponent(key)}&v=${v}`; }
-    if(JOI.has(key)) return "/assets/brand/joi-profile.png?v=9";
     if(window.Live?.enabled) return "";
     return key===String(Store.state.user.email||"").toLowerCase() ? (Store.state.prefs.avatar||"") : "";
   },
