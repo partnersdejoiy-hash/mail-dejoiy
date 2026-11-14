@@ -202,7 +202,10 @@ const App = {
   toast(msg, action){
     // Code errors are logged, not shown: people get a plain message instead of "Cannot read properties…".
     if(/Cannot read prop|is not a function|is not defined|undefined \(reading/.test(String(msg))){ console.error(msg); msg="Something went wrong. Please try again."; }
-    const t = document.createElement("div"); t.className="toast"; t.textContent = msg;
+    // the same notice again while it is still showing is one notice, not a pile of them
+    const root0 = document.getElementById("toast-root"), same = !action && [...root0.children].find(x=>x.dataset.msg===String(msg));
+    if(same) return same;
+    const t = document.createElement("div"); t.className="toast"; t.textContent = msg; t.dataset.msg = String(msg);
     if(action){ const b=document.createElement("button"); b.type="button"; b.className="toast-action"; b.textContent=action.label;
       b.addEventListener("click", ()=>{ t.remove(); action.fn(); }); t.appendChild(b); }
     const root = document.getElementById("toast-root"); root.appendChild(t);

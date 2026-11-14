@@ -35,4 +35,19 @@ class Styles(unittest.TestCase):
         self.assertNotRegex(out, r'script|iframe|onmouseover|javascript|<style|face=|color="red"')
         self.assertIn('<hr>', out); self.assertIn('<font>f</font>', out); self.assertIn('<a style="color:blue">l</a>', out)
 
+class JoiPictures(unittest.TestCase):
+    def test_only_picture_files_on_jois_own_site(self):
+        rule = z.joi_image_rule('https://joi-ai.dejoiy.com/')
+        for ok in ('https://joi-ai.dejoiy.com/email/joi-peek.gif?v=8', 'https://joi-ai.dejoiy.com/joi-avatar.webp', 'https://joi-ai.dejoiy.com/email/dmail-logo.gif'):
+            self.assertTrue(rule.fullmatch(ok), ok)
+        for bad in ('https://joi-ai.dejoiy.com.evil.test/email/x.gif', 'https://evil.test/https://joi-ai.dejoiy.com/email/x.gif', 'http://joi-ai.dejoiy.com/email/x.gif',
+                    'https://joi-ai.dejoiy.com/email/../api/x.gif', 'https://joi-ai.dejoiy.com/email/x.gif?u=deepak', 'https://joi-ai.dejoiy.com/api/track?id=1',
+                    'https://joi-ai.dejoiy.com/email/x.svg', 'https://joi-ai.dejoiy.com/email/x.gif#y'):
+            self.assertFalse(rule.fullmatch(bad), bad)
+
+    def test_a_mail_from_joi_keeps_her_pictures_and_drops_everyone_elses(self):
+        box = z.Zimbra.__new__(z.Zimbra); box.media_prefix = 'https://mail.dejoiy.com/media/'; box.joi_images = z.joi_image_rule('https://joi-ai.dejoiy.com')
+        out = z.safe_html('<img src="https://joi-ai.dejoiy.com/email/joi-peek.gif?v=8" width="150" height="140" alt="Joi"><img src="https://tracker.test/p.gif">', box.own_image, styled=True)
+        self.assertIn('joi-peek.gif?v=8', out); self.assertNotIn('tracker.test', out)
+
 if __name__ == '__main__': unittest.main()

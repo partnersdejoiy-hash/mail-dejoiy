@@ -751,7 +751,7 @@ def joi_template(inner, app_url):
         f'<tr><td style="padding:18px 22px 0 28px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>'
         f'<td valign="middle"><div style="font:800 34px/1 {font};color:#121212;letter-spacing:-1px">Joi</div>'
         f'<div style="font:600 13px/1.4 {font};color:#5b5560;padding-top:4px">your buddy from DEJOIY</div></td>'
-        f'<td valign="bottom" align="right" width="150"><img src="{a}joi-peek.gif?v=7" width="150" height="140" alt="Joi peeking out to say hi" style="display:block;border:0;width:150px;height:140px"></td>'
+        f'<td valign="bottom" align="right" width="150"><img src="{a}joi-peek.gif?v=8" width="150" height="140" alt="Joi peeking out to say hi" style="display:block;border:0;width:150px;height:140px"></td>'
         f'</tr></table></td></tr>'
         f'<tr><td style="background:#d4f53c;padding:9px 28px;border-top:2px solid #121212;border-bottom:2px solid #121212;font:700 13px/1.4 {font};color:#121212">Joi is feeling: happy to write to you</td></tr>'
         f'<tr><td style="padding:26px 28px 10px;color:#121212;font:400 16px/1.6 {font}">{inner}'
@@ -770,6 +770,9 @@ def safe_html(value, images=None, styled=False):
     out=''.join(parser.parts)+''.join('</'+t+'>' for t in reversed(parser.stack))
     return '<div class="mail-html">'+out+'</div>' if parser.designed else out
 
+def joi_image_rule(joi_url):
+    """Matches a picture file on Joi's own site and nothing else (no other host, no path tricks, no query but ?v=)."""
+    return re.compile(re.escape(joi_url.rstrip('/'))+r'/(?:[A-Za-z0-9_-]{1,60}/){0,3}[A-Za-z0-9_-]{1,80}\.(?:gif|png|jpe?g|webp)(?:\?v=[A-Za-z0-9._-]{1,20})?')
 def web_image(src):
     """Images a sender deliberately put in their own message: plain https links only."""
     return bool(re.fullmatch(r'https://[^\s"\'<>\\]{1,2000}',src))
@@ -853,9 +856,11 @@ class Zimbra:
             if f.get('name')=='Archive' and f.get('l')=='1': mapping['archive']=f.get('id')
         return mapping
     media_prefix=''  # public address of signature images, set when the server starts
+    joi_images=None  # pictures on Joi's own site (her letters' header and logo), set when the server starts
     app_url='https://mail.dejoiy.com'  # linked from the footer of every message sent
     def own_image(self, src):
         # Only our own hosted signature images are shown; other remote images could track the reader.
+        if self.joi_images and self.joi_images.fullmatch(src): return True   # Joi is ours: her letters show their pictures
         return bool(self.media_prefix) and src.startswith(self.media_prefix) and bool(MEDIA_NAME.fullmatch(src[len(self.media_prefix):]))
     def messages(self, token, offset=0):
         folders=self.folder_map(token); reverse={v:k for k,v in folders.items()}; result=[]; more=False
@@ -2972,7 +2977,9 @@ def serve():
     server.api_tokens=ApiTokens(state_dir/'api-tokens.json') if state_dir else None
     server.avatars=AvatarStore(str(state_dir/'avatars.sqlite') if state_dir else None)
     server.media=MediaStore(str(state_dir/'media') if state_dir else None)
-    if server.zimbra: server.zimbra.media_prefix=server.app_origin+'/media/'; server.zimbra.app_url=server.app_origin
+    if server.zimbra:
+        server.zimbra.media_prefix=server.app_origin+'/media/'; server.zimbra.app_url=server.app_origin
+        if server.joi_url.startswith('https://'): server.zimbra.joi_images=joi_image_rule(server.joi_url)
     # whose Authentication-Results stamp we trust on incoming mail: our own mail server's name (AUTH_SERVER_ID if it stamps under another)
     if server.zimbra: server.zimbra.authserv=os.environ.get('AUTH_SERVER_ID') or os.environ.get('MAIL_HOST') or urllib.parse.urlsplit(origin).hostname
     admin_url=os.environ.get('ZIMBRA_ADMIN_URL'); server.admin=Admin(admin_url) if admin_url else None
