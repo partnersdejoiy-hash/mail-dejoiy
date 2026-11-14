@@ -269,3 +269,49 @@ html .reader.own-design .ai-note{background:rgba(255,255,255,.55);color:#121212}
 
 /* a problem inside a dialog form (add account) */
 .field-error{min-height:1.2em;margin:4px 0 0;color:#c0263f;font-size:13px}
+
+/* ---- Help desk: the company's own internal tickets ---- */
+.tk{max-width:980px;margin:0 auto;padding-bottom:96px}   /* room for the floating Chat button */
+.tk .view-head .spacer{flex:1}
+.tk-note{margin:0 0 14px;padding:10px 14px;border:1px solid var(--line);border-radius:10px;color:var(--ink-2);font-size:13.5px}
+.tk-tabs{margin-bottom:14px}
+.tk-list{display:grid;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--surface)}
+.tk-row{display:grid;grid-template-columns:64px minmax(0,1fr) auto auto 96px;align-items:center;gap:12px;padding:12px 16px;border:0;border-bottom:1px solid var(--line);background:none;color:var(--ink);font:inherit;text-align:left;cursor:pointer}
+.tk-row:last-child{border-bottom:0}
+.tk-row:hover{background:var(--active)}
+.tk-row:focus-visible,.tk-set select:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.tk-code{font-variant-numeric:tabular-nums;font-size:12.5px;font-weight:700;color:var(--ink-2)}
+.tk-main{display:grid;min-width:0}
+.tk-main b{font-size:14.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tk-main small{font-size:12.5px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tk-when{font-size:12.5px;color:var(--ink-2);text-align:right}
+.tk-row.late .tk-when b{color:#b3261e}
+.tk-pill{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:999px;font-size:11.5px;font-weight:700;white-space:nowrap;background:var(--surface-2);color:var(--ink-2)}
+.tk-pri-high{background:#ffe8cc;color:#8a4b00}.tk-pri-urgent,.tk-late{background:#ffd9d6;color:#8c1d18}
+.tk-st-open{background:#dbe7ff;color:#12408f}.tk-st-in_progress{background:#fff1c2;color:#6b4e00}.tk-st-waiting{background:#ecdcff;color:#4f2a8a}
+.tk-st-resolved{background:#d3f2dc;color:#145c2c}.tk-internal{background:#fff1c2;color:#6b4e00}
+.tk-top{margin-bottom:14px}
+.tk-head h1{margin:2px 0 10px;font-size:24px;font-weight:650;letter-spacing:-.01em;text-wrap:balance}
+.tk-meta{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin:0 0 16px;font-size:13px;color:var(--ink-2)}
+.tk-actions{display:flex;flex-wrap:wrap;gap:12px;margin:0 0 18px;padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.tk-set{display:grid;gap:4px;min-width:150px;flex:1;font-size:12px;font-weight:600;color:var(--ink-2)}
+.tk-set select{height:38px;padding:0 10px;border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--ink);font:inherit;font-size:14px}
+.tk-thread{list-style:none;display:grid;gap:10px;margin:0 0 18px;padding:0}
+.tk-note-item{padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.tk-note-item.internal{border-style:dashed;background:color-mix(in srgb,#fff1c2 30%,var(--surface))}
+.tk-by{margin:0 0 6px;font-size:12.5px;color:var(--ink-2)}
+.tk-by b{color:var(--ink);font-weight:600}
+.tk-text{white-space:pre-wrap;overflow-wrap:anywhere;font-size:14.5px;line-height:1.55;max-width:70ch}
+.tk-change{padding:0 16px;font-size:12.5px;color:var(--ink-2)}
+.tk-reply{display:grid;gap:8px}
+.tk-reply label{font-size:12.5px;font-weight:600;color:var(--ink-2)}
+.tk-reply textarea,.dlg #tn-body{width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);font:inherit;font-size:14.5px;line-height:1.5;resize:vertical}
+.tk-reply-foot{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.tk-check{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:400;color:var(--ink-2)}
+@media (max-width:680px){
+  .tk{padding:0 12px 24px}
+  .tk-row{grid-template-columns:minmax(0,1fr) auto;gap:6px 10px;padding:12px 14px}
+  .tk-row .tk-pill{justify-self:start}
+  .tk-row .tk-code{display:none}.tk-row .tk-main{grid-column:1/-1}.tk-row .tk-when{grid-column:1/-1;text-align:left}
+  .tk-head h1{font-size:21px}
+}

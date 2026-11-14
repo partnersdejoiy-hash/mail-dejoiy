@@ -1,5 +1,5 @@
 """Departments and roles in the admin console, against a fake mail server."""
-import os, sys, unittest
+import json, os, sys, unittest
 from xml.etree import ElementTree as ET
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'server'))
 import zimbra as z
@@ -70,3 +70,21 @@ class OrgTests(unittest.TestCase):
         self.assertEqual(z.read_org(notes)['boxName'], 'Kaali Tea News')
 
 if __name__ == '__main__': unittest.main()
+
+
+class CompactOrg(unittest.TestCase):
+    """Roles and policies are stored in a short form, because the mail server keeps a domain's notes to about 1024 characters."""
+    def test_thirty_roles_fit_and_come_back_the_same(self):
+        roles = [{'name': f'Quality Analyst {i:02d}', 'access': 'Domain admin' if i % 3 == 0 else 'User',
+                  'perms': sorted(z.PERMISSIONS) if i % 3 == 0 else (['tickets.manage', 'updates.post'] if i % 2 else [])} for i in range(30)]
+        notes = z.write_org('', roles=roles)
+        self.assertLessEqual(len(notes), z.ORG_NOTES_LIMIT)
+        self.assertEqual(z.read_org(notes)['roles'], roles)
+    def test_old_long_form_is_still_read_and_policies_survive(self):
+        old = json.dumps({'dejoiyRoles': [{'name': 'CEO', 'access': 'Domain admin', 'perms': ['roles.manage', 'updates.post']}], 'companyBox': 'Notice board',
+                          'mailPolicies': [{'name': 'Strict', 'rules': {**z.standard_policy()['rules'], 'forwarding': False, 'trashDays': 14}}], 'defaultPolicy': 'Strict'})
+        before = z.read_org(old); after = z.read_org(z.write_org(old))
+        self.assertEqual(after, before); self.assertEqual(after['policies'][0]['rules']['forwarding'], False); self.assertEqual(after['boxName'], 'Notice board')
+    def test_too_much_is_refused_with_a_reason(self):
+        roles = [{'name': 'x' * 40 + str(i), 'access': 'User', 'perms': []} for i in range(30)]
+        with self.assertRaises(z.APIError): z.write_org('', roles=roles)

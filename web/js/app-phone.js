@@ -45,7 +45,7 @@ const Phone = {
   /* header title: where you are, and how much is unread */
   sync(){
     const title = document.getElementById("ph-title"); if (!title || !App.route) return;
-    const route = App.route, names = {today: "Home", calendar: "Calendar", contacts: "Contacts", settings: "Settings", notes: "Notes", chat: "Chat", compose: "New message", search: "Search"};
+    const route = App.route, names = {today: "Home", calendar: "Calendar", contacts: "Contacts", desk: "Help desk", settings: "Settings", notes: "Notes", chat: "Chat", compose: "New message", search: "Search"};
     let name = names[route] || "Dejoiy Mail", sub = "";
     if (route === "mail") {
       name = Mail.folderName(App.ui.folder);

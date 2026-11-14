@@ -27,6 +27,7 @@ import zconsole
 from webhooks import Webhooks, WebhookError
 from newmail import NewMailWatcher
 import relay
+from tickets import Tickets, TicketError, Who
 from automations import Automations, AutomationError
 from apitokens import ApiTokens, TokenError, SCOPES as API_SCOPES
 from undelivered import Undelivered
@@ -456,6 +457,9 @@ def team_groups(people, domain):
 def team_members(people, domain, kind, slug):
     """The active mailboxes of one company in one department or with one designation."""
     return [p['email'] for p in people if p['active'] and p['email'].rsplit('@',1)[1]==domain and group_slug(p['a'].get(TEAM_FIELD[kind]))==slug.lower()]
+def desk_priorities():
+    from tickets import PRIORITIES
+    return PRIORITIES
 def host_points_here(host, mail_host, lookup=None):
     """True when the address reaches this mail server: a CNAME to it, or the same A records."""
     lookup=lookup or dns_lookup
@@ -1486,8 +1490,12 @@ def whole(data, key, low, high, message):
 DEPARTMENT_MARK='dejoiy:department'
 # What a role may do. Console permissions need company-admin access; posting needs none.
 PERMISSIONS={'updates.post':'Post in the company box','mailboxes.manage':'Add and edit mailboxes','mailboxes.delete':'Delete mailboxes',
-    'teams.manage':'Manage departments and team lists','domain.view':'See the DNS setup','roles.manage':'Manage roles, permissions and the company box'}
-CONSOLE_PERMISSIONS=set(PERMISSIONS)-{'updates.post'}
+    'teams.manage':'Manage departments and team lists','domain.view':'See the DNS setup','roles.manage':'Manage roles, permissions and the company box',
+    'tickets.manage':'See and handle every help desk ticket'}
+CONSOLE_PERMISSIONS=set(PERMISSIONS)-{'updates.post','tickets.manage'}
+# The order permissions are stored in (one bit each). Only ever add at the end: saved roles depend on it.
+PERM_ORDER=('updates.post','mailboxes.manage','mailboxes.delete','teams.manage','domain.view','roles.manage','tickets.manage')
+ORG_NOTES_LIMIT=1000   # the mail server keeps a domain's notes to about 1024 characters
 DEFAULT_ROLES=[{'name':'Member','access':'User','perms':[]},{'name':'Team lead','access':'User','perms':['updates.post']},
     {'name':'Department head','access':'User','perms':['updates.post']},{'name':'IT admin','access':'Domain admin','perms':sorted(PERMISSIONS)}]
 OP_PERMISSIONS={**{op:'mailboxes.manage' for op in ('create_user','set_name','status','password','quota','forward','add_alias','remove_alias','set_plan')},
@@ -1533,6 +1541,12 @@ def read_org(notes):
     try: data=json.loads(notes or '')
     except ValueError: data=None
     data=data if isinstance(data,dict) else {}
+    if isinstance(data.get('r'),list):   # the short form (see write_org): roles as [name, admin?, permission bits], policies as differences from Standard
+        standard=standard_policy()['rules']
+        data={'dejoiyRoles':[{'name':r[0],'access':'Domain admin' if r[1] else 'User','perms':[p for i,p in enumerate(PERM_ORDER) if r[2]>>i&1]}
+                for r in data['r'] if isinstance(r,list) and len(r)==3 and isinstance(r[0],str) and isinstance(r[2],int) and not isinstance(r[2],bool)],
+            'companyBox':data.get('b'),'defaultPolicy':data.get('d'),
+            'mailPolicies':[{'name':p[0],'rules':{**standard,**p[1]}} for p in data.get('p') or [] if isinstance(p,list) and len(p)==2 and isinstance(p[1],dict)]}
     roles=[]
     for role in data.get('dejoiyRoles') or []:
         if not isinstance(role,dict) or not isinstance(role.get('name'),str): continue
@@ -1551,7 +1565,13 @@ def read_org(notes):
 def read_roles(notes): return read_org(notes)['roles']
 def write_org(notes, **changes):
     current=read_org(notes); current.update(changes)
-    return json.dumps({'dejoiyRoles':current['roles'],'companyBox':current['boxName'],'mailPolicies':current['policies'],'defaultPolicy':current['defaultPolicy']},separators=(',',':'))
+    # Kept short, because the domain's notes hold about 1024 characters: 30 roles and a few policies must fit.
+    standard=standard_policy()['rules']
+    out=json.dumps({'r':[[r['name'],1 if r['access']=='Domain admin' else 0,sum(1<<i for i,p in enumerate(PERM_ORDER) if p in r['perms'])] for r in current['roles']],
+        'b':current['boxName'],'d':current['defaultPolicy'],
+        'p':[[p['name'],{k:v for k,v in p['rules'].items() if standard.get(k)!=v}] for p in current['policies']]},separators=(',',':'),ensure_ascii=False)
+    if len(out)>ORG_NOTES_LIMIT: raise APIError('That is more than the mail server can keep for one company. Use shorter role or policy names, or fewer of them.')
+    return out
 def role_perms(roles, title, is_admin):
     """A person's permissions: their role's, or everything for a company admin without a role (the owner)."""
     role=next((r for r in roles if title and r['name'].lower()==title.lower()),None)
@@ -2086,6 +2106,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if self.path=='/api/supervisors': return self.reply(200,self.supervisors(s))
                 if self.path=='/api/groups': return self.reply(200,self.team_groups(s))
                 if self.path=='/api/accounts': return self.reply(200,self.accounts_view(sid,s))
+                if self.path.split('?',1)[0]=='/api/tickets' or self.path.startswith('/api/tickets/'): return self.reply(200,self.desk_get(s,self.path))
                 if self.path=='/api/joi': return self.reply(200,self.joi(s,sid))
                 if self.path=='/api/avatars': return self.reply(200,{'avatars':self.avatar_versions()})
                 if self.path.startswith('/api/bimi?'):
@@ -2214,6 +2235,50 @@ class Handler(SimpleHTTPRequestHandler):
         elif draft_id: kept=' Your message is saved in Drafts and was not sent.'
         else: kept=' The message was not sent. Copy your text before leaving this page.'
         self.reply(error.status if error.status>=400 else 502,{'error':str(error)+note+kept,'draftId':draft_id,'notSent':True})
+    # ---------- help desk: the company's own internal tickets ----------
+    def desk_context(self, session):
+        """Who is asking (their department, and whether their role handles every ticket), the company's departments and its people.
+        Looked up on the mail server and kept for two minutes per session."""
+        desk=getattr(self.server,'tickets',None); provisioner=getattr(self.server,'provisioner',None)
+        if not desk or not provisioner: raise APIError('The help desk is not switched on for this server.',503)
+        kept=session.get('desk')
+        if kept and kept['at']>time.time()-120: return desk,kept['who'],kept['teams'],kept['people']
+        me=session['user']['email'].lower(); domain=self.domain(session); token=provisioner.token(); admin=provisioner.admin
+        lookup=node(ADMIN,'GetAccountRequest'); lookup.append(node(ADMIN,'account',{'by':'name'},me))
+        account=admin.call(lookup,token).find('{'+ADMIN+'}account')
+        found=node(ADMIN,'GetDomainRequest'); found.append(node(ADMIN,'domain',{'by':'name'},domain))
+        notes=attr(admin.call(found,token).find('{'+ADMIN+'}domain'),'zimbraNotes')
+        manage='tickets.manage' in role_perms(read_roles(notes),attr(account,'title') if account is not None else '',bool(session['user'].get('isAdmin')))
+        lists=node(ADMIN,'GetAllDistributionListsRequest'); lists.append(node(ADMIN,'domain',{'by':'name'},domain))
+        teams=sorted({attr(d,'displayName') or d.get('name','').split('@')[0] for d in admin.call(lists,token).findall('{'+ADMIN+'}dl') if attr(d,'zimbraNotes')==DEPARTMENT_MARK})
+        people=sorted(a.lower() for a in domain_mailboxes(provisioner,domain) if a.lower() not in JOI_MAILBOXES)
+        who=Who(me,attr(account,'ou') if account is not None else '',manage)
+        session['desk']={'at':time.time(),'who':who,'teams':teams,'people':people}
+        return desk,who,teams,people
+    def desk_notify(self, notices):
+        """A ticket changed: a short note lands in the inbox of the people it concerns (best effort, never blocks the answer)."""
+        mail=getattr(self.server,'desk_mail',None)
+        if not mail or not notices: return
+        def send():
+            for email,subject,text in notices:
+                try: mail.remind(email,'Help desk: '+subject,text+'\n\nOpen Help desk in Dejoiy Mail to answer.')
+                except Exception: pass
+        threading.Thread(target=send,daemon=True).start()
+    def desk_get(self, session, path):
+        desk,who,teams,people=self.desk_context(session)
+        try:
+            if path=='/api/tickets/meta': return {'teams':teams,'people':people,'department':who.department,'manage':who.manage,'waiting':desk.waiting_on_me(who),'priorities':list(desk_priorities())}
+            if path.startswith('/api/tickets?'):
+                view=urllib.parse.parse_qs(urllib.parse.urlsplit(path).query).get('view',['mine'])[0]
+                return desk.list(who,view if view in ('mine','team','all') else 'mine')
+            return desk.get(who,path.rsplit('/',1)[1])
+        except TicketError as e: raise APIError(str(e),e.status)
+    def desk_post(self, session, data):
+        desk,who,teams,people=self.desk_context(session)
+        try: ticket,notices=desk.create(who,data,teams) if data.get('op')=='create' else desk.act(who,data,people,teams)
+        except TicketError as e: raise APIError(str(e),e.status)
+        self.desk_notify(notices)
+        return {'ticket':ticket}
     def relay_route(self, session, data):
         """The company's own mail service this message should leave through, or None for the usual way."""
         relays=getattr(self.server,'relays',None)
@@ -3174,6 +3239,7 @@ class Handler(SimpleHTTPRequestHandler):
                 try: self.server.zimbra.remember_recipients(s['token'],data,s['user']['email'])
                 except APIError: pass  # the message went out; a missed contact is not worth an error
                 return self.reply(200,result)
+            if self.path=='/api/tickets': return self.reply(200,self.desk_post(s,data))
             if self.path=='/api/updates': return self.reply(200,self.post_update(s,data))
             if self.path=='/api/calendar':
                 if data.get('op')=='delete': return self.reply(200,self.cal(dcalendar.delete_event,self.server.zimbra,s['token'],data))
@@ -3278,6 +3344,8 @@ def serve():
     # 'mail.received' webhooks: incoming mail never passes this server, so a watcher looks once a minute (only for companies that asked)
     # ready-made automations (Configure > Automations), run here on the new-mail watcher
     followup_mail=FollowupMail(server.zimbra,server.provisioner,'no-reply@'+(server.mail_host or 'mail.dejoiy.com')) if server.zimbra and server.provisioner else None
+    server.desk_mail=followup_mail   # ticket notices land in people's inboxes the same way reminders do
+    server.tickets=Tickets(state_dir/'tickets.sqlite') if state_dir else None
     server.automations=Automations(state_dir/'automations.json',lambda payload: shine_admin_call(server.shine_site,server.shine_secret,payload),server.audit,mail=followup_mail) if state_dir else None
     if server.automations: server.automations.start()
     if (server.hooks or server.automations) and server.provisioner and server.zimbra:

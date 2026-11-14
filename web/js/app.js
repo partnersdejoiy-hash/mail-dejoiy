@@ -52,6 +52,7 @@ const App = {
       else if(r==="admin") Views.admin(el);
       else if(r==="news") Views.updates(el, "dejoiy");
       else if(r==="company") Views.updates(el, "company");
+      else if(r==="desk") Views.desk(el, a||undefined);
       else if(r==="settings") Views.settings(el, a||undefined);
       else if(r==="search") this.renderSearch(el, a);
       else Views.today(el);
@@ -103,13 +104,13 @@ const App = {
   /* ---------------- navigation chrome ---------------- */
   NAV: [
     ["today","🏠","Home"],["mail:inbox","📥","Inbox"],["calendar","📅","Calendar"],
-    ["news","📣","Dejoiy Updates"],["company","🏢","Company"],
+    ["news","📣","Dejoiy Updates"],["company","🏢","Company"],["desk","🎫","Help desk"],
     ["contacts","👥","Contacts"],["notes","📝","Notes"],["chat","💬","Chat"],
     ["admin","🛡️","Admin"],["settings","⚙️","Settings"]
   ],
   refreshNav(){
     const c = Mail.counts(), nav = document.getElementById("main-nav");
-    const icons={inbox:'inbox',starred:'star',drafts:'draft',sent:'sent',archive:'archive',spam:'spam',trash:'trash',unread:'unread',attach:'paperclip',important:'important',newsletters:'megaphone',notifications:'mail',photos:'photo',documents:'file',contacts:'contacts',admin:'shield',news:'megaphone',company:'building',settings:'settings',today:'home',calendar:'calendar',notes:'note',chat:'chat'};
+    const icons={inbox:'inbox',starred:'star',drafts:'draft',sent:'sent',archive:'archive',spam:'spam',trash:'trash',unread:'unread',attach:'paperclip',important:'important',newsletters:'megaphone',notifications:'mail',photos:'photo',documents:'file',contacts:'contacts',admin:'shield',news:'megaphone',company:'building',desk:'help',settings:'settings',today:'home',calendar:'calendar',notes:'note',chat:'chat'};
     const entries=[...Mail.FOLDERS.map(f=>['mail:'+f.id,Icons.get(icons[f.id]),f.name]),...Mail.SMART.filter(f=>f.id!=='starredv').map(f=>['mail:'+f.id,Icons.get(icons[f.id]),f.name]),...this.NAV.filter(([r])=>!r.startsWith('mail:')).map(([r,ico,label])=>[r,Icons.get(icons[r]),r==='company'&&this.companyName?this.companyName:label])];
     /* Labels hidden in Settings → Labels stay reachable from Settings but leave the list. */
     const hidden=new Set((window.Settings&&Settings.ui.hiddenFolders)||[]);

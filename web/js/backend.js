@@ -166,7 +166,7 @@ const Live={enabled:!!window.DEJOIY_LIVE,csrf:'',more:false,avatars:{},
     });
   },
   install(){
-    App.NAV=App.NAV.filter(([route])=>['today','mail:inbox','calendar','news','company','contacts','admin','settings'].includes(route) && (route!=='admin'||Store.state.user?.isAdmin===true));
+    App.NAV=App.NAV.filter(([route])=>['today','mail:inbox','calendar','news','company','desk','contacts','admin','settings'].includes(route) && (route!=='admin'||Store.state.user?.isAdmin===true));
     const local={}; for(const name of ['setRead','toggleStar','toggleImportant','moveTo','deleteForever','addLabel'])local[name]=Mail[name].bind(Mail);
     let queue=Promise.resolve();
     const mutate=(data,apply)=>{const job=queue.then(async()=>{await this.request('action',data);apply();App.refreshNav();if(App.route==='mail')App.render();});queue=job.catch(()=>{});return job;};
@@ -196,7 +196,7 @@ const Live={enabled:!!window.DEJOIY_LIVE,csrf:'',more:false,avatars:{},
     };
     const adminRoute=location.pathname.startsWith('/admin') || location.hash==='#/admin';
     // keep the page the person was on (a reload of Drafts stays on Drafts); only start at the inbox when there's no page yet
-    const known=/^#\/(mail:[a-z0-9_-]+|compose(:.*)?|calendar|contacts|notes|settings(:.*)?|search:.+|news|company)$/i.test(location.hash);
+    const known=/^#\/(mail:[a-z0-9_-]+|compose(:.*)?|calendar|contacts|notes|settings(:.*)?|search:.+|news|company|desk(:\d+)?)$/i.test(location.hash);
     App.route=adminRoute?'admin':'mail';if(adminRoute)location.hash='#/admin';else if(!known)location.hash='#/mail:inbox';
     window.addEventListener('unhandledrejection',e=>{e.preventDefault();App.toast(e.reason?.message||'Mail operation failed');});
     document.body.classList.add('live-mode');
