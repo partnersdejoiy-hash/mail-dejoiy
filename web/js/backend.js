@@ -188,7 +188,7 @@ const Live={enabled:!!window.DEJOIY_LIVE,csrf:'',more:false,avatars:{},
     Mail.storage=()=>{const a=Settings.account;if(!a||!a.quota)return {used:a?(a.used/1048576).toFixed(1):'—',total:0,pct:0};const mb=a.used/1048576;return {used:mb.toFixed(1),total:a.quota/1048576,pct:Math.min(100,Math.round(a.used/a.quota*1000)/10)};};
     const original=App.render.bind(App);
     App.render=function(){
-      if(this.route==='admin'&&Store.state.user?.isAdmin===true){location.assign(ADMIN_URL);return;}
+      if(this.route==='admin'&&Store.state.user?.isAdmin===true){if(!window.DejoiyLinks?.open(ADMIN_URL))location.assign(ADMIN_URL);return;}   // in the Android app: the Admin app or the browser
       if(this.route==='admin'&&Store.state.user?.isAdmin!==true){document.getElementById('view').innerHTML='<div class="empty-note"><h1>Administrator access required</h1><p>This mailbox does not have administration permissions.</p><a href="#/mail:inbox">Return to your inbox</a></div>';this.refreshNav();return;}
       if(this.route==='chat'){
         document.getElementById('view').innerHTML='<div class="empty-note">This feature is not connected to your business mailbox yet. <a href="#/mail:inbox">Open Mail</a></div>';this.refreshNav();return;
