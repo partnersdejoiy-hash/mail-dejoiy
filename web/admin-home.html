@@ -14,7 +14,7 @@
 <link rel="preload" href="assets/fonts/bricolage-grotesque-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
 <script src="js/accent.js?v=20261110g"></script>
 <link rel="stylesheet" href="css/font.css?v=20261110b" />
-<link rel="stylesheet" href="css/landing.css?v=20261110w" />
+<link rel="stylesheet" href="css/landing.css?v=20261115a" />
 <script>document.documentElement.classList.add("js")</script>
 </head>
 <body class="lp lp-admin">
@@ -23,7 +23,7 @@
 <header class="lp-nav">
   <a class="lp-logo" href="/" aria-label="Dejoiy Mail Admin home"><img src="assets/brand/dejoiy-mail-on-dark.svg?v=20261110a" alt="Dejoiy Mail" height="36"></a>
   <span class="lp-tag">Admin</span>
-  <nav class="lp-links" aria-label="Page"><a href="#updates">Updates</a><a href="#try">Try it</a><a href="#features">What you control</a><a href="https://mail.dejoiy.com/home">Dejoiy Mail</a></nav>
+  <nav class="lp-links" aria-label="Page"><a href="#updates">Updates</a><a href="#try">Try it</a><a href="#features">What you control</a><a href="#inside">Inside</a><a href="https://mail.dejoiy.com/home">Dejoiy Mail</a></nav>
   <div class="lp-actions"><a class="lp-upd" href="#updates" aria-label="Dejoiy Updates" hidden>📣<span>Updates</span><i data-news-count></i></a><a class="lp-btn ghost" href="https://mail.dejoiy.com/signup">New company</a><a class="lp-btn" href="/admin">Open admin</a></div>
 </header>
 
@@ -102,6 +102,22 @@
       <div><p class="lp-statement">DNS problems, with the fix.</p><p class="lp-more">MX, SPF, DKIM and DMARC checked live. A leftover record shows up with the exact change to make.</p></div>
       <button class="lp-toggle" role="switch" aria-checked="false" aria-label="DNS checks"><i></i></button>
     </div>
+  </section>
+
+  <section id="inside" class="lp-inside" aria-labelledby="inside-title">
+    <div class="lp-inside-head"><h2 id="inside-title" class="rv">Run the whole company from here</h2><p class="rv">Every item is a page in the console. The Admin guide inside it explains each one.</p></div>
+    <figure class="lp-inside-pic rv"><img src="assets/landing/adm-templates.webp?v=20261115a" alt="The Offboard template: forward mail, leave lists, sign out everywhere and lock sign-in, with a tick beside each finished step" width="640" height="740" loading="lazy">
+      <figcaption>The Offboard template, step by step. Sample data.</figcaption></figure>
+    <ul class="lp-inside-list">
+      <li class="rv"><h3>Templates</h3><p>Onboard, offboard, suspend or reactivate someone from one form. You see every step it took.</p></li>
+      <li class="rv"><h3>Departments and roles</h3><p>Give each department its own address, and each role its own permissions: who adds mailboxes, who posts to the company, who handles tickets.</p></li>
+      <li class="rv"><h3>Help desk tickets</h3><p>Tickets your people raise reach the right team. Open ones nobody picked up come to you, and you can raise one to the Dejoiy team.</p></li>
+      <li class="rv"><h3>Your own mail service</h3><p>Send outside mail through Amazon SES, Resend or any SMTP service your company already uses.</p></li>
+      <li class="rv"><h3>Your brand</h3><p>Your name and logo in every mailbox, a picture behind the sign-in form, and sign-in at your own address.</p></li>
+      <li class="rv"><h3>Policies</h3><p>Password rules, lockouts, forwarding and how long Trash and Spam are kept, per group of mailboxes.</p></li>
+      <li class="rv"><h3>Webhooks, API tokens, automations</h3><p>Tell your own tools when mail arrives or someone signs in, and switch on ready-made automations.</p></li>
+      <li class="rv"><h3>Undelivered mail and reports</h3><p>See every mail that did not arrive, with the reason, and who signed in or changed what.</p></li>
+    </ul>
   </section>
 
   <section class="lp-how" aria-labelledby="how-title">

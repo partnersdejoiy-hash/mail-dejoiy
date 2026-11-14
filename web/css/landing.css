@@ -333,3 +333,19 @@ body.lp-admin .t3 .lp-tile-pic img.fill{object-position:right top}
 @keyframes lpPing{0%,80%,100%{transform:scale(1)}88%{transform:scale(1.25)}}
 @media (max-width:900px){.lp-upd{min-height:40px;padding:0 12px}.lp-upd span{display:none}}
 @media (prefers-reduced-motion:reduce){.lp-upd i{animation:none}}
+
+/* ---- "Inside": what else the product does, one picture and a list of plain statements ---- */
+.lp-inside{width:min(var(--max),100%);margin:0 auto;padding:clamp(72px,12vh,150px) var(--m) 0;display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:clamp(28px,4vw,72px);align-items:start}
+.lp-inside-head{grid-column:1/-1;display:grid;gap:14px}
+.lp-inside-head h2{font-size:clamp(36px,4.4vw,64px);line-height:1;letter-spacing:-.04em;font-weight:800;max-width:14em}
+.lp-inside-head p{max-width:46ch;font-size:19px;font-weight:500;color:var(--muted)}
+.lp-inside-pic{position:sticky;top:24px;margin:0;border:2px solid var(--edge);border-radius:28px;background:var(--soft);padding:clamp(14px,2vw,26px) clamp(14px,2vw,26px) 0;overflow:hidden}
+.lp-inside-pic img{display:block;width:100%;height:auto;border:3px solid #121212;border-bottom:0;border-radius:18px 18px 0 0;background:#fff}
+.lp-inside-pic figcaption{position:absolute;left:16px;bottom:14px;padding:5px 12px;border-radius:999px;background:#121212;color:#fff;font-size:13px;font-weight:700}
+.lp-inside-list{list-style:none;margin:0;padding:0;display:grid;gap:clamp(22px,3.4vh,38px)}
+.lp-inside-list h3{font-size:clamp(24px,2.4vw,34px);line-height:1.05;letter-spacing:-.03em;font-weight:800}
+.lp-inside-list p{margin-top:6px;max-width:44ch;font-size:18px;line-height:1.45;font-weight:500;color:var(--muted)}
+.lp-inside-list li:nth-child(3n+1) h3{box-shadow:inset 0 -.42em 0 var(--pink);display:inline}
+.lp-inside-list li:nth-child(3n+1) p{margin-top:10px}
+@media (max-width:1100px){.lp-inside{grid-template-columns:1fr}.lp-inside-pic{position:relative;top:0;max-width:640px}}
+@media (max-width:680px){.lp-inside-head p,.lp-inside-list p{font-size:16.5px}.lp-inside-pic{border-radius:22px}}
