@@ -271,7 +271,7 @@ html .reader.own-design .ai-note{background:rgba(255,255,255,.55);color:#121212}
 .field-error{min-height:1.2em;margin:4px 0 0;color:#c0263f;font-size:13px}
 
 /* ---- Help desk: the company's own internal tickets ---- */
-.tk{max-width:980px;margin:0 auto;padding-bottom:96px}   /* room for the floating Chat button */
+.tk{max-width:980px;margin:0 auto;padding:24px 28px 96px;border-radius:16px;background:var(--surface);color:var(--ink)}   /* a solid sheet: readable on any theme picture; room below for the floating Chat button */
 .tk .view-head .spacer{flex:1}
 .tk-note{margin:0 0 14px;padding:10px 14px;border:1px solid var(--line);border-radius:10px;color:var(--ink-2);font-size:13.5px}
 .tk-tabs{margin-bottom:14px}
@@ -309,7 +309,7 @@ html .reader.own-design .ai-note{background:rgba(255,255,255,.55);color:#121212}
 .tk-reply-foot{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
 .tk-check{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:400;color:var(--ink-2)}
 @media (max-width:680px){
-  .tk{padding:0 12px 24px}
+  .tk{padding:12px 12px 96px;border-radius:0}
   .tk-row{grid-template-columns:minmax(0,1fr) auto;gap:6px 10px;padding:12px 14px}
   .tk-row .tk-pill{justify-self:start}
   .tk-row .tk-code{display:none}.tk-row .tk-main{grid-column:1/-1}.tk-row .tk-when{grid-column:1/-1;text-align:left}
