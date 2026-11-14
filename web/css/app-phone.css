@@ -100,16 +100,39 @@
   #ph-sheet .ph-item .ui-icon{width:22px;height:22px;color:var(--ink-2)}
   #ph-sheet .ph-aa{width:22px;text-align:center;font-weight:600;color:var(--ink-2)}
 
-  /* ---- writing: a plain sheet, Send in the accent ---- */
-  html[data-app-look="clean"] .compose-head{flex-wrap:nowrap!important;padding:calc(6px + env(safe-area-inset-top)) 12px 6px!important;border-radius:0!important;background:var(--surface)!important;color:var(--ink);border-bottom:1px solid var(--line)}
+  /* ---- writing: one solid sheet (never see-through, whatever the theme), Send at the top ---- */
+  html[data-app-look="clean"] #view .compose{background:var(--surface)!important;padding:0!important}
+  html[data-app-look="clean"] #view .compose-head{flex-wrap:nowrap!important;gap:4px;padding:calc(6px + env(safe-area-inset-top)) 12px 6px 4px!important;border-radius:0!important;background:var(--surface)!important;color:var(--ink);border-bottom:1px solid var(--line)}
+  html[data-app-look="clean"] .compose-head .c-ico{display:none}
   html[data-app-look="clean"] .compose-head .c-title{order:0!important;flex:1 1 auto!important;padding:0!important;font-size:17px!important;font-weight:700;letter-spacing:-.01em;white-space:nowrap;color:var(--ink)!important}
-  html[data-app-look="clean"] .compose-head .icon-btn{color:var(--ink)}
-  html[data-app-look="clean"] .compose-head #c-discard{border:0!important;color:var(--ink-2);font-weight:600}
-  html[data-app-look="clean"] .compose-head .c-send-top{background:var(--accent)!important;color:var(--accent-ink)!important}
-  html[data-app-look="clean"] .compose .c-row{margin:0;padding:6px var(--ph-pad)!important;min-height:50px;border-radius:0;background:none!important;box-shadow:none;border-bottom:1px solid var(--line)!important}
-  html[data-app-look="clean"] .compose .c-lab{padding:0;min-width:56px!important;border-radius:0;background:none;color:var(--ink-3);font-size:14px;font-weight:500}
-  html[data-app-look="clean"] .compose #compose-body{margin:0;padding:14px var(--ph-pad)!important;border-radius:0;background:var(--surface)!important;color:var(--ink)!important;box-shadow:none}
+  html[data-app-look="clean"] .compose-head .icon-btn{width:44px;height:44px;color:var(--ink)}
+  html[data-app-look="clean"] .compose-head #c-discard{min-height:44px;padding:0 10px;border:0!important;background:none;color:var(--ink-2);font-size:15px;font-weight:600}
+  html[data-app-look="clean"] .compose-head .c-send-top{display:inline-flex!important;align-items:center;gap:8px;width:auto;height:40px;min-height:40px;padding:0 16px!important;border:0;border-radius:20px!important;background:var(--accent)!important;color:var(--accent-ink)!important;font-size:15px;font-weight:700}
+  html[data-app-look="clean"] .compose-head .c-send-top:active{transform:scale(.97)}
+  html[data-app-look="clean"] .c-send-word{display:inline}
+  html[data-app-look="clean"] .c-send-top .ui-icon{width:18px;height:18px}
+  html[data-app-look="clean"] .compose .c-row{margin:0;padding:4px var(--ph-pad)!important;min-height:52px;align-items:center;border-radius:0;background:none!important;box-shadow:none;border-bottom:1px solid var(--line)!important}
+  html[data-app-look="clean"] .compose .c-lab{padding:0;width:auto;min-width:58px!important;border-radius:0;background:none;color:var(--ink-2);font-size:14px;font-weight:500}
+  html[data-app-look="clean"] .compose .c-row input{font-size:16px;color:var(--ink)}
+  html[data-app-look="clean"] .compose .c-row input::placeholder{color:var(--ink-3);opacity:1}
+  html[data-app-look="clean"] .compose #c-subj{flex:1;min-width:0;font-weight:600}
+  html[data-app-look="clean"] .compose #c-ccbtn{min-height:36px;padding:0 10px;border:0;background:none;color:var(--ink-2);font-size:13px;font-weight:600}
+  html[data-app-look="clean"] .compose .chip{min-height:32px;font-size:14px}
+  html[data-app-look="clean"] .c-suggest{left:8px;right:8px;border-radius:16px}
+  html[data-app-look="clean"] .c-often{padding:8px var(--ph-pad)}
+  html[data-app-look="clean"] .compose .c-labels{min-height:48px}
+  html[data-app-look="clean"] .compose .c-label-pills{gap:6px}
+  html[data-app-look="clean"] .compose .c-pill{min-height:30px;padding:0 12px;border-width:1px;font-size:13px;font-weight:600;box-shadow:none}
+  html[data-app-look="clean"] .compose .c-pill[aria-checked="true"]{border-color:transparent;box-shadow:none}
+  html[data-app-look="clean"] #view .compose .fmt-bar{margin:0;padding:2px 8px!important;gap:0;border:0!important;border-bottom:1px solid var(--line)!important;border-radius:0;background:var(--surface)!important;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+  html[data-app-look="clean"] .compose .fmt-bar .icon-btn{flex:none;min-width:44px;height:44px;border-radius:10px;color:var(--ink-2);font-size:15px}
+  html[data-app-look="clean"] .compose .fmt-bar .icon-btn:active{background:var(--active)}
+  html[data-app-look="clean"] .compose #compose-body{flex:1;margin:0;min-height:38vh;padding:16px var(--ph-pad)!important;border-radius:0;background:var(--surface)!important;color:var(--ink)!important;box-shadow:none;font-size:16px;line-height:1.6}
   html[data-app-look="clean"] .compose #compose-body:focus{outline:0}
+  html[data-app-look="clean"] #view .compose-foot{margin:0;padding:8px var(--ph-pad) calc(10px + env(safe-area-inset-bottom))!important;gap:8px;align-items:center;flex-wrap:wrap;border-top:1px solid var(--line)!important;background:var(--surface)!important}
+  html[data-app-look="clean"] .compose-foot #c-send{display:none}   /* Send sits at the top, in reach while the keyboard is open */
+  html[data-app-look="clean"] .compose-foot .btn:not(#c-send){flex:none;min-height:40px;padding:0 14px;border-radius:20px;font-size:14px;font-weight:600}
+  html[data-app-look="clean"] .compose-foot #c-status{flex:1 1 auto;margin:0 0 0 auto!important;text-align:right}
 
   /* ---- home ---- */
   html[data-app-look="clean"] .home{padding:8px var(--ph-pad) 0}
