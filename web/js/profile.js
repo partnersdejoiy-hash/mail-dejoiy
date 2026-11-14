@@ -16,6 +16,8 @@ const loadImage = src => new Promise((resolve,reject)=>{
    Keep in step with JOI_MAILBOXES on the server. */
 const NO_LOGO=new Set();
 const JOI = new Set(["joi-ai@mail.dejoiy.com"]);
+// Joi waves in her picture; people who ask their device for less motion get the still one
+const JOI_PHOTO = matchMedia("(prefers-reduced-motion:reduce)").matches ? "/assets/brand/joi-profile.png?v=9" : "/assets/brand/joi-profile.webp?v=10";
 
 const Profile = {
   isJoi(email){ return JOI.has(String(email||"").toLowerCase()); },
@@ -23,7 +25,7 @@ const Profile = {
      mailboxes see their colleagues' photos; the demo only knows your own. */
   photo(email){
     const key=String(email||"").toLowerCase(); if(!key) return "";
-    if(JOI.has(key)) return "/assets/brand/joi-profile.png?v=9";  // Joi always looks like her letters, even if her mailbox has an old upload
+    if(JOI.has(key)) return JOI_PHOTO;  // Joi always looks like her letters, even if her mailbox has an old upload
     if(window.Live?.enabled){ const v=Live.avatars?.[key]; if(v) return `/api/avatar?email=${encodeURIComponent(key)}&v=${v}`; }
     if(window.Live?.enabled) return "";
     return key===String(Store.state.user.email||"").toLowerCase() ? (Store.state.prefs.avatar||"") : "";

@@ -5,10 +5,18 @@
 .ph-only,#ph-title,#ph-readbar,#ph-size,#ph-search-x{display:none}
 
 @media (max-width:680px){
+  /* both phone looks: the folder drawer is never see-through (text behind it made it unreadable),
+     and with Theme background on phone = Off there is no picture at all */
+  html:is([data-photo-theme="true"],[data-scenic="true"]) #sidebar{background:var(--surface)!important}
+  html[data-phone-bg="off"] #bg{display:none}
+
   html[data-app-look="clean"]{--ph-pad:16px}
+  html[data-app-look="clean"] body{--ph-fill:var(--surface);--ph-row:var(--surface)}   /* on body: that is where a theme sets --surface */
+  /* Theme background on phone = On: the picture shows through, as much as the phone's own transparency says */
+  html[data-app-look="clean"][data-phone-bg="on"]:is([data-photo-theme="true"],[data-scenic="true"]) body{--ph-fill:color-mix(in srgb,var(--surface) calc(100% - var(--glass,0%)),transparent);--ph-row:transparent}
 
   /* ---- header: avatar, where you are, compose, search ---- */
-  html[data-app-look="clean"] #topbar{min-height:56px;height:auto;margin:0!important;padding:calc(6px + env(safe-area-inset-top)) 12px 6px var(--ph-pad);gap:10px;background:var(--surface)!important;border:0;border-radius:0!important;box-shadow:none}
+  html[data-app-look="clean"] #topbar{min-height:56px;height:auto;margin:0!important;padding:calc(6px + env(safe-area-inset-top)) 12px 6px var(--ph-pad);gap:10px;background:var(--ph-fill)!important;border:0;border-radius:0!important;box-shadow:none}
   html[data-app-look="clean"] :is(#menu-btn,#joi-btn span,#theme-btn,#shortcuts-btn,#check-mail-btn,#settings-btn,.account-label,.brand){display:none!important}
   html[data-app-look="clean"] .top-actions{display:contents}
   html[data-app-look="clean"] #account-btn{order:-1;width:36px;height:36px;margin:0;border-radius:50%;flex:none}
@@ -31,13 +39,18 @@
 
   /* ---- list: quiet chips, date groups, flat rows ---- */
   html[data-app-look="clean"] :is(.mail-heading,.fab){display:none!important}
-  html[data-app-look="clean"] #view{background:var(--surface)!important}
+  html[data-app-look="clean"] #view{background:var(--ph-fill)!important}
   html[data-app-look="clean"] .mail-filterbar{padding:6px var(--ph-pad) 8px;gap:8px;min-height:0;border:0}
   html[data-app-look="clean"] .mail-filterbar button{height:32px;padding:0 13px!important;border:1px solid var(--line)!important;border-radius:16px!important;background:none;color:var(--ink-2);font-size:13px;font-weight:600}
   html[data-app-look="clean"] .mail-filterbar button.active{background:var(--accent)!important;border-color:var(--accent)!important;color:var(--accent-ink)!important}
   html[data-app-look="clean"] .message-group{padding:18px var(--ph-pad) 6px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
-  html[data-app-look="clean"] .msg-row{min-height:0;margin:0!important;padding:11px var(--ph-pad)!important;column-gap:12px;border:0!important;border-radius:0!important;background:var(--surface)!important;box-shadow:none!important;transform:none!important}
+  html[data-app-look="clean"] .msg-row{min-height:0;margin:0!important;padding:11px var(--ph-pad)!important;column-gap:12px;border:0!important;border-radius:0!important;background:var(--ph-row)!important;box-shadow:none!important;transform:none!important}
+  /* a mail with a label keeps its colour, like on the computer: a soft tint and a bar on the left */
+  html[data-app-look="clean"] .msg-row[data-tone]:not([data-tone=""]){background:color-mix(in srgb,var(--t) 15%,var(--ph-row))!important;box-shadow:inset 4px 0 0 var(--t)!important}
+  html[data-app-look="clean"][data-phone-bg="on"]:is([data-photo-theme="true"],[data-scenic="true"]) .msg-row[data-tone]:not([data-tone=""]){background:color-mix(in srgb,var(--t) 30%,color-mix(in srgb,var(--surface) 45%,transparent))!important}   /* over a picture the tint needs more body */
+  html[data-app-look="clean"] .msg-row[data-tone]:not([data-tone=""]) .m-labels .lbl{background:color-mix(in srgb,var(--t) 30%,var(--surface))}
   html[data-app-look="clean"] .msg-row:active,html[data-app-look="clean"] .msg-row.selected{background:var(--active)!important}
+  html[data-app-look="clean"] .msg-row[data-tone]:not([data-tone=""]):is(:active,.selected){background:color-mix(in srgb,var(--t) 34%,var(--surface))!important}
   html[data-app-look="clean"] .msg-row .m-avatar{width:40px;height:40px;border-radius:50%!important;box-shadow:none;font-size:13px;font-weight:600}
   html[data-app-look="clean"] .msg-row.unread .m-avatar::after{display:none}
   html[data-app-look="clean"] .msg-row .m-from{font-size:15px;font-weight:500;color:var(--ink)}
@@ -50,7 +63,7 @@
   html[data-app-look="clean"] .msg-row .m-labels .lbl{background:var(--surface-2)}
 
   /* ---- tab bar: flat, full width ---- */
-  html[data-app-look="clean"] #bottomnav{left:0!important;right:0!important;bottom:0!important;min-height:0;padding:4px 4px calc(4px + env(safe-area-inset-bottom))!important;border:0;border-top:1px solid var(--line);border-radius:0;background:var(--surface)!important;box-shadow:none}
+  html[data-app-look="clean"] #bottomnav{left:0!important;right:0!important;bottom:0!important;min-height:0;padding:4px 4px calc(4px + env(safe-area-inset-bottom))!important;border:0;border-top:1px solid var(--line);border-radius:0;background:var(--ph-fill)!important;box-shadow:none}
   html[data-app-look="clean"] #bottomnav button{min-height:48px;gap:2px;border-radius:10px;font-size:10.5px;font-weight:500;color:var(--ink-3);transform:none}
   html[data-app-look="clean"] #bottomnav button.active{color:var(--ink);font-weight:700}
   html[data-app-look="clean"] #bottomnav button.active .b-ico{padding:0;background:none}

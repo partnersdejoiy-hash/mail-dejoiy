@@ -73,16 +73,21 @@ const THEME_CSS = {
 // solid until the person asks for see-through panels (the keys still say which themes have a background to show)
 const GLASS_DEFAULT = {live:0, photo:0, scenic:0, custom:0};
 const GLASS_MAX = 85;
+const GLASS_PHONE = 40;   // where a phone starts once its background is switched on
 
 const Themes = {
   ALL: THEMES,
   GLASS_MAX,
-  glassKey(){ const p=Store.state.prefs; return p.customBg ? "custom" : p.theme; },
+  /* A phone keeps its own transparency (and can switch the background off), so a see-through desktop does not make the small screen hard to read. */
+  phone(){ return matchMedia("(max-width:680px)").matches; },
+  phoneBg(){ return window.Settings?.ui?.phoneBg==="on"; },
+  glassKey(){ const p=Store.state.prefs, key=p.customBg ? "custom" : p.theme; return this.phone() ? "phone"+key : key; },
   hasBackdrop(){ const p=Store.state.prefs; return !!p.customBg || THEMES.some(t=>t.id===p.theme && GLASS_DEFAULT[t.kind]!==undefined); },
   glass(){
-    if(!this.hasBackdrop()) return 0;
+    if(!this.hasBackdrop() || (this.phone() && !this.phoneBg())) return 0;
     const p=Store.state.prefs, key=this.glassKey(), saved=p.glass && p.glass[key];
     if(Number.isInteger(saved)) return Math.max(0,Math.min(GLASS_MAX,saved));
+    if(this.phone()) return GLASS_PHONE;
     return p.customBg ? GLASS_DEFAULT.custom : GLASS_DEFAULT[THEMES.find(t=>t.id===p.theme).kind];
   },
   setGlass(value){
@@ -93,7 +98,8 @@ const Themes = {
   persist(){ if(window.Live && window.Live.enabled && window.Live.saveAppearance) window.Live.saveAppearance(); },
   glassControl(){
     if(!this.hasBackdrop()) return "";
-    return `<div class="field glass-field"><label for="glass-range">Panel transparency <span id="glass-value">${this.glass()}%</span></label>
+    if(this.phone() && !this.phoneBg()) return `<p class="hint">The theme background is off on this phone. Turn it on in Settings → General → Theme background on phone.</p>`;
+    return `<div class="field glass-field"><label for="glass-range">Panel transparency${this.phone()?" on phones":""} <span id="glass-value">${this.glass()}%</span></label>
       <input type="range" id="glass-range" min="0" max="${GLASS_MAX}" step="5" value="${this.glass()}" aria-describedby="glass-hint">
       <p class="hint" id="glass-hint">Slide right to see more of the background behind your mail. Saved for this theme.</p></div>`;
   },
@@ -124,6 +130,7 @@ const Themes = {
     if(p.customBg){ bg.classList.add("custom"); bg.style.setProperty("--custom-bg", "url('"+p.customBg+"')"); }
     else { bg.classList.remove("custom"); bg.style.removeProperty("--custom-bg"); }
     if(live && !p.customBg) window.LiveThemes.start(live.id, bg); else window.LiveThemes?.stop();
+    document.documentElement.dataset.phoneBg = this.phoneBg() ? "on" : "off";
     document.documentElement.style?.setProperty('--glass', this.glass()+'%');
     document.documentElement.style?.setProperty('--glass-num', String(this.glass()));
   },

@@ -51,7 +51,7 @@ addEventListener("hashchange", ()=>{ if(ready) share(); });
 setInterval(()=>{ if(ready && document.visibilityState==="visible") share(); }, 30000);
 
 window.JoiDock = {
-  avatar: "/assets/brand/joi-profile.png?v=9",
+  avatar: "/assets/brand/joi-profile.webp?v=10",
   async open(){
     try{ await load(); share(); window.Joi.open(); }
     catch(e){ App.toast(e.message); }
