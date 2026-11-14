@@ -303,6 +303,7 @@ async function shine(main, d){
 
 /* Reports: email numbers for the last 14 days, sign-ins (failed ones flagged) and who changed what. */
 const OPS={create_user:"Created mailbox",delete_user:"Deleted mailbox",password:"Reset password",status:"Changed status",quota:"Changed storage limit",forward:"Changed forwarding",
+  relay_set:"Changed the company mail service",relay_remove:"Removed the company mail service",relay_test:"Tested the company mail service",
   add_alias:"Added alias",remove_alias:"Removed alias",set_name:"Renamed",set_plan:"Changed plan",role:"Changed role",set_title:"Changed title",save_roles:"Edited roles",
   company_settings:"Changed company settings",create_domain:"Added domain",delete_domain:"Removed domain",domain_status:"Changed domain status",create_list:"Created list",
   delete_list:"Deleted list",add_member:"Added list member",remove_member:"Removed list member",create_department:"Created department",set_department:"Changed department",
@@ -449,6 +450,42 @@ function tplStatus(d, status){
       await act({op:"status",id:u.id,status}); await reload(u.email+(lock?" suspended.":" reactivated.")); }}]});
 }
 
+/* A company's own outgoing mail service (Amazon SES, Resend, any SMTP): mail to outside addresses leaves through it. */
+const RELAY_PRESETS=[["","Choose a service to fill this in…"],["email-smtp.ap-south-1.amazonaws.com|587|starttls","Amazon SES (Mumbai). Use your SES SMTP user name and password."],
+  ["smtp.resend.com|465|ssl|resend","Resend. User name is resend, password is your API key."],["smtp-relay.brevo.com|587|starttls","Brevo"],["smtp.mailgun.org|587|starttls","Mailgun"],
+  ["smtp.postmarkapp.com|587|starttls","Postmark"],["smtp.sendgrid.net|587|starttls|apikey","SendGrid. User name is apikey, password is your API key."]];
+async function mailService(domain, d){
+  const root=dialog({title:"Mail service · "+domain, wide:true, body:`<p class="adm-muted">Loading…</p>`});
+  const body=root.querySelector(".adm-dialog-body"), depts=(d.departments||[]).map(x=>x.name);
+  const draw=(out,note)=>{
+    const r=out.relay||{}, on=r.configured, chosen=r.departments||[];
+    body.innerHTML=`${note?`<p class="${note.bad?"adm-error":"adm-muted"}" role="status">${esc(note.text)}</p>`:""}
+      <p class="adm-muted">Mail that people at ${esc(domain)} send to outside addresses (Gmail, Outlook, customers) can leave through a mail service your company already uses, so it carries your own sending reputation. Mail inside ${esc(domain)} keeps going the usual way. Verify ${esc(domain)} with that service first, or it will refuse to send.</p>
+      ${on&&r.last?`<p><span class="adm-pill ${r.last.ok?"good":"bad"}">${r.last.ok?"Working":"Last try failed"}</span> <small>${esc(r.last.note)} · ${esc(new Date(r.last.at*1000).toLocaleString())}</small></p>`:""}
+      <div class="adm-form">
+        <label>Quick fill<select id="rl-preset">${RELAY_PRESETS.map(([v,t])=>`<option value="${esc(v)}">${esc(t)}</option>`).join("")}</select></label>
+        <label>SMTP server<input id="rl-host" value="${esc(r.host||"")}" placeholder="smtp.resend.com" autocapitalize="off" spellcheck="false"></label>
+        <label>Port<select id="rl-port">${[587,465,2587,2465,25].map(p=>`<option ${p===(r.port||587)?"selected":""}>${p}</option>`).join("")}</select></label>
+        <label>Connection<select id="rl-sec"><option value="starttls" ${r.security!=="ssl"?"selected":""}>STARTTLS (port 587)</option><option value="ssl" ${r.security==="ssl"?"selected":""}>SSL (port 465)</option></select></label>
+        <label>User name<input id="rl-user" value="${esc(r.user||"")}" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+        <label>Password or API key<input id="rl-pass" type="password" autocomplete="new-password" placeholder="${on?"Saved. Leave empty to keep it.":""}"></label>
+        ${depts.length?`<fieldset class="adm-fieldset"><legend>Who uses it</legend><p class="adm-muted">Tick departments to use it only for them. Nothing ticked means everyone at ${esc(domain)}.</p>
+          <div class="adm-chips">${depts.map(n=>`<label class="adm-check"><input type="checkbox" name="rl-dept" value="${esc(n)}" ${chosen.some(c=>c.toLowerCase()===n.toLowerCase())?"checked":""}> ${esc(n)}</label>`).join("")}</div></fieldset>`:""}
+        <label class="adm-check"><input type="checkbox" id="rl-active" ${!on||r.active?"checked":""}> Switched on</label>
+      </div>
+      <p class="adm-muted">The password is kept encrypted on the mail server and is never shown again. If the service refuses a mail, the sender is told and the mail stays in their Drafts.</p>
+      <div class="adm-dialog-actions">${on?`<button class="adm-btn ghost" id="rl-remove">Remove</button><button class="adm-btn" id="rl-test">Send me a test mail</button>`:""}<button class="adm-btn primary" id="rl-save">Save</button></div>`;
+    const fail=e=>{ const old=body.querySelector("[role=status]"); if(old) old.remove(); body.insertAdjacentHTML("afterbegin",`<p class="adm-error" role="status">${esc(e.message)}</p>`); body.scrollTop=0; };
+    const go=(id,payload,text)=>{ const b=$(id); if(!b) return; b.addEventListener("click",async()=>{ b.disabled=true; try{ draw(await act(payload()),{text}); }catch(e){ b.disabled=false; fail(e); } }); };
+    $("rl-preset").addEventListener("change",e=>{ const [host,port,sec,user]=e.target.value.split("|"); if(!host) return; $("rl-host").value=host; $("rl-port").value=port; $("rl-sec").value=sec; if(user) $("rl-user").value=user; });
+    go("rl-save",()=>({op:"relay_set",domain,host:$("rl-host").value,port:Number($("rl-port").value),security:$("rl-sec").value,user:$("rl-user").value,password:$("rl-pass").value,
+      departments:[...body.querySelectorAll("[name=rl-dept]:checked")].map(c=>c.value),active:$("rl-active").checked}),"Saved. Send yourself a test mail to check it.");
+    go("rl-test",()=>({op:"relay_test",domain}),"Test mail sent through your service. Check your inbox.");
+    go("rl-remove",()=>({op:"relay_remove",domain}),"Removed. Mail goes out the usual way again.");
+  };
+  try{ draw(await act({op:"relay_get",domain})); }catch(e){ body.innerHTML=`<p class="adm-error">${esc(e.message)}</p>`; }
+}
+
 function manageUser(u, d){
   const plans=d.plans||[], self=u.email.toLowerCase()===(state.user?.email||"").toLowerCase();
   const root=dialog({title:u.email, wide:true, body:`
@@ -578,11 +615,12 @@ function domains(main, d){
     <div class="adm-card adm-flush"><table class="adm-table"><thead><tr><th>Domain</th><th>Mailboxes</th><th>Status</th><th></th></tr></thead><tbody>
     ${d.domains.map((x,i)=>`<tr><td><b>${esc(x.domain)}</b></td><td>${d.users.filter(u=>u.email.endsWith("@"+x.domain)).length}</td>
       <td>${d.scope?`<span class="adm-pill ${x.status==="active"?"good":"warn"}">${esc(x.status)}</span>`:`<select data-dstatus="${i}" aria-label="Status for ${esc(x.domain)}">${["active","locked","maintenance","suspended"].map(s=>`<option ${s===x.status?"selected":""}>${s}</option>`).join("")}</select>`}</td>
-      <td class="adm-right">${can("domain.view")?`<a class="adm-btn ghost sm" href="/admin/manage/domains/${esc(x.domain)}">Settings</a> `:""}<button class="adm-btn ghost sm" data-dns="${esc(x.domain)}">DNS setup</button> <button class="adm-btn ghost sm" data-host="${esc(x.domain)}">Branding & sign-in</button>${d.scope?"":` <button class="adm-btn ghost sm" data-ddel="${i}" aria-label="Delete ${esc(x.domain)}">Delete</button>`}</td></tr>`).join("")}
+      <td class="adm-right">${can("domain.view")?`<a class="adm-btn ghost sm" href="/admin/manage/domains/${esc(x.domain)}">Settings</a> `:""}<button class="adm-btn ghost sm" data-dns="${esc(x.domain)}">DNS setup</button> <button class="adm-btn ghost sm" data-host="${esc(x.domain)}">Branding & sign-in</button> <button class="adm-btn ghost sm" data-relay="${esc(x.domain)}">Mail service</button>${d.scope?"":` <button class="adm-btn ghost sm" data-ddel="${i}" aria-label="Delete ${esc(x.domain)}">Delete</button>`}</td></tr>`).join("")}
     </tbody></table></div>
     <div class="adm-card"><h2>DNS checklist</h2><p class="adm-muted">Adding a domain here does not change public DNS. At your DNS provider, point <b>MX</b> to this server and publish <b>SPF</b>, <b>DKIM</b> and <b>DMARC</b> records so mail is delivered and trusted.</p></div>`;
   main.querySelectorAll("[data-dstatus]").forEach(s=>s.addEventListener("change",async()=>{const x=d.domains[+s.dataset.dstatus];s.disabled=true;try{await act({op:"domain_status",id:x.id,status:s.value});x.status=s.value;toast("Domain status updated.");}catch(e){s.value=x.status;toast(e.message);}finally{s.disabled=false;}}));
   main.querySelectorAll("[data-dns]").forEach(b=>b.addEventListener("click",()=>dnsSetup(b.dataset.dns)));
+  main.querySelectorAll("[data-relay]").forEach(b=>b.addEventListener("click",()=>mailService(b.dataset.relay,d)));
   main.querySelectorAll("[data-host]").forEach(b=>b.addEventListener("click",()=>loginHost(b.dataset.host)));
   main.querySelectorAll("[data-ddel]").forEach(b=>b.addEventListener("click",()=>deleteDomain(d,d.domains[+b.dataset.ddel])));
   if(!d.scope) $("d-add").addEventListener("click",()=>dialog({title:"Add domain",body:`<label>Domain name<input id="nd-name" placeholder="example.com" autocomplete="off"></label><p role="alert" class="adm-error"></p>`,

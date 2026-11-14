@@ -26,6 +26,7 @@ import dcalendar
 import zconsole
 from webhooks import Webhooks, WebhookError
 from newmail import NewMailWatcher
+import relay
 from automations import Automations, AutomationError
 from apitokens import ApiTokens, TokenError, SCOPES as API_SCOPES
 from undelivered import Undelivered
@@ -650,6 +651,7 @@ class Provisioner:
                 except APIError: pass
             if isinstance(error,APIError) and error.code=='account.INVALID_PASSWORD': raise APIError('The password does not meet the mailbox password policy.')
             raise APIError('Your company mail could not be created. Nothing was changed; try again.',502)
+MAX_OTHER_ACCOUNTS = 4   # accounts that can wait signed in beside the open one
 SESSIONS = {}
 LOCK = threading.Lock()
 ROOT = Path(__file__).resolve().parent.parent / 'web'
@@ -1022,6 +1024,11 @@ class Zimbra:
             try: self.action(token,{'ids':[message.get('id')],'op':'label','label':label})
             except APIError: pass
         return {'id':message.get('id') if message is not None else None,'accepted':not draft,'draftRemoved':bool(not draft and data.get('id'))}
+    def file_sent(self, token, raw):
+        """Puts a mail that went out another way (a company's own mail service) in the Sent folder, as sent and read."""
+        r=node(MAIL,'AddMsgRequest'); m=node(MAIL,'m',{'l':FOLDERS['sent'],'f':'s'}); m.append(node(MAIL,'content',text=raw)); r.append(m)
+        found=self.call(r,token,timeout=60).find('{'+MAIL+'}m')
+        return found.get('id') if found is not None else None
     def sent_copy(self, token, data, since):
         """After a send timed out, look for the copy Zimbra files in Sent once a message is accepted:
         same subject, same To, dated after we started. Found -> it went out; do not send it again."""
@@ -1971,8 +1978,50 @@ class Handler(SimpleHTTPRequestHandler):
         raw=json.dumps(data).encode(); self.send_response(status)
         self.send_header('Content-Type','application/json'); self.send_header('Cache-Control','no-store')
         self.send_header('Content-Length',str(len(raw)))
-        if cookie: self.send_header('Set-Cookie',cookie)
+        for one in ([cookie] if isinstance(cookie,str) else cookie or []): self.send_header('Set-Cookie',one)
         self.end_headers(); self.wfile.write(raw)
+    # ---- several accounts in one browser: one is open, up to four more wait signed in ----
+    def other_sessions(self):
+        """The other accounts signed in on this browser that are still valid: [(sid, session)]."""
+        c=SimpleCookie(); c.load(self.headers.get('Cookie','')); raw=c.get('dejoiy_others')
+        sids=[x for x in (raw.value.split('.') if raw else []) if re.fullmatch(r'[A-Za-z0-9_-]{20,80}',x)][:MAX_OTHER_ACCOUNTS]
+        with LOCK: return [(sid,SESSIONS[sid]) for sid in dict.fromkeys(sids) if sid in SESSIONS and SESSIONS[sid]['expires']>time.time()]
+    def account_cookies(self, current, others):
+        """Set-Cookie lines for the open account (None: nobody) and the waiting ones."""
+        secure='; Secure' if self.server.app_origin.startswith('https:') else ''; base='; Path=/; HttpOnly; SameSite=Strict'
+        with LOCK: life=int(SESSIONS[current]['expires']-time.time()) if current and current in SESSIONS else 0
+        return [f'dejoiy_session={current or ""}{base}; Max-Age={max(life,0)}{secure}',
+                f'dejoiy_others={".".join(others)}{base}; Max-Age={30*86400 if others else 0}{secure}']
+    def accounts_view(self, sid, session):
+        return {'accounts':[{'email':session['user']['email'],'name':session['user'].get('name',''),'current':True}]
+            +[{'email':o['user']['email'],'name':o['user'].get('name',''),'current':False} for _,o in self.other_sessions() if _!=sid]}
+    def account_add(self, sid, data, custom):
+        """Signs another account in beside the open one and opens it. Signing in an account that already waits replaces its old session."""
+        email=str(data.get('email','')).strip(); password=str(data.get('password',''))
+        if not email or len(email)>320 or not password or len(password)>4096: raise APIError('Enter an email and password')
+        if custom:
+            if '@' not in email: email=email+'@'+custom['domain']
+            if not email.lower().endswith('@'+custom['domain']): raise APIError('This sign-in page is for '+custom['domain']+' mailboxes.',403)
+        with LOCK: mine=SESSIONS[sid]['user']['email'].lower()
+        if email.lower()==mine: raise APIError('You are already signed in to '+email+'.')
+        waiting=[(o,x) for o,x in self.other_sessions() if o!=sid]
+        if len([1 for o,x in waiting if x['user']['email'].lower()!=email.lower()])>=MAX_OTHER_ACCOUNTS: raise APIError(f'You can keep {MAX_OTHER_ACCOUNTS+1} accounts signed in. Sign out of one first.')
+        try: new,s=self.open_session(email,password)
+        except APIError:
+            if EMAIL.fullmatch(email): self.log('signin_failed',email)
+            raise
+        self.log('signin',email)
+        with LOCK:
+            for o,x in waiting:
+                if x['user']['email'].lower()==email.lower(): SESSIONS.pop(o,None)   # its older session
+        keep=[sid]+[o for o,x in waiting if x['user']['email'].lower()!=email.lower()]
+        return self.reply(200,{'user':s['user'],'csrf':s['csrf']},self.account_cookies(new,keep))
+    def account_switch(self, sid, data):
+        want=str(data.get('email','')).strip().lower()
+        waiting=[(o,x) for o,x in self.other_sessions() if o!=sid]
+        target=next((o for o,x in waiting if x['user']['email'].lower()==want),None)
+        if not target: raise APIError('That account is no longer signed in here. Add it again.',404)
+        return self.reply(200,{'ok':True},self.account_cookies(target,[sid]+[o for o,_ in waiting if o!=target]))
     def session(self):
         c=SimpleCookie(); c.load(self.headers.get('Cookie','')); sid=c.get('dejoiy_session'); sid=sid.value if sid else ''
         with LOCK:
@@ -2036,6 +2085,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if self.path=='/api/filters': return self.reply(200,self.server.zimbra.filters(s['token']))
                 if self.path=='/api/supervisors': return self.reply(200,self.supervisors(s))
                 if self.path=='/api/groups': return self.reply(200,self.team_groups(s))
+                if self.path=='/api/accounts': return self.reply(200,self.accounts_view(sid,s))
                 if self.path=='/api/joi': return self.reply(200,self.joi(s,sid))
                 if self.path=='/api/avatars': return self.reply(200,{'avatars':self.avatar_versions()})
                 if self.path.startswith('/api/bimi?'):
@@ -2164,6 +2214,82 @@ class Handler(SimpleHTTPRequestHandler):
         elif draft_id: kept=' Your message is saved in Drafts and was not sent.'
         else: kept=' The message was not sent. Copy your text before leaving this page.'
         self.reply(error.status if error.status>=400 else 502,{'error':str(error)+note+kept,'draftId':draft_id,'notSent':True})
+    def relay_route(self, session, data):
+        """The company's own mail service this message should leave through, or None for the usual way."""
+        relays=getattr(self.server,'relays',None)
+        if not relays: return None
+        me=session['user']['email'].lower(); domain=self.domain(session)
+        recipients=[a.strip() for k in ('to','cc','bcc') for a in re.split(r'[,;\n]+',str(data.get(k,''))) if a.strip()]
+        department=''
+        if (relays.all.get(domain) or {}).get('departments'):   # only then is the sender's department needed
+            provisioner=getattr(self.server,'provisioner',None)
+            if not provisioner: return None
+            lookup=node(ADMIN,'GetAccountRequest'); lookup.append(node(ADMIN,'account',{'by':'name'},me))
+            account=provisioner.admin.call(lookup,provisioner.token()).find('{'+ADMIN+'}account')
+            department=next((a.text or '' for a in account.findall('{'+ADMIN+'}a') if a.get('n')=='ou'),'') if account is not None else ''
+        try: return relays.route(domain,department,recipients)
+        except relay.RelayError as e: raise APIError(str(e),502,'relay')
+    def relay_send(self, session, data, cfg):
+        """Sends one mail through the company's own service, then files the copy in Sent.
+        The same text, template, label and attachments as the usual way; only the road out differs."""
+        z=self.server.zimbra; token=session['token']; me=session['user']['email']; fields={}
+        for kind in ('to','cc','bcc'):
+            fields[kind]=[a.strip() for a in re.split(r'[,;\n]+',str(data.get(kind,''))) if a.strip()]
+            if any(not re.fullmatch(r'[^\s<>@]+@[^\s<>@]+',a) for a in fields[kind]): raise APIError('Enter recipient email addresses without display names.')
+        if not fields['to']: raise APIError('Add a recipient')
+        everyone=list(dict.fromkeys(a for k in fields for a in fields[k]))
+        if len(everyone)>500: raise APIError('That is more than 500 recipients for one mail. Send it in parts.')
+        label=str(data.get('label') or '').strip()
+        if label and (len(label)>64 or ',' in label or any(ord(c)<32 for c in label)): raise APIError('Enter a label of up to 64 characters without commas.')
+        in_reply_to=data.get('inReplyTo') or ''
+        if in_reply_to and (not isinstance(in_reply_to,str) or len(in_reply_to)>998 or not re.fullmatch(r'<[^<>\s]+>',in_reply_to)): raise APIError('Invalid reply reference.')
+        body=str(data.get('body','')); text,markup=plain(body),safe_html(body,web_image)
+        text+='\n\n--\nThis mail is being sent using Dejoiy Mail: '+z.app_url; markup=email_template(markup,label,z.app_url)
+        attachments=data.get('attachments',[]); files=[]; total=0
+        if not isinstance(attachments,list) or len(attachments)>20: raise APIError('Select up to 20 attachments.')
+        for item in attachments:
+            if not isinstance(item,dict): raise APIError('Invalid attachment.')
+            if item.get('mid') and item.get('part'): raw=z.download(token,str(item['mid']),str(item['part']))   # a file from the mail being forwarded
+            else:
+                try: raw=base64.b64decode(item.get('data',''),validate=True)
+                except (ValueError,TypeError,binascii.Error): raise APIError('Invalid attachment data.')
+                if 'data' not in item: raise APIError('Select the attachment file again.')
+            total+=len(raw)
+            if total>MAX_ATTACHMENT_BYTES: raise APIError('Attachments must total 15 MB or less.')
+            name=str(item.get('name') or 'attachment')
+            if len(name)>255 or any(ord(c)<32 for c in name): raise APIError('Invalid attachment filename.')
+            mime=str(item.get('type') or 'application/octet-stream')
+            files.append((raw,name,mime if re.fullmatch(r'[a-zA-Z0-9.+-]+/[a-zA-Z0-9.+-]+',mime) else 'application/octet-stream'))
+        message=relay.build(me,session['user'].get('name') or '',fields['to'],fields['cc'],data.get('subject',''),text,markup,files,in_reply_to,data.get('important') is True)
+        domain=self.domain(session)
+        try: relay.send(cfg,me,everyone,message)
+        except relay.RelayError as e:
+            self.server.relays.record(domain,False,str(e)); raise APIError(str(e),502,'relay')
+        self.server.relays.record(domain,True,'Mail accepted')
+        # it has gone out: nothing below may turn that into an error
+        sent_id=None
+        try:
+            if fields['bcc']: message['Bcc']=', '.join(fields['bcc'])   # only your own Sent copy shows who was in Bcc
+            sent_id=z.file_sent(token,message.as_string())
+            if sent_id and label and label!='Important': z.action(token,{'ids':[sent_id],'op':'label','label':label})
+        except APIError: pass
+        removed=False
+        if data.get('id') and re.fullmatch(r'\d+',str(data['id'])):
+            try: z.action(token,{'ids':[str(data['id'])],'op':'delete'}); removed=True
+            except APIError: pass
+        return {'id':sent_id,'accepted':True,'draftRemoved':removed,'via':cfg['host'],**({} if sent_id else {'sentCopyMissing':True})}
+    def relay_action(self, session, data):
+        """Admin console: see, save, test or remove a company's own outgoing mail service."""
+        relays=getattr(self.server,'relays',None)
+        if not relays: raise APIError('A company mail service cannot be set on this server yet.',503)
+        client,token,scope=self.admin_session(session)
+        perms=client.actor_perms(token,session['user']['email'],scope)
+        if scope and perms is not None and 'roles.manage' not in perms: raise APIError('Your role does not allow this. Ask an admin for "'+PERMISSIONS['roles.manage']+'".',403)
+        domain=str(data.get('domain','')).strip().lower()
+        if not DOMAIN_NAME.fullmatch(domain) or (scope and domain!=scope): raise APIError('You can only change your own domain.',403)
+        lookup=node(ADMIN,'GetDomainRequest'); lookup.append(node(ADMIN,'domain',{'by':'name'},domain)); client.call(lookup,token)  # the domain exists and this admin may see it
+        try: return relays.action(data.get('op'),data,domain,session['user']['email'].lower())
+        except relay.RelayError as e: raise APIError(str(e),502 if data.get('op')=='relay_test' else 400)
     def log(self, kind, actor, target='', n=1):
         audit=getattr(self.server,'audit',None)
         if audit: audit.add(kind,actor,target,self.client_ip(),n)
@@ -2506,6 +2632,20 @@ class Handler(SimpleHTTPRequestHandler):
     def account(self, session):
         # Sessions created before account ids were recorded fall back to the signed-in address.
         return session.get('account') or session['user']['email'].lower()
+    def open_session(self, email, password):
+        """Checks the password and makes a session beside any other. Returns (sid, session)."""
+        token,lifetime=self.server.zimbra.login(email,password)
+        s={'token':token,'expires':time.time()+lifetime,'csrf':secrets.token_urlsafe(32),'user':{'email':email,'name':email.split('@')[0],'signature':''}}
+        s['user'].update(self.server.zimbra.capabilities(token))
+        account=self.server.zimbra.account_id(token)
+        s['account']=account if isinstance(account,str) and account else email.lower()
+        sid=secrets.token_urlsafe(32)
+        with LOCK:
+            for key in list(SESSIONS):
+                if SESSIONS[key]['expires'] <= time.time(): del SESSIONS[key]
+            if len(SESSIONS)>=1000: raise APIError('Session capacity reached',503)
+            SESSIONS[sid]=s
+        return sid,s
     def start_session(self, email, password):
         token,lifetime=self.server.zimbra.login(email,password)
         s={'token':token,'expires':time.time()+lifetime,'csrf':secrets.token_urlsafe(32),'user':{'email':email,'name':email.split('@')[0],'signature':''}}
@@ -2902,7 +3042,7 @@ class Handler(SimpleHTTPRequestHandler):
             if not isinstance(data,dict): raise APIError('JSON object required')
             if not self.server.zimbra: raise APIError('Mail server setup is pending. Contact your administrator.',503)
             booking=self.path.startswith('/api/public/booking/')
-            if self.path in ('/api/login','/api/admin/login') or self.path.startswith('/api/signup/') or booking:
+            if self.path in ('/api/login','/api/admin/login','/api/accounts/add') or self.path.startswith('/api/signup/') or booking:
                 with LOCK:
                     now=time.time(); attempts=self.server.attempts
                     for key in list(attempts):
@@ -2936,7 +3076,13 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.reply(200,{'domain':domain,'records':domain_records(domain,self.server.mail_host,getattr(self.server.admin,'dkim_dir',None))})
             if self.path=='/api/logout':
                 with LOCK: SESSIONS.pop(sid,None)
-                return self.reply(200,{'ok':True},'dejoiy_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0')
+                waiting=[o for o,_ in self.other_sessions() if o!=sid]   # signing out of one account opens the next one that waits
+                if waiting:
+                    with LOCK: following=SESSIONS[waiting[0]]['user']['email']
+                    return self.reply(200,{'ok':True,'next':following},self.account_cookies(waiting[0],waiting[1:]))
+                return self.reply(200,{'ok':True},self.account_cookies(None,[]))
+            if self.path=='/api/accounts/add': return self.account_add(sid,data,custom)
+            if self.path=='/api/accounts/switch': return self.account_switch(sid,data)
             if self.path=='/api/admin/login':
                 client=getattr(self.server,'admin',None)
                 if not client: raise APIError('Mail administration is not configured on this server.',503)
@@ -2999,6 +3145,10 @@ class Handler(SimpleHTTPRequestHandler):
                 audit=getattr(self.server,'audit',None)
                 if not audit: raise APIError('Reports are not switched on for this server.',503)
                 return self.reply(200,audit.report(scope))
+            if self.path=='/api/admin/action' and data.get('op') in ('relay_get','relay_set','relay_remove','relay_test'):
+                out=self.relay_action(s,data)
+                if data.get('op')!='relay_get': self.log('admin:'+data['op'],s['user']['email'],out.get('domain'))   # never the password
+                return self.reply(200,out)
             if self.path=='/api/admin/action' and data.get('op') in ('login_host_get','login_host_set','login_host_remove','brand_set'):
                 out=self.login_host_action(s,data)
                 if data.get('op')!='login_host_get': self.log('admin:'+data['op'],s['user']['email'],out.get('host') or out.get('domain'))
@@ -3015,7 +3165,9 @@ class Handler(SimpleHTTPRequestHandler):
             if self.path=='/api/send':
                 data=self.mention_recipients(s,data)
                 started=time.time()
-                try: result=self.server.zimbra.write_message(s['token'],data,sender=s['user']['email'])
+                try:
+                    own=None if s['user']['email'].lower() in JOI_MAILBOXES else self.relay_route(s,data)   # the company's own mail service, when it set one
+                    result=self.relay_send(s,data,own) if own else self.server.zimbra.write_message(s['token'],data,sender=s['user']['email'])
                 except APIError as e:
                     return self.send_failed(s,data,e,started)
                 self.log('send',s['user']['email'],n=max(1,sum(len([a for a in re.split(r'[,;\n]+',str(data.get(k,''))) if a.strip()]) for k in ('to','cc','bcc'))))
@@ -3120,6 +3272,7 @@ def serve():
         server.admin.app_url=server.app_origin
         server.admin.dkim_dir=os.environ.get('DKIM_DIR') or (str(state/'dkim') if state else None)
     server.signups=SignupStore(str(state/'signups.sqlite') if state else None)
+    server.relays=relay.Relays(state/'relays.json',key_file=state/'relay.key') if state else None   # a company's own outgoing mail service
     server.reserved_domains={d.strip().lower() for d in os.environ.get('RESERVED_DOMAINS','dejoiy.com').split(',') if d.strip()}
     server.provisioner=Provisioner(server.admin,os.environ['PROVISION_ADMIN'],os.environ['PROVISION_ADMIN_PASSWORD']) if server.admin and os.environ.get('PROVISION_ADMIN') and os.environ.get('PROVISION_ADMIN_PASSWORD') else None
     # 'mail.received' webhooks: incoming mail never passes this server, so a watcher looks once a minute (only for companies that asked)

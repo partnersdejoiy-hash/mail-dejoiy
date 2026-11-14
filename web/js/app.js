@@ -173,6 +173,23 @@ const App = {
     const first = root.querySelector("input,textarea,select"); if(first) setTimeout(()=>first.focus(), 50);
   },
   closeDialog(){ document.getElementById("dialog-root").innerHTML=""; Back.closed(); },
+  /* Sign in to one more mailbox beside this one. You stay signed in here and switch from the account menu. */
+  addAccount(){
+    const send = ()=>{
+      const email=document.getElementById("aa-email").value.trim(), password=document.getElementById("aa-pass").value, note=document.getElementById("aa-note"), button=document.querySelector(".dlg-foot .primary");
+      if(!email || !password){ note.textContent="Enter the email address and its password."; return false; }
+      if(button.disabled) return false; button.disabled=true; note.textContent="";
+      Live.request("accounts/add",{email,password}).then(()=>location.reload()).catch(error=>{ button.disabled=false; document.getElementById("aa-pass").value=""; note.textContent=error.message; });
+      return false;
+    };
+    this.dialog({title:"Add another account", body:`
+      <p class="hint">Sign in to another Dejoiy Mail mailbox. You stay signed in to ${esc(Store.state.user.email)} and can switch between them from this menu. Up to 5 accounts.</p>
+      <div class="field"><label for="aa-email">Email address</label><input type="email" id="aa-email" autocomplete="username" autocapitalize="off"></div>
+      <div class="field"><label for="aa-pass">Password</label><input type="password" id="aa-pass" autocomplete="current-password"></div>
+      <p id="aa-note" role="alert" class="field-error"></p>`,
+      actions:[{label:"Cancel"},{label:"Sign in", primary:true, fn:send}]});
+    document.getElementById("aa-pass").addEventListener("keydown", e=>{ if(e.key==="Enter") send(); });
+  },
   confirm(msg, fn){
     this.dialog({title:"Please confirm", body:`<p>${esc(msg)}</p>`,
       actions:[{label:"Cancel"},{label:"Yes, do it", primary:true, fn}]});
@@ -357,8 +374,11 @@ const App = {
     document.getElementById("side-scrim").addEventListener("click", ()=>{ document.body.classList.remove("nav-open"); Back.closed(); });
     document.getElementById("brand-home").addEventListener("click", ()=> this.go("mail:inbox"));
     document.getElementById("account-btn").addEventListener("click", async ev=>{
-      const u = Store.state.user;
-      this.menu(ev.currentTarget, [
+      const u = Store.state.user, anchor = ev.currentTarget;
+      // the other accounts signed in on this browser (the server keeps them; nothing about them is stored in the page)
+      const others = Live.enabled ? ((await Live.request("accounts").catch(()=>({accounts:[]}))).accounts||[]).filter(a=>!a.current) : [];
+      const switchTo = async email=>{ try{ await Live.request("accounts/switch",{email}); location.reload(); }catch(error){ this.toast(error.message); } };
+      this.menu(anchor, [
         {label:`👤 ${u.name} — ${u.email}`, fn:()=>this.go("settings:general")},
         ...(window.Presence && Presence.enabled ? [{label:`${{online:"🟢",away:"🟡",busy:"🔴",offline:"⚪"}[{auto:"online",away:"away",busy:"busy",invisible:"offline"}[Presence.mine.choice]]} ${Presence.mine.text||"Set a status"}`, fn:()=>Presence.open()}] : []),
         {label:"📷 Change profile photo", fn:()=>{
@@ -371,7 +391,9 @@ const App = {
         {label:"🎨 Themes", fn:()=>Themes.openPicker()},
         {label:"⚙️ Settings", fn:()=>this.go("settings")},
         {sep:true},
-        {label:Live.enabled?"↩ Sign out":"↩ Sign out (demo)", fn:async ()=>{if(Live.enabled)await Live.logout();else this.toast("Demo build — there is no server session to sign out of.");}}
+        ...others.map(a=>({label:`🔁 Switch to ${a.name||a.email.split("@")[0]} — ${a.email}`, fn:()=>switchTo(a.email)})),
+        ...(Live.enabled ? [{label:"＋ Add another account", fn:()=>this.addAccount()}] : []),
+        {label:Live.enabled?(others.length?"↩ Sign out of this account":"↩ Sign out"):"↩ Sign out (demo)", fn:async ()=>{if(Live.enabled)await Live.logout();else this.toast("Demo build — there is no server session to sign out of.");}}
       ]);
     });
     window.addEventListener("hashchange", ()=> this.parse());
