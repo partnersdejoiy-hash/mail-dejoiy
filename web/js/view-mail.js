@@ -520,7 +520,7 @@ function ownDesign(readerEl){
   readerEl.classList.remove("own-design"); clear(readerEl);
   articles.forEach(a=>{ a.classList.remove("own-design"); clear(a); });
   const painted=articles.map(a=>[a, a.classList.contains("open") ? mailBackground(a) : null]).filter(([,rgb])=>rgb);
-  if(articles.length===1 && painted.length===1){ readerEl.classList.add("own-design"); set(readerEl,painted[0][1]); painted[0][0].classList.add("own-design"); set(painted[0][0],painted[0][1]); return; }
+  // an open mail is always the colour card; a designed message only colours its own box inside it
   painted.forEach(([a,rgb])=>{ a.classList.add("own-design"); set(a,rgb); });
 }
 })();

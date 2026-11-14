@@ -75,6 +75,26 @@ const GLASS_DEFAULT = {live:0, photo:0, scenic:0, custom:0};
 const GLASS_MAX = 85;
 const GLASS_PHONE = 40;   // where a phone starts once its background is switched on
 
+/* How bright a picture is, 0 (black) to 1 (white); null when it cannot be read. Remembered per picture. */
+const seenBrightness = new Map();
+function brightness(src){
+  if(seenBrightness.has(src)) return Promise.resolve(seenBrightness.get(src));
+  return new Promise(done=>{
+    const img=new Image(); img.crossOrigin="anonymous";
+    img.onload=()=>{ let value=null;
+      try{ const c=document.createElement("canvas"); c.width=c.height=16; const x=c.getContext("2d"); x.drawImage(img,0,0,16,16);
+        const d=x.getImageData(0,0,16,16).data; let sum=0; for(let i=0;i<d.length;i+=4) sum+=0.2126*d[i]+0.7152*d[i+1]+0.0722*d[i+2]; value=sum/(d.length/4)/255; }catch(_){}
+      seenBrightness.set(src,value); done(value); };
+    img.onerror=()=>done(null);
+    img.src=src;
+  });
+}
+function colourBrightness(css){
+  const c=document.createElement("canvas"); c.width=c.height=1; const x=c.getContext("2d");
+  x.fillStyle="#fff"; x.fillRect(0,0,1,1); x.fillStyle=css.trim()||"#fff"; x.fillRect(0,0,1,1);   // over white, so a see-through panel colour counts as lighter
+  const d=x.getImageData(0,0,1,1).data; return (0.2126*d[0]+0.7152*d[1]+0.0722*d[2])/255;
+}
+
 const Themes = {
   ALL: THEMES,
   GLASS_MAX,
@@ -133,6 +153,20 @@ const Themes = {
     document.documentElement.dataset.phoneBg = this.phoneBg() ? "on" : "off";
     document.documentElement.style?.setProperty('--glass', this.glass()+'%');
     document.documentElement.style?.setProperty('--glass-num', String(this.glass()));
+    this.panelInk();
+  },
+
+  /* See-through panels: the text takes the colour that reads on what is now behind it (the picture
+     mixed with the panel colour). Below 40% the panel colour still decides, so the theme's own ink stays. */
+  async panelInk(){
+    const root=document.documentElement, p=Store.state.prefs, g=this.glass(), run=this._ink=(this._ink||0)+1;
+    const photo=PHOTO_THEMES.find(t=>t.id===p.theme), live=LIVE_THEMES.find(t=>t.id===p.theme);
+    const src=g<40 ? "" : p.customBg || (photo ? photo.image.replace('w=1920','w=64') : live ? window.LiveThemes?.thumb(live.id) : "");
+    const picture=src ? await brightness(src) : null;
+    if(run!==this._ink) return;   // a newer change is already being worked out
+    if(picture===null){ delete root.dataset.panelInk; return; }
+    const behind=colourBrightness(getComputedStyle(document.body).getPropertyValue('--surface'))*(1-g/100) + picture*(g/100);
+    root.dataset.panelInk = behind<0.55 ? "light" : "dark";
   },
 
   /* The Dejoiy colour in use: chosen on its own, or pink for the plain default look. */

@@ -494,3 +494,14 @@ html #shell::before{-webkit-backdrop-filter:none!important;backdrop-filter:none!
 html:is([data-photo-theme="true"],[data-scenic="true"]) :is(#topbar,#sidebar,#app-rail,#view){background:color-mix(in srgb,var(--surface) calc(100% - var(--glass,0%)),transparent)!important}
 html[data-scenic="true"] .mail-card{background:var(--card)!important}
 html[data-scenic="true"] .msg-row{--row-base:var(--card)!important;background:color-mix(in srgb,var(--t,var(--accent)) 15%,var(--card))!important}
+
+/* ---------- see-through panels: text that reads on the picture behind it (set by Themes.panelInk) ---------- */
+html[data-panel-ink="light"] :is(#topbar,#sidebar,#app-rail,.mail-heading,.mail-filterbar,.message-group,.msg-row,.r-toolbar,.list-toolbar){--ink:#fff;--ink-2:#f0f0f4;--ink-3:#dcdce4;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.5)}
+html[data-panel-ink="dark"] :is(#topbar,#sidebar,#app-rail,.mail-heading,.mail-filterbar,.message-group,.msg-row,.r-toolbar,.list-toolbar){--ink:#121212;--ink-2:#2e2b33;--ink-3:#48434d;color:#121212;text-shadow:0 1px 1px rgba(255,255,255,.45)}
+/* solid things inside those panels keep their own text colour */
+html[data-panel-ink] :is(.search-wrap,.compose-btn,.btn,.lbl,.code-chip,.m-avatar,.avatar,.badge,.count,[role="menu"],.menu,.popover){text-shadow:none}
+html[data-panel-ink="light"] .search-wrap{--ink:#121212;--ink-2:#3d3a42;--ink-3:#5b5560;background:#fff;color:#121212}
+html[data-panel-ink="dark"] .search-wrap{--ink:#121212;--ink-2:#3d3a42;--ink-3:#5b5560;background:#fff;color:#121212}
+html[data-panel-ink] :is(#topbar,#view,#sidebar) :is(select,input:not([type="checkbox"])){color:#121212;text-shadow:none}
+html[data-panel-ink] .list-toolbar :is(button,.btn){color:inherit;text-shadow:inherit}
+html[data-panel-ink] .folder-total{color:#121212;text-shadow:none}
