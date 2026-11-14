@@ -26,7 +26,8 @@ async function list(el){
   if((view==="team" && !meta.department && !meta.manage) || (view==="all" && !meta.manage) || (view==="platform" && !meta.platform)) view="mine";
   const data = await Live.request("tickets?view="+view);
   if(App.route!=="desk") return;
-  const queue = meta.department ? meta.department+" queue" : "Company admin queue";
+  // a company admin's queue holds the Company admin tickets too, even when they also belong to a department
+  const queue = meta.manage ? (meta.department ? meta.department+" + Company admin queue" : "Company admin queue") : meta.department+" queue";
   const tabs = [["mine","My tickets"], ...(meta.department||meta.manage?[["team", queue+(meta.waiting?` · ${meta.waiting}`:"")]]:[]), ...(meta.manage?[["all","All company tickets"]]:[]),
     ...(meta.platform?[["platform","From companies to Dejoiy"+(meta.waitingPlatform?` · ${meta.waitingPlatform}`:"")]]:[])];
   const empty = view==="mine" ? "You have not raised a ticket yet. Need something from IT, HR, your admin or another team? Raise one." : view==="team" ? "Nothing in your queue."
