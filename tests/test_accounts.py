@@ -82,3 +82,14 @@ class StaySignedIn(unittest.TestCase):
         self.assertEqual(self.lifetime(48 * 3600 * 1000), 48 * 3600)
         self.assertEqual(self.lifetime(3600 * 1000), 3600)
         self.assertEqual(self.lifetime(400 * 86400 * 1000), z.MAX_SESSION_SECONDS)
+
+
+class MailboxName(unittest.TestCase):
+    def test_a_new_person_is_known_by_the_name_on_their_mailbox(self):
+        import xml.etree.ElementTree as ET
+        client = z.Zimbra('https://mail.example'); out = ET.Element('r')
+        for n, v in (('displayName', ' Deepanshu Chander Yaduvanshi '), ('zimbraIsAdminAccount', 'FALSE')):
+            ET.SubElement(out, '{' + z.ACCOUNT + '}attr', {'name': n}).text = v
+        client.call = lambda request, token=None: out
+        self.assertEqual(client.capabilities('t'), {'isAdmin': False, 'canManageRoles': False, 'name': 'Deepanshu Chander Yaduvanshi'})
+        out.remove(out[0]); self.assertNotIn('name', client.capabilities('t'))   # none given: the page keeps its own fallback

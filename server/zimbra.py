@@ -909,7 +909,8 @@ class Zimbra:
         attrs={a.get('name') or a.get('n'):a.text or '' for a in response.findall('.//{'+ACCOUNT+'}attr')}
         global_admin=attrs.get('zimbraIsAdminAccount')=='TRUE'
         delegated=attrs.get('zimbraIsDelegatedAdminAccount')=='TRUE'
-        return {'isAdmin':global_admin or delegated,'canManageRoles':global_admin}
+        # the name their admin gave the mailbox: without it a new person shows up everywhere as the start of their address
+        return {'isAdmin':global_admin or delegated,'canManageRoles':global_admin,**({'name':attrs['displayName'].strip()} if attrs.get('displayName','').strip() else {})}
     def account_id(self, token):
         account=self.call(node(ACCOUNT,'GetInfoRequest',{'sections':'mbox'}),token).find('{'+ACCOUNT+'}id')
         return account.text if account is not None and account.text else ''
@@ -2543,6 +2544,7 @@ class Handler(SimpleHTTPRequestHandler):
         user=self.server.zimbra.capabilities(token)
         try: name=self.server.zimbra.preferences(token).get('name') or ''
         except APIError: name=''
+        name=name or user.get('name','')   # no 'From' name chosen yet: the name on the mailbox
         return {'email':email,'name':name,'admin':shine_admin(user),'photo':self.shine_photo(email)}
     def shine_meeting(self, session, data):
         """'Add Shine meeting' on a calendar event: Shine makes a room for this mailbox and gives back its link."""
