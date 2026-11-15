@@ -138,11 +138,6 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
 @media (max-width:640px){
   .adm-top{flex-wrap:wrap;gap:8px}
   #adm-who{display:none}
-  #o-roles thead{display:none}
-  #o-roles tr{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:8px;padding:12px 0;border-bottom:1px solid var(--line,#e5e7eb)}
-  #o-roles td{padding:0;border:0}
-  #o-roles td:first-child{grid-column:1/-1}
-  #o-roles input{width:100%}
   .adm-card .adm-table td small{word-break:break-all}
 }
 /* roles with their permissions */
@@ -321,3 +316,27 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;backgrou
 .adm-guide .bug-btn{display:inline-block;padding:.5em 1.1em;border-radius:999px;background:var(--accent);color:#fff;font-weight:600;text-decoration:none}
 .adm-guide blockquote{margin:1em 0;padding:.5em 1em;border-left:4px solid var(--line)}
 .adm-guide .table{overflow-x:auto}.adm-guide table{border-collapse:collapse;width:100%}.adm-guide th,.adm-guide td{border:1px solid var(--line);padding:.45em .6em;text-align:left;vertical-align:top}
+
+/* roles & permissions matrix, like Shine's: rows = permissions, columns = roles */
+.adm-row-btns{display:flex;gap:8px;flex-wrap:wrap}
+.adm-matrix-wrap{overflow-x:auto;margin:10px 0;border:1px solid var(--line);border-radius:14px}
+.adm-matrix{border-collapse:separate;border-spacing:0;font-size:13px;min-width:100%}
+.adm-matrix th,.adm-matrix td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:center;vertical-align:middle}
+.adm-matrix tr:last-child>*{border-bottom:0}
+.adm-matrix th[scope=row],.adm-matrix thead th:first-child{position:sticky;left:0;z-index:1;background:var(--surface);text-align:left;font-weight:600;min-width:200px;max-width:240px}
+@media (max-width:640px){.adm-matrix th[scope=row],.adm-matrix thead th:first-child{min-width:130px;max-width:150px;font-size:12px}.adm-matrix thead th{min-width:120px}}
+.adm-matrix thead th{background:var(--surface);min-width:150px}
+.adm-matrix thead input{width:100%;min-width:0;margin:0;font-weight:700;text-align:center;font-size:13px}
+.adm-matrix thead small{display:block;margin-top:4px;color:var(--ink-3);font-weight:500}
+.adm-matrix select{margin:0;font-size:12px;width:100%}
+.adm-matrix-group th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-3);background:var(--surface-2)}
+.adm-matrix-group th[scope=rowgroup]{position:sticky;left:0}
+.adm-cell{display:inline-grid;place-items:center;width:34px;height:34px;border-radius:10px;cursor:pointer;position:relative;
+  background:color-mix(in srgb,var(--ink-3) 10%,transparent);color:var(--ink-3);font-weight:700;transition:background .15s,transform .1s}
+.adm-cell input{position:absolute;inset:0;opacity:0;margin:0;cursor:inherit}
+.adm-cell.is-on{background:color-mix(in srgb,var(--pop,var(--accent)) 16%,transparent);color:var(--pop,var(--accent))}
+.adm-cell:has(input:focus-visible){outline:2px solid var(--pop,var(--accent));outline-offset:2px}
+.adm-cell:active{transform:scale(.94)}
+.adm-cell.is-locked,.adm-cell:has(input:disabled){cursor:not-allowed;opacity:.55}
+.adm-matrix-tools td{white-space:nowrap}
+.adm-matrix-tools .adm-btn{margin:2px}

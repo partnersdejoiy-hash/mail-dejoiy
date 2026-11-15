@@ -1503,13 +1503,25 @@ DEPARTMENT_MARK='dejoiy:department'
 # What a role may do. Console permissions need company-admin access; posting needs none.
 PERMISSIONS={'updates.post':'Post in the company box','mailboxes.manage':'Add and edit mailboxes','mailboxes.delete':'Delete mailboxes',
     'teams.manage':'Manage departments and team lists','domain.view':'See the DNS setup','roles.manage':'Manage roles, permissions and the company box',
-    'tickets.manage':'See and handle every help desk ticket'}
-CONSOLE_PERMISSIONS=set(PERMISSIONS)-{'updates.post','tickets.manage'}
+    'tickets.manage':'See and handle every help desk ticket','mail.everyone':'Mail the whole company at once (@all)',
+    'reports.view':'See mail reports and the activity log'}
+CONSOLE_PERMISSIONS=set(PERMISSIONS)-{'updates.post','tickets.manage','mail.everyone'}
 # The order permissions are stored in (one bit each). Only ever add at the end: saved roles depend on it.
-PERM_ORDER=('updates.post','mailboxes.manage','mailboxes.delete','teams.manage','domain.view','roles.manage','tickets.manage')
+PERM_ORDER=('updates.post','mailboxes.manage','mailboxes.delete','teams.manage','domain.view','roles.manage','tickets.manage','mail.everyone','reports.view')
+ORG_VERSION=2   # 2: mail.everyone and reports.view exist; older saved roles get them as they behaved before (see read_org)
 ORG_NOTES_LIMIT=1000   # the mail server keeps a domain's notes to about 1024 characters
-DEFAULT_ROLES=[{'name':'Member','access':'User','perms':[]},{'name':'Team lead','access':'User','perms':['updates.post']},
-    {'name':'Department head','access':'User','perms':['updates.post']},{'name':'IT admin','access':'Domain admin','perms':sorted(PERMISSIONS)}]
+DEFAULT_ROLES=[{'name':'Member','access':'User','perms':['mail.everyone']},{'name':'Team lead','access':'User','perms':['mail.everyone','updates.post']},
+    {'name':'Department head','access':'User','perms':['mail.everyone','updates.post']},{'name':'IT admin','access':'Domain admin','perms':sorted(PERMISSIONS)}]
+# The company roles Shine uses, with the permissions that mean something in mail. Super Admin and DEJOIY Admin are
+# Dejoiy platform admins, not company roles, so they are not here. Chat, calls and meetings have no mail permission.
+SHINE_ROLES=[{'name':'Admin','access':'Domain admin','perms':sorted(PERMISSIONS)},
+    {'name':'Super IT','access':'Domain admin','perms':sorted(PERMISSIONS)},
+    {'name':'IT Team','access':'Domain admin','perms':['domain.view','mail.everyone','mailboxes.manage','reports.view','teams.manage','tickets.manage','updates.post']},
+    {'name':'President','access':'User','perms':['mail.everyone','tickets.manage','updates.post']},
+    {'name':'Director','access':'User','perms':['mail.everyone','tickets.manage','updates.post']},
+    {'name':'Operations Manager','access':'User','perms':['mail.everyone','updates.post']},
+    {'name':'Team Leader','access':'User','perms':['updates.post']},
+    {'name':'Employee','access':'User','perms':[]}]
 OP_PERMISSIONS={**{op:'mailboxes.manage' for op in ('create_user','set_name','status','password','quota','forward','add_alias','remove_alias','set_plan')},
     'delete_user':'mailboxes.delete','dns_records':'domain.view',
     **{op:'teams.manage' for op in ('create_department','set_department','create_list','delete_list','add_member','remove_member','list_members')},
@@ -1557,7 +1569,7 @@ def read_org(notes):
         standard=standard_policy()['rules']
         data={'dejoiyRoles':[{'name':r[0],'access':'Domain admin' if r[1] else 'User','perms':[p for i,p in enumerate(PERM_ORDER) if r[2]>>i&1]}
                 for r in data['r'] if isinstance(r,list) and len(r)==3 and isinstance(r[0],str) and isinstance(r[2],int) and not isinstance(r[2],bool)],
-            'companyBox':data.get('b'),'defaultPolicy':data.get('d'),
+            'companyBox':data.get('b'),'defaultPolicy':data.get('d'),'v':data.get('v'),
             'mailPolicies':[{'name':p[0],'rules':{**standard,**p[1]}} for p in data.get('p') or [] if isinstance(p,list) and len(p)==2 and isinstance(p[1],dict)]}
     roles=[]
     for role in data.get('dejoiyRoles') or []:
@@ -1565,6 +1577,8 @@ def read_org(notes):
         access='Domain admin' if role.get('access')=='Domain admin' else 'User'
         # Roles saved before permissions existed: company admins could do everything, members nothing.
         perms=role.get('perms') if isinstance(role.get('perms'),list) else (sorted(PERMISSIONS) if access=='Domain admin' else [])
+        if data.get('v')!=ORG_VERSION:   # saved before version 2: everyone could use @all, and every company admin saw reports
+            perms=[*perms,'mail.everyone',*(['reports.view'] if access=='Domain admin' else [])]
         roles.append({'name':role['name'],'access':access,'perms':sorted({p for p in perms if p in PERMISSIONS and (access=='Domain admin' or p not in CONSOLE_PERMISSIONS)})})
     box=data.get('companyBox') if isinstance(data.get('companyBox'),str) else ''
     policies=[]
@@ -1581,7 +1595,7 @@ def write_org(notes, **changes):
     standard=standard_policy()['rules']
     out=json.dumps({'r':[[r['name'],1 if r['access']=='Domain admin' else 0,sum(1<<i for i,p in enumerate(PERM_ORDER) if p in r['perms'])] for r in current['roles']],
         'b':current['boxName'],'d':current['defaultPolicy'],
-        'p':[[p['name'],{k:v for k,v in p['rules'].items() if standard.get(k)!=v}] for p in current['policies']]},separators=(',',':'),ensure_ascii=False)
+        'p':[[p['name'],{k:v for k,v in p['rules'].items() if standard.get(k)!=v}] for p in current['policies']],'v':ORG_VERSION},separators=(',',':'),ensure_ascii=False)
     if len(out)>ORG_NOTES_LIMIT: raise APIError('That is more than the mail server can keep for one company. Use shorter role or policy names, or fewer of them.')
     return out
 def role_perms(roles, title, is_admin):
@@ -2161,7 +2175,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if self.path=='/api/admin':
                     client,token,scope=self.admin_session(s)
                     perms=client.actor_perms(token,s['user']['email'],scope)
-                    return self.reply(200,{**client.overview(token,scope),'permissions':PERMISSIONS,'perms':None if perms is None else sorted(perms)})
+                    return self.reply(200,{**client.overview(token,scope),'permissions':PERMISSIONS,'consolePermissions':sorted(CONSOLE_PERMISSIONS),'shineRoles':SHINE_ROLES,'perms':None if perms is None else sorted(perms)})
                 raise APIError('Not found',404)
             except APIError as e: return self.reply(e.status,{'error':str(e)})
             except (ValueError,TypeError): return self.reply(400,{'error':'Invalid request'})
@@ -2650,6 +2664,8 @@ class Handler(SimpleHTTPRequestHandler):
             if not fields['to']: fields['to']=[me]
         if groups:
             user=session['user']; mine=self.domain(session)
+            if 'all' in groups and 'mail.everyone' not in self.org(session).get('perms',()):
+                raise APIError('Your role does not allow mailing the whole company with @all. Ask an admin for "'+PERMISSIONS['mail.everyone']+'".',403)
             if 'allS' in groups and not (user.get('canManageRoles') is True or (user.get('isAdmin') is True and mine in getattr(self.server,'joi_internal',[]))):
                 raise APIError('Only DEJOIY super admins and IT can mail everyone with @allS. Use @all for your own domain.',403)
             every=[p['email'] for p in self.mailboxes() if p['active'] and p['email']!=me and p['email'] not in JOI_MAILBOXES]
@@ -2665,7 +2681,7 @@ class Handler(SimpleHTTPRequestHandler):
     def team_groups(self, session):
         """The departments and designations of the signed-in person's company, for Compose's suggestions."""
         if not getattr(self.server,'provisioner',None): return {'groups':[]}
-        return {'groups':team_groups(self.mailboxes(),self.domain(session))[:200]}
+        return {'groups':team_groups(self.mailboxes(),self.domain(session))[:200],'everyone':'mail.everyone' in self.org(session).get('perms',())}
     def mailboxes(self):
         """Every real mailbox (system and spam-training boxes left out)."""
         provisioner=getattr(self.server,'provisioner',None)
@@ -2878,8 +2894,8 @@ class Handler(SimpleHTTPRequestHandler):
         """The company box name and whether this person may post there, read with the service admin
         (people without admin rights cannot read their own role). Cached on the session for 5 minutes."""
         cached=session.get('org')
-        if cached and cached.get('at',0)>time.time()-300: return cached
-        user=session['user']; domain=self.domain(session); info={'at':time.time(),'box':'','post':bool(user.get('isAdmin'))}
+        if cached and 'perms' in cached and cached.get('at',0)>time.time()-300: return cached
+        user=session['user']; domain=self.domain(session); info={'at':time.time(),'box':'','post':bool(user.get('isAdmin')),'perms':sorted(PERMISSIONS) if user.get('isAdmin') else ['mail.everyone']}
         provisioner=getattr(self.server,'provisioner',None)
         if provisioner and domain:
             try:
@@ -2888,7 +2904,8 @@ class Handler(SimpleHTTPRequestHandler):
                 notes=attr(admin.call(found,token).find('{'+ADMIN+'}domain'),'zimbraNotes')
                 me=node(ADMIN,'GetAccountRequest'); me.append(node(ADMIN,'account',{'by':'name'},user['email']))
                 title=attr(admin.call(me,token).find('{'+ADMIN+'}account'),'title')
-                info.update(box=read_org(notes)['boxName'],post='updates.post' in role_perms(read_roles(notes),title,bool(user.get('isAdmin'))))
+                mine=role_perms(read_roles(notes),title,bool(user.get('isAdmin')))
+                info.update(box=read_org(notes)['boxName'],post='updates.post' in mine,perms=sorted(mine))
             except (APIError,AttributeError): pass
         session['org']=info; return info
     def updates_view(self, session):
@@ -3325,6 +3342,9 @@ class Handler(SimpleHTTPRequestHandler):
             if self.path=='/api/admin/action' and data.get('op')=='passkeys_reset': return self.reply(200,self.passkeys_reset(s,data))
             if self.path=='/api/admin/action' and data.get('op')=='reports':
                 client,token,scope=self.admin_session(s)
+                perms=client.actor_perms(token,s['user']['email'],scope)
+                if perms is not None and 'reports.view' not in perms:
+                    raise APIError('Your role does not allow this. Ask an admin for "'+PERMISSIONS['reports.view']+'".',403)
                 audit=getattr(self.server,'audit',None)
                 if not audit: raise APIError('Reports are not switched on for this server.',503)
                 return self.reply(200,audit.report(scope))

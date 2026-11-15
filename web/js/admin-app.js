@@ -593,7 +593,13 @@ const companyRoles = (d, u) => (d.domains.find(x=>u&&u.email.endsWith("@"+x.doma
 
 // What the signed-in admin's role allows; platform admins (perms null) can do everything.
 const can = perm => !state.data?.perms || state.data.perms.includes(perm);
-const CONSOLE_ONLY = perm => perm !== "updates.post";
+const CONSOLE_ONLY = perm => (state.data?.consolePermissions || []).includes(perm);
+const PERM_GROUPS = [["Mail",["updates.post","mail.everyone","tickets.manage"]],
+  ["Admin console",["mailboxes.manage","mailboxes.delete","teams.manage","roles.manage","domain.view","reports.view"]]];
+// Shine's roles and the old starter roles, by name, for "Reset"
+const STARTER = {"member":["mail.everyone"],"team lead":["mail.everyone","updates.post"],"department head":["mail.everyone","updates.post"]};
+const defaultsFor = name => { const n=String(name||"").trim().toLowerCase(), shine=(state.data?.shineRoles||[]).find(r=>r.name.toLowerCase()===n);
+  return shine ? shine : STARTER[n] ? {name, access:"User", perms:STARTER[n]} : null; };
 
 function org(main, d){
   const domain = d.scope || d.domains[0]?.domain || "", here = d.domains.find(x=>x.domain===domain) || {}, roles = here.roles || [];
@@ -611,17 +617,19 @@ function org(main, d){
       ${d.departments.map((x,i)=>`<tr><td><b>${esc(x.name||x.email)}</b><small>${esc(x.email)}</small></td><td>${count(x.name)}</td>
         <td class="adm-right">${editTeams?`<button class="adm-btn ghost sm" data-dmem="${i}">People</button> <button class="adm-btn ghost sm" data-ddel="${i}">Delete</button>`:""}</td></tr>`).join("")||`<tr><td class="adm-muted" colspan="3">No departments yet. Start with one like Sales, Support or Accounts.</td></tr>`}
       </tbody></table>`}</div>
-    <div class="adm-card"><div class="adm-card-head"><h2>Roles &amp; permissions${domain?` · ${esc(domain)}`:""}</h2>${editRoles?`<button class="adm-btn ghost" id="o-role-add">+ Add role</button>`:""}</div>
-      <p class="adm-muted">Pick what each role may do. Admin-console permissions need company admin access. A company admin without a role can do everything.</p>
-      <div class="adm-roles" id="o-roles">
-      ${roles.map((r,i)=>`<div class="adm-role"><div class="adm-role-head">
-          <input data-rname="${i}" value="${esc(r.name)}" maxlength="40" aria-label="Role name" ${editRoles?"":"disabled"}>
-          <select data-raccess="${i}" aria-label="Access for ${esc(r.name)}" ${editRoles?"":"disabled"}><option value="User" ${r.access==="User"?"selected":""}>Mail only</option><option value="Domain admin" ${r.access==="Domain admin"?"selected":""}>Company admin</option></select>
-          <span class="adm-muted">${holders(r.name)} ${holders(r.name)===1?"person":"people"}</span>
-          ${editRoles?`<button class="adm-btn ghost sm" data-rdel="${i}">Remove</button>`:""}</div>
-        <div class="adm-perms">${Object.entries(perms).map(([key,label])=>{const off=!editRoles||(r.access!=="Domain admin"&&CONSOLE_ONLY(key));
-          return `<label class="adm-check ${off&&r.access!=="Domain admin"&&CONSOLE_ONLY(key)?"is-off":""}"><input type="checkbox" data-rperm="${i}" value="${key}" ${(r.perms||[]).includes(key)&&!(r.access!=="Domain admin"&&CONSOLE_ONLY(key))?"checked":""} ${off?"disabled":""}> ${esc(label)}</label>`;}).join("")}</div></div>`).join("")}
-      </div><p role="alert" class="adm-error" id="o-err"></p>${editRoles?`<button class="adm-btn primary" id="o-roles-save">Save roles</button>`:""}</div>`;
+    <div class="adm-card"><div class="adm-card-head"><h2>Roles &amp; permissions${domain?` · ${esc(domain)}`:""}</h2>${editRoles?`<span class="adm-row-btns"><button class="adm-btn ghost" id="o-role-shine">Add Shine roles</button><button class="adm-btn ghost" id="o-role-add">+ Add role</button></span>`:""}</div>
+      <p class="adm-muted">Tap a box to give or take a permission. Admin-console permissions need "Company admin" access. A company admin without a role can do everything; someone without a role can do none of these.</p>
+      <div class="adm-matrix-wrap"><table class="adm-matrix" id="o-roles"><thead><tr><th scope="col">Permission</th>
+      ${roles.map((r,i)=>`<th scope="col"><input data-rname="${i}" value="${esc(r.name)}" maxlength="40" aria-label="Role name" ${editRoles?"":"disabled"}>
+        <small>${holders(r.name)} ${holders(r.name)===1?"person":"people"}</small></th>`).join("")}</tr></thead><tbody>
+      <tr class="adm-matrix-access"><th scope="row">Access</th>${roles.map((r,i)=>`<td><select data-raccess="${i}" aria-label="Access for ${esc(r.name)}" ${editRoles?"":"disabled"}><option value="User" ${r.access==="User"?"selected":""}>Mail only</option><option value="Domain admin" ${r.access==="Domain admin"?"selected":""}>Company admin</option></select></td>`).join("")}</tr>
+      ${PERM_GROUPS.map(([title,keys])=>`<tr class="adm-matrix-group"><th scope="rowgroup" colspan="${roles.length+1}">${title}</th></tr>`+keys.filter(k=>perms[k]).map(key=>`<tr><th scope="row">${esc(perms[key])}</th>
+        ${roles.map((r,i)=>{ const locked=r.access!=="Domain admin"&&CONSOLE_ONLY(key), on=(r.perms||[]).includes(key)&&!locked;
+          return `<td><label class="adm-cell ${locked?"is-locked":on?"is-on":""}" title="${locked?"Needs Company admin access":esc(perms[key])}"><input type="checkbox" data-rperm="${i}" value="${key}" aria-label="${esc(r.name)}: ${esc(perms[key])}" ${on?"checked":""} ${!editRoles||locked?"disabled":""}><span aria-hidden="true">${locked?"🔒":on?"✓":"✕"}</span></label></td>`;}).join("")}</tr>`).join("")).join("")}
+      ${editRoles?`<tr class="adm-matrix-tools"><th scope="row">Role</th>${roles.map((r,i)=>`<td>${defaultsFor(r.name)?`<button class="adm-btn ghost sm" data-rreset="${i}">Reset</button>`:""}<button class="adm-btn ghost sm" data-rdel="${i}">Remove</button></td>`).join("")}</tr>`:""}
+      </tbody></table></div>
+      <p class="adm-muted">Not in mail, so only in Shine: chat, group chat, calls, meetings and deleting chats. Super Admin and DEJOIY Admin are Dejoiy platform admins, not company roles.</p>
+      <p role="alert" class="adm-error" id="o-err"></p>${editRoles?`<button class="adm-btn primary" id="o-roles-save">Save roles</button>`:""}</div>`;
   let list = roles.map(r=>({...r, perms:[...(r.perms||[])]}));
   const sync = ()=>{
     main.querySelectorAll("[data-rname]").forEach(i=>list[+i.dataset.rname].name=i.value);
@@ -631,9 +639,13 @@ function org(main, d){
   // Unsaved role edits redraw from the list being edited, not from the server copy.
   const redraw = change=>{ sync(); change(); org(main,{...d,domains:d.domains.map(x=>x.domain===domain?{...x,roles:list}:x)}); };
   main.querySelectorAll("[data-raccess]").forEach(sel=>sel.addEventListener("change",()=>redraw(()=>{})));
+  main.querySelectorAll("[data-rperm]").forEach(box=>box.addEventListener("change",()=>{ box.nextElementSibling.textContent=box.checked?"✓":"✕"; box.parentElement.classList.toggle("is-on",box.checked); }));
   if(editRoles){
     $("o-role-add").addEventListener("click",()=>{ redraw(()=>list.push({name:"New role",access:"User",perms:[]})); main.querySelector(`[data-rname="${list.length-1}"]`)?.select(); });
     main.querySelectorAll("[data-rdel]").forEach(b=>b.addEventListener("click",()=>redraw(()=>list.splice(+b.dataset.rdel,1))));
+    main.querySelectorAll("[data-rreset]").forEach(b=>b.addEventListener("click",()=>redraw(()=>{ const r=list[+b.dataset.rreset], def=defaultsFor(r.name); if(def){ r.access=def.access; r.perms=[...def.perms]; } })));
+    $("o-role-shine").addEventListener("click",()=>redraw(()=>{ const have=new Set(list.map(r=>r.name.trim().toLowerCase()));
+      (d.shineRoles||[]).filter(r=>!have.has(r.name.toLowerCase())).forEach(r=>list.push({...r, perms:[...r.perms]})); }));
     $("o-roles-save").addEventListener("click",async e=>{ const b=e.currentTarget; sync(); b.disabled=true;
       try{ await act({op:"save_roles",domain,roles:list}); await reload("Roles saved."); }catch(x){ $("o-err").textContent=x.message; b.disabled=false; } });
     $("o-box-save").addEventListener("click",async e=>{ const b=e.currentTarget; b.disabled=true;

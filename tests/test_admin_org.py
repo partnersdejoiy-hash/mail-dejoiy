@@ -48,7 +48,8 @@ class OrgTests(unittest.TestCase):
 
     def test_default_roles(self):
         self.assertEqual(z.read_roles('')[0]['name'], 'Member')
-        self.assertEqual(z.read_roles('{"dejoiyRoles":[{"name":"HR","access":"User"}]}'), [{'name': 'HR', 'access': 'User', 'perms': []}])
+        # saved before @all needed a permission: the role keeps @all, as it had
+        self.assertEqual(z.read_roles('{"dejoiyRoles":[{"name":"HR","access":"User"}]}'), [{'name': 'HR', 'access': 'User', 'perms': ['mail.everyone']}])
 
     def test_role_permissions_limit_company_admins(self):
         a = Fake()
@@ -64,8 +65,9 @@ class OrgTests(unittest.TestCase):
     def test_role_perms_owner_and_members(self):
         roles = z.read_roles('')
         self.assertEqual(z.role_perms(roles, '', True), set(z.PERMISSIONS))          # company owner without a role
-        self.assertEqual(z.role_perms(roles, 'Member', False), set())
-        self.assertEqual(z.role_perms(roles, 'team lead', False), {'updates.post'})
+        self.assertEqual(z.role_perms(roles, 'Member', False), {'mail.everyone'})
+        self.assertEqual(z.role_perms(roles, 'team lead', False), {'mail.everyone', 'updates.post'})
+        self.assertEqual(z.role_perms(roles, 'Nobody', False), set())
         notes = z.write_org('', boxName='Kaali Tea News')
         self.assertEqual(z.read_org(notes)['boxName'], 'Kaali Tea News')
 
@@ -88,3 +90,37 @@ class CompactOrg(unittest.TestCase):
     def test_too_much_is_refused_with_a_reason(self):
         roles = [{'name': 'x' * 40 + str(i), 'access': 'User', 'perms': []} for i in range(30)]
         with self.assertRaises(z.APIError): z.write_org('', roles=roles)
+
+
+class ShineRoles(unittest.TestCase):
+    """The Shine permissions that mean something in mail: @all for the whole company and the reports page."""
+    def test_old_saved_roles_keep_what_they_could_do(self):
+        old = json.dumps({'r': [['Agent', 0, 0], ['IT', 1, 0b1111110]], 'b': '', 'd': 'Standard', 'p': []})   # saved before version 2
+        agent, it = z.read_roles(old)
+        self.assertEqual(agent['perms'], ['mail.everyone'])                       # everyone could use @all
+        self.assertIn('reports.view', it['perms'])                               # every company admin saw reports
+    def test_new_saves_keep_a_ticked_off_permission_off(self):
+        roles = [{'name': 'Agent', 'access': 'User', 'perms': []}, {'name': 'IT', 'access': 'Domain admin', 'perms': ['mailboxes.manage']}]
+        self.assertEqual(z.read_roles(z.write_org('', roles=roles)), roles)
+    def test_shine_roles_are_valid_and_fit_next_to_many_roles(self):
+        for r in z.SHINE_ROLES:
+            self.assertTrue(set(r['perms']) <= set(z.PERMISSIONS))
+            if r['access'] == 'User': self.assertFalse(set(r['perms']) & z.CONSOLE_PERMISSIONS, r['name'])
+        bpo = [{'name': f'Quality Analyst {i:02d}', 'access': 'User', 'perms': ['tickets.manage']} for i in range(19)]
+        notes = z.write_org('', roles=bpo + z.SHINE_ROLES)
+        self.assertLessEqual(len(notes), z.ORG_NOTES_LIMIT)
+        self.assertEqual(z.read_roles(notes)[-1]['name'], 'Employee')
+    def test_mail_everyone_is_a_mail_permission(self):
+        self.assertNotIn('mail.everyone', z.CONSOLE_PERMISSIONS); self.assertIn('reports.view', z.CONSOLE_PERMISSIONS)
+        self.assertEqual(z.PERM_ORDER[:7], ('updates.post', 'mailboxes.manage', 'mailboxes.delete', 'teams.manage', 'domain.view', 'roles.manage', 'tickets.manage'))
+
+class AtAll(unittest.TestCase):
+    def run_mention(self, perms):
+        me = type('H', (), {})()
+        me.org = lambda s: {'perms': perms}; me.domain = lambda s: 'kaali.in'
+        me.mailboxes = lambda: [{'email': e, 'active': True, 'a': {}} for e in ('me@kaali.in', 'a@kaali.in', 'b@other.in')]
+        return z.Handler.mention_recipients(me, {'user': {'email': 'me@kaali.in'}}, {'to': '@all', 'body': 'hi'})
+    def test_all_needs_the_permission(self):
+        with self.assertRaisesRegex(z.APIError, 'does not allow'): self.run_mention([])
+        out = self.run_mention(['mail.everyone'])
+        self.assertEqual(out['bcc'], 'a@kaali.in'); self.assertEqual(out['to'], 'me@kaali.in')

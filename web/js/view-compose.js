@@ -332,13 +332,14 @@ function suggestions(el, named){
   const u=Store.state.user||{};
   const groups=[{email:"@all", name:"Everyone on your domain"}, ...(u.canManageRoles||u.isAdmin ? [{email:"@allS", name:"Everyone on Dejoiy Mail, every domain (super admins and IT)"}] : [])];
   let extra=[]; const fillAll=()=>fill([...groups, ...extra]);
+  const noEveryone=()=>{ const i=groups.findIndex(g=>g.email==="@all"); if(i>=0) groups.splice(i,1); };   // the role has no "Mail the whole company
   fillAll();
   if(window.Live?.enabled){
     // contacts used to load only when the Contacts page was opened, so Compose had nobody to suggest
     Live.request("contacts").then(r=>{ Store.state.contacts=r.contacts; fillAll(); }).catch(()=>{});
     if(window.Contacts) Contacts.supervisors().then(more=>{ extra=[...extra, ...more]; fillAll(); });
     // your company's departments and designations, each as one address
-    Live.request("groups").then(r=>{ extra=[...extra, ...(r.groups||[]).map(g=>({email:g.mention, team:true, name:`${g.name} ${g.kind==="dept"?"department":"(everyone with this designation)"} · ${g.count} ${g.count===1?"person":"people"}`}))]; fillAll(); }).catch(()=>{});
+    Live.request("groups").then(r=>{ if(r.everyone===false) noEveryone(); extra=[...extra, ...(r.groups||[]).map(g=>({email:g.mention, team:true, name:`${g.name} ${g.kind==="dept"?"department":"(everyone with this designation)"} · ${g.count} ${g.count===1?"person":"people"}`}))]; fillAll(); }).catch(()=>{});
   }
 }
 
