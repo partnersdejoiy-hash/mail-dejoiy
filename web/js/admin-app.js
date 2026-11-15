@@ -343,7 +343,7 @@ async function billing(main, d){
     <div class="adm-card adm-flush"><div class="adm-card-head adm-pad"><h2>Payments</h2></div>
       ${b.invoices.length?`<table class="adm-table"><thead><tr><th>Date</th><th>Plan</th><th>Amount</th><th>Status</th></tr></thead><tbody>${b.invoices.map(x=>`<tr><td><small>${day(x.paidAt||x.created)}</small></td>
         <td>${esc(b.plans.find(p=>p.id===x.plan)?.name||x.plan)} · ${x.period==="year"?"yearly":"monthly"}${x.mode==="test"?` <span class="adm-pill warn">test</span>`:""}</td><td>${inr(x.amount)}</td>
-        <td><span class="adm-pill ${x.status==="paid"||x.status==="active"?"good":x.status==="created"?"warn":""}">${{paid:"Paid",created:"Waiting",replaced:"Not used",expired:"Expired",cancelled:"Cancelled",active:`AutoPay · ${x.charges} paid`,cancelling:`Auto-renew off · ${x.charges} paid`,ended:"Ended"}[x.status]||esc(x.status)}</span></td></tr>`).join("")}</tbody></table>`
+        <td><span class="adm-pill ${x.status==="paid"||x.status==="active"?"good":x.status==="created"?"warn":""}">${{paid:"Paid",created:"Waiting",replaced:"Not used",expired:"Expired",cancelled:"Cancelled",active:`AutoPay · ${x.charges} paid`,cancelling:`Auto-renew off · ${x.charges} paid`,ended:"Ended",test:"Test (not real)"}[x.status]||esc(x.status)}</span></td></tr>`).join("")}</tbody></table>`
         :`<p class="adm-muted adm-pad">No payments yet.</p>`}</div>`;
     main.querySelectorAll("[data-period]").forEach(x=>x.addEventListener("click",()=>{ period=billing.period=x.dataset.period; draw(); }));
     $("bl-check")?.addEventListener("click",()=>billing(main,d));

@@ -79,7 +79,17 @@ class Billing:
             CREATE INDEX IF NOT EXISTS invoices_domain ON invoices(domain, created);''')
         try: self.db.execute('ALTER TABLE invoices ADD COLUMN paid_count INTEGER NOT NULL DEFAULT 0')   # auto-renewing subscriptions: charges so far
         except sqlite3.OperationalError: pass
+        if pay is not None and pay.mode == 'live': self._leave_test()
         self.db.commit()
+
+    def _leave_test(self):
+        """Switched to a live key: test payments were never real, so they stop counting. Test subscriptions
+        can't be seen with a live key either, so they no longer block subscribing for real."""
+        test_domains = [r[0] for r in self.db.execute("SELECT DISTINCT domain FROM invoices WHERE mode='test' AND status IN ('created','active','cancelling','paid')")]
+        for domain in test_domains:
+            real = self.db.execute("SELECT 1 FROM invoices WHERE domain=? AND mode='live' AND (status IN ('active','cancelling','paid'))", (domain,)).fetchone()
+            if not real: self.db.execute('UPDATE subs SET paid_until=0, plan=NULL, period=NULL WHERE domain=?', (domain,))
+        self.db.execute("UPDATE invoices SET status='test' WHERE mode='test' AND status IN ('created','active','cancelling','paid','replaced')")
 
     @property
     def ready(self): return self.pay is not None

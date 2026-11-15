@@ -77,6 +77,15 @@ class BillingTests(unittest.TestCase):
         other = json.dumps({'event': 'payment.failed', 'payload': {}}).encode()
         self.assertFalse(self.bill.webhook(other, sign(other))['used'])
 
+    def test_switching_to_a_live_key_drops_test_payments(self):
+        out = self.bill.checkout('kaali.in', 'team', 'month', 'a@kaali.in'); self.pay.charge(out['id'])
+        self.assertEqual(self.bill.status('kaali.in')['renewing']['id'], out['id'])
+        self.pay.mode = 'live'
+        live = b.Billing(self.bill.db.execute('PRAGMA database_list').fetchone()[2], self.pay, 'whsec', clock=self.clock)
+        s = live.status('kaali.in')
+        self.assertIsNone(s['renewing']); self.assertEqual(s['state'], 'trial'); self.assertEqual(s['invoices'][0]['status'], 'test')
+        live.checkout('kaali.in', 'team', 'month', 'a@kaali.in')        # not blocked any more
+
     def test_bad_choice_and_no_keys(self):
         with self.assertRaises(b.BillingError): self.bill.checkout('kaali.in', 'gold', 'month', 'a@kaali.in')
         off = b.Billing(os.path.join(tempfile.mkdtemp(), 'b.sqlite'))
