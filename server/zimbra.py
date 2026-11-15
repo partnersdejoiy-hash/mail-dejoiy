@@ -2532,6 +2532,16 @@ class Handler(SimpleHTTPRequestHandler):
         secret=self.server.shine_secret
         auth=self.headers.get('Authorization') or ''
         if not secret or not auth.startswith('Bearer ') or not hmac.compare_digest(auth[7:].strip().encode(),secret.encode()): raise APIError('Not allowed',403)
+    def shine_plan(self, data):
+        """Shine asks which plan a person's company is on: Shine comes with the company's Dejoiy Mail plan."""
+        email=str(data.get('email','')).strip().lower()
+        if not EMAIL.fullmatch(email): raise APIError('Invalid mailbox')
+        domain=email.rsplit('@',1)[1]; billing=getattr(self.server,'billing',None)
+        if any(domain==r or domain.endswith('.'+r) for r in self.server.reserved_domains): return {'domain':domain,'state':'internal'}
+        if not billing: return {'domain':domain,'state':'unknown'}
+        if not getattr(self.server,'provisioner',None) or not self.server.provisioner.domain_exists(domain): return {'domain':domain,'state':'none'}
+        st=billing.status(domain)
+        return {'domain':domain,**{k:st[k] for k in ('state','ends','daysLeft','plan','planName','period','mailboxes')}}
     def shine_calendar(self, data):
         """Shine's meetings live on the same Zimbra calendar: save/delete/list events for one mailbox."""
         owner=str(data.get('owner','')).strip().lower()
@@ -3243,13 +3253,14 @@ class Handler(SimpleHTTPRequestHandler):
                 data=json.loads(self.rfile.read(length))
                 if not isinstance(data,dict): raise APIError('JSON object required')
                 return self.reply(200,self.joi_mailbox(data))
-            if self.path in ('/api/shine/calendar','/api/shine/login','/api/shine/avatar'):
+            if self.path in ('/api/shine/calendar','/api/shine/login','/api/shine/avatar','/api/shine/plan'):
                 self.shine_allowed()
                 length=int(self.headers.get('Content-Length','0'))
                 if not 0<length<=MAX_REQUEST_BYTES: raise APIError('Request too large or empty',413)
                 data=json.loads(self.rfile.read(length))
                 if not isinstance(data,dict): raise APIError('JSON object required')
                 if self.path=='/api/shine/avatar': return self.reply(200,self.shine_avatar(data))
+                if self.path=='/api/shine/plan': return self.reply(200,self.shine_plan(data))
                 return self.reply(200,self.shine_calendar(data) if self.path=='/api/shine/calendar' else self.shine_login(data))
             if self.path=='/api/pay/webhook':   # Dejoiy Pay telling us a payment went through: signed, no browser
                 billing=getattr(self.server,'billing',None)
