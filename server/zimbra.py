@@ -3256,6 +3256,8 @@ class Handler(SimpleHTTPRequestHandler):
         if any(domain==r or domain.endswith('.'+r) for r in reserved):
             return {'domain':domain,'state':'internal'}   # Dejoiy's own domains don't pay themselves
         try:
+            if data['op']=='billing_cancel':
+                out=billing.cancel(domain); self.log('admin:billing_cancel',s['user']['email'],domain); return out
             if data['op']=='billing_checkout':
                 out=billing.checkout(domain,str(data.get('plan','')),str(data.get('period','')),s['user']['email'],s['user'].get('name') or '',by=s['user']['email'])
                 self.log('admin:billing_checkout',s['user']['email'],domain)
@@ -3408,7 +3410,7 @@ class Handler(SimpleHTTPRequestHandler):
             if self.path=='/api/admin/action' and data.get('op') in APITOKEN_OPS:
                 return self.reply(200,self.apitoken_action(s,data))
             if self.path=='/api/admin/action' and data.get('op')=='passkeys_reset': return self.reply(200,self.passkeys_reset(s,data))
-            if self.path=='/api/admin/action' and data.get('op') in ('billing_get','billing_checkout'):
+            if self.path=='/api/admin/action' and data.get('op') in ('billing_get','billing_checkout','billing_cancel'):
                 return self.reply(200,self.billing_action(s,data))
             if self.path=='/api/admin/action' and data.get('op')=='reports':
                 client,token,scope=self.admin_session(s)

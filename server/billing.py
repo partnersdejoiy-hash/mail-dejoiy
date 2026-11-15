@@ -62,6 +62,9 @@ class DejoiyPay:
 
     def create_link(self, **fields): return self.call('POST', '/payment_links', fields)
     def link(self, link_id): return self.call('GET', '/payment_links/' + link_id)
+    def create_subscription(self, **fields): return self.call('POST', '/subscriptions', fields)
+    def subscription(self, sub_id): return self.call('GET', '/subscriptions/' + sub_id)
+    def cancel_subscription(self, sub_id): return self.call('POST', '/subscriptions/' + sub_id + '/cancel', {})
 
 
 class Billing:
@@ -74,6 +77,8 @@ class Billing:
                 amount INTEGER NOT NULL, mode TEXT NOT NULL, url TEXT NOT NULL, status TEXT NOT NULL, created REAL NOT NULL,
                 paid_at REAL, payment_id TEXT, by TEXT);
             CREATE INDEX IF NOT EXISTS invoices_domain ON invoices(domain, created);''')
+        try: self.db.execute('ALTER TABLE invoices ADD COLUMN paid_count INTEGER NOT NULL DEFAULT 0')   # auto-renewing subscriptions: charges so far
+        except sqlite3.OperationalError: pass
         self.db.commit()
 
     @property
@@ -96,52 +101,84 @@ class Billing:
         self.refresh(domain)
         with self.lock:
             sub = self._sub(domain); now = self.clock()
-            rows = self.db.execute('SELECT link_id, plan, period, amount, mode, url, status, created, paid_at FROM invoices WHERE domain=? ORDER BY created DESC LIMIT 12', (domain,)).fetchall()
+            rows = self.db.execute('SELECT link_id, plan, period, amount, mode, url, status, created, paid_at, paid_count FROM invoices WHERE domain=? ORDER BY created DESC LIMIT 12', (domain,)).fetchall()
         if sub['paid_until'] > now: state, ends = 'active', sub['paid_until']
         elif sub['trial_ends'] > now and not sub['paid_until']: state, ends = 'trial', sub['trial_ends']
         else: state, ends = 'expired', max(sub['paid_until'], sub['trial_ends'])
-        invoices = [{'id': r[0], 'plan': r[1], 'period': r[2], 'amount': r[3], 'mode': r[4], 'url': r[5], 'status': r[6], 'created': int(r[7]), 'paidAt': int(r[8]) if r[8] else None} for r in rows]
+        invoices = [{'id': r[0], 'plan': r[1], 'period': r[2], 'amount': r[3], 'mode': r[4], 'url': r[5], 'status': r[6], 'created': int(r[7]), 'paidAt': int(r[8]) if r[8] else None,
+                     'auto': r[0].startswith('sub_'), 'charges': r[9]} for r in rows]
         plan = PLANS.get(sub['plan'] or '')
         return {'state': state, 'ends': int(ends), 'daysLeft': max(0, int((ends - now + DAY - 1) // DAY)),
                 'plan': sub['plan'], 'planName': plan['name'] if plan else None, 'period': sub['period'],
                 'mailboxes': plan['mailboxes'] if plan else None, 'invoices': invoices,
                 'open': next((i for i in invoices if i['status'] == 'created'), None),
+                'renewing': next((i for i in invoices if i['status'] == 'active'), None),
                 'payReady': self.ready, 'payMode': self.pay.mode if self.pay else None,
                 'plans': [{'id': k, **v, 'monthPaise': price_paise(k, 'month'), 'yearPaise': price_paise(k, 'year')} for k, v in PLANS.items()],
                 'gst': GST_PERCENT}
 
     def checkout(self, domain, plan, period, email, name='', by=''):
-        """A Dejoiy Pay payment link for this plan; the admin pays there."""
+        """An auto-renewing subscription on Dejoiy Pay: the admin authorises UPI AutoPay or a card once,
+        then every month or year is charged by itself until they turn auto-renew off."""
         if not self.ready: raise BillingError('Payments are not switched on for this server yet.')
         if plan not in PLANS or period not in PERIOD_DAYS: raise BillingError('Pick a plan and monthly or yearly.')
+        with self.lock:
+            renewing = self.db.execute('SELECT plan, period FROM invoices WHERE domain=? AND status=?', (domain, 'active')).fetchone()
+        if renewing: raise BillingError(f'{PLANS[renewing[0]]["name"]} ({"yearly" if renewing[1] == "year" else "monthly"}) already renews by itself. Turn auto-renew off first to change plan.')
         amount = price_paise(plan, period)
-        reference = f'dm-{secrets.token_hex(6)}'
         p = PLANS[plan]
-        link = self.pay.create_link(
-            title=f'Dejoiy Mail + Shine · {p["name"]} ({"yearly" if period == "year" else "monthly"})',
-            description=f'{domain} · {"unlimited" if p["mailboxes"] is None else p["mailboxes"]} mailboxes · {p[period]:,} + {GST_PERCENT}% GST',
-            amount=amount, currency='INR', reference_id=reference,
-            customer={k: v for k, v in (('email', email), ('name', name)) if v},
-            expire_by=int(self.clock() + LINK_HOURS * 3600), notify={'email': True, 'sms': False}, reminder_enable=False,
+        sub = self.pay.create_subscription(
+            plan={'name': f'Dejoiy Mail + Shine · {p["name"]} ({"yearly" if period == "year" else "monthly"})', 'amount': amount, 'period': 'yearly' if period == 'year' else 'monthly'},
+            customer={k: v for k, v in (('email', email), ('name', name)) if v}, reference_id=f'dm-{secrets.token_hex(6)}',
             notes={'domain': domain, 'plan': plan, 'period': period, 'product': 'dejoiy-mail'})
-        link_id, url = str(link.get('id') or ''), str(link.get('short_url') or '')
-        if not link_id.startswith('plink_') or not url.startswith('https://'): raise BillingError('Dejoiy Pay sent back something unexpected. Try again.')
+        sub_id, url = str(sub.get('id') or ''), str(sub.get('short_url') or '')
+        if not sub_id.startswith('sub_') or not url.startswith('https://'): raise BillingError('Dejoiy Pay sent back something unexpected. Try again.')
         with self.lock:
             self._sub(domain)
-            # one open link at a time: an older unpaid one is left to expire on its own
+            # one waiting payment at a time: an older unpaid one is left to expire on its own
             self.db.execute('UPDATE invoices SET status=? WHERE domain=? AND status=?', ('replaced', domain, 'created'))
             self.db.execute('INSERT INTO invoices (link_id, domain, plan, period, amount, mode, url, status, created, by) VALUES (?,?,?,?,?,?,?,?,?,?)',
-                            (link_id, domain, plan, period, amount, str(link.get('mode') or self.pay.mode), url, 'created', self.clock(), by))
+                            (sub_id, domain, plan, period, amount, str(sub.get('mode') or self.pay.mode), url, 'created', self.clock(), by))
             self.db.commit()
-        return {'url': url, 'id': link_id, 'amount': amount}
+        return {'url': url, 'id': sub_id, 'amount': amount}
+
+    def cancel(self, domain):
+        """Turn auto-renew off: nothing more is charged, the time already paid runs out."""
+        with self.lock:
+            row = self.db.execute('SELECT link_id FROM invoices WHERE domain=? AND status=?', (domain, 'active')).fetchone()
+        if not row: raise BillingError('Nothing renews by itself right now.')
+        self._apply_subscription(row[0], self.pay.cancel_subscription(row[0]))
+        return {'ok': True}
+
+    def _apply_subscription(self, sub_id, sub):
+        """Dejoiy Pay's view of one subscription: paid until current_end, renewing or not."""
+        status, end = sub.get('status'), sub.get('current_end')
+        mine = 'active' if status in ('active', 'authenticated') and sub.get('auto_renew', True) else \
+               'cancelling' if status in ('active', 'authenticated') else \
+               'created' if status == 'created' else 'ended'
+        with self.lock:
+            row = self.db.execute('SELECT domain, plan, period, status FROM invoices WHERE link_id=?', (sub_id,)).fetchone()
+            if not row: return False
+            domain, plan, period, before = row
+            if before == 'replaced' and mine == 'created': return False
+            paid = sub.get('paid_count') or 0
+            self.db.execute('UPDATE invoices SET status=?, paid_count=?, paid_at=COALESCE(paid_at, ?) WHERE link_id=?', (mine, paid, self.clock() if paid else None, sub_id))
+            if paid and end:
+                cur = self._sub(domain)
+                self.db.execute('UPDATE subs SET plan=?, period=?, paid_until=? WHERE domain=?', (plan, period, max(cur['paid_until'], float(end)), domain))
+            self.db.commit()
+            return bool(paid)
 
     def refresh(self, domain):
-        """Ask Dejoiy Pay about this company's open links (cheap: at most two)."""
+        """Ask Dejoiy Pay about this company's open links and subscriptions (cheap: at most three)."""
         if not self.ready: return
         with self.lock:
-            open_ = [r[0] for r in self.db.execute('SELECT link_id FROM invoices WHERE domain=? AND status IN (?,?) ORDER BY created DESC LIMIT 2', (domain, 'created', 'replaced'))]
+            open_ = [r[0] for r in self.db.execute('SELECT link_id FROM invoices WHERE domain=? AND status IN (?,?,?,?) ORDER BY created DESC LIMIT 3', (domain, 'created', 'replaced', 'active', 'cancelling'))]
         for link_id in open_:
-            try: link = self.pay.link(link_id)
+            try:
+                if link_id.startswith('sub_'):
+                    self._apply_subscription(link_id, self.pay.subscription(link_id)); continue
+                link = self.pay.link(link_id)
             except BillingError: return   # Dejoiy Pay is away; the page shows what we know
             if link.get('status') == 'paid': self.paid(link_id)
             elif link.get('status') in ('cancelled', 'expired'):
@@ -171,6 +208,10 @@ class Billing:
         except ValueError: raise BillingError('Not JSON.')
         payment = note.get('payload') if isinstance(note, dict) else None
         if note.get('event') != 'payment.captured' or not isinstance(payment, dict): return {'ok': True, 'used': False}
+        if payment.get('source') == 'subscription' and str(payment.get('source_id', '')).startswith('sub_'):
+            # a first charge or a renewal: Dejoiy Pay is asked for the subscription's paid period
+            sub_id = payment['source_id']
+            return {'ok': True, 'used': bool(self.ready and self._apply_subscription(sub_id, self.pay.subscription(sub_id)))}
         if payment.get('source') != 'link' or not str(payment.get('source_id', '')).startswith('plink_'): return {'ok': True, 'used': False}
         # the webhook only says which link; Dejoiy Pay itself is asked whether that link is now fully paid
         link_id = payment['source_id']

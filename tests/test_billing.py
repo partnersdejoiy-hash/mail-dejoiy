@@ -7,13 +7,20 @@ DAY = 86400
 
 
 class FakePay:
+    """Dejoiy Pay's subscription API, as far as billing uses it."""
     mode = 'test'
-    def __init__(self): self.links = {}; self.made = []
-    def create_link(self, **fields):
-        self.made.append(fields); link_id = f'plink_{len(self.made)}'
-        self.links[link_id] = 'created'
-        return {'id': link_id, 'short_url': f'https://pay.dejoiy.com/pay/c{len(self.made)}', 'mode': 'test', 'status': 'created'}
-    def link(self, link_id): return {'id': link_id, 'status': self.links[link_id]}
+    def __init__(self, clock): self.subs = {}; self.made = []; self.clock = clock
+    def create_subscription(self, **fields):
+        self.made.append(fields); sub_id = f'sub_{len(self.made)}'
+        self.subs[sub_id] = {'id': sub_id, 'status': 'created', 'auto_renew': True, 'paid_count': 0, 'current_end': None, 'short_url': f'https://pay.dejoiy.com/s/c{len(self.made)}', 'mode': 'test', 'period': fields['plan']['period']}
+        return dict(self.subs[sub_id])
+    def subscription(self, sub_id): return dict(self.subs[sub_id])
+    def cancel_subscription(self, sub_id):
+        self.subs[sub_id]['auto_renew'] = False; return dict(self.subs[sub_id])
+    def charge(self, sub_id):
+        """The first payment, or a renewal done by AutoPay."""
+        s = self.subs[sub_id]; start = s['current_end'] or self.clock()
+        s.update(status='active', paid_count=s['paid_count'] + 1, current_end=start + (365 if s['period'] == 'yearly' else 30) * DAY)
 
 
 class Clock:
@@ -23,7 +30,7 @@ class Clock:
 
 class BillingTests(unittest.TestCase):
     def setUp(self):
-        self.clock = Clock(); self.pay = FakePay()
+        self.clock = Clock(); self.pay = FakePay(self.clock)
         self.bill = b.Billing(os.path.join(tempfile.mkdtemp(), 'billing.sqlite'), self.pay, 'whsec', clock=self.clock)
 
     def test_prices_include_gst_and_match_the_home_page(self):
@@ -32,46 +39,39 @@ class BillingTests(unittest.TestCase):
         home = open(os.path.join(os.path.dirname(__file__), '..', 'web', 'js', 'signup.js')).read()
         for key, p in b.PLANS.items(): self.assertIn(f'{key}:["{p["name"]}",{p["month"]},{p["year"]}', home)
 
-    def test_trial_then_paid_plan_keeps_trial_days(self):
+    def test_subscription_renews_by_itself_until_cancelled(self):
         s = self.bill.status('kaali.in')
         self.assertEqual((s['state'], s['daysLeft']), ('trial', 11))
-        out = self.bill.checkout('kaali.in', 'team', 'year', 'boss@kaali.in', 'Boss')
-        self.assertEqual(self.pay.made[0]['amount'], b.price_paise('team', 'year'))
-        self.assertEqual(self.pay.made[0]['notes']['domain'], 'kaali.in')
+        out = self.bill.checkout('kaali.in', 'team', 'month', 'boss@kaali.in', 'Boss')
+        made = self.pay.made[0]
+        self.assertEqual((made['plan']['amount'], made['plan']['period'], made['notes']['domain']), (b.price_paise('team', 'month'), 'monthly', 'kaali.in'))
         self.assertTrue(out['url'].startswith('https://pay.dejoiy.com/'))
         self.assertEqual(self.bill.status('kaali.in')['open']['id'], out['id'])
-        self.clock.t += 2 * DAY
-        self.pay.links[out['id']] = 'paid'                 # paid on pay.dejoiy.com; the page asks
+        self.pay.charge(out['id'])                                     # first payment + AutoPay mandate
         s = self.bill.status('kaali.in')
-        self.assertEqual((s['state'], s['plan'], s['period'], s['mailboxes']), ('active', 'team', 'year', 101))
-        self.assertEqual(s['daysLeft'], 365 + 9)           # the 9 trial days left are kept
-        self.assertIsNone(s['open'])
+        self.assertEqual((s['state'], s['plan'], s['period'], s['daysLeft']), ('active', 'team', 'month', 30))
+        self.assertEqual(s['renewing']['id'], out['id']); self.assertIsNone(s['open'])
+        self.clock.t += 30 * DAY; self.pay.charge(out['id'])           # a month later AutoPay charges again
+        self.assertEqual(self.bill.status('kaali.in')['daysLeft'], 30)
+        with self.assertRaisesRegex(b.BillingError, 'already renews'): self.bill.checkout('kaali.in', 'business', 'year', 'boss@kaali.in')
+        self.bill.cancel('kaali.in')
+        s = self.bill.status('kaali.in')
+        self.assertEqual((s['state'], s['renewing']), ('active', None))  # paid time runs out, nothing more is charged
+        self.clock.t += 31 * DAY
+        self.assertEqual(self.bill.status('kaali.in')['state'], 'expired')
 
-    def test_unpaid_link_buys_nothing_and_trial_runs_out(self):
+    def test_unpaid_subscription_buys_nothing(self):
         self.bill.checkout('kaali.in', 'starter', 'month', 'a@kaali.in')
         self.clock.t += 12 * DAY
         self.assertEqual(self.bill.status('kaali.in')['state'], 'expired')
 
-    def test_paying_again_extends_and_twice_counts_once(self):
-        first = self.bill.checkout('kaali.in', 'starter', 'month', 'a@kaali.in')
-        self.assertTrue(self.bill.paid(first['id'])); self.assertFalse(self.bill.paid(first['id']))
-        ends = self.bill.status('kaali.in')['ends']
-        second = self.bill.checkout('kaali.in', 'starter', 'month', 'a@kaali.in')
-        self.bill.paid(second['id'])
-        self.assertEqual(self.bill.status('kaali.in')['ends'], ends + 30 * DAY)
-
-    def test_part_payment_does_not_start_a_plan(self):
-        link = self.bill.checkout('kaali.in', 'team', 'month', 'a@kaali.in')
-        self.assertFalse(self.bill.paid(link['id'], amount=100))
-        self.assertEqual(self.bill.status('kaali.in')['state'], 'trial')
-
-    def test_webhook_needs_signature_and_a_paid_link(self):
-        link = self.bill.checkout('kaali.in', 'team', 'month', 'a@kaali.in')
-        note = json.dumps({'event': 'payment.captured', 'payload': {'id': 'pay_1', 'source': 'link', 'source_id': link['id'], 'amount': 35282}}).encode()
+    def test_webhook_needs_signature_and_asks_dejoiy_pay(self):
+        out = self.bill.checkout('kaali.in', 'team', 'month', 'a@kaali.in')
+        note = json.dumps({'event': 'payment.captured', 'payload': {'id': 'pay_1', 'source': 'subscription', 'source_id': out['id'], 'amount': 35282}}).encode()
         sign = lambda raw, key='whsec': hmac.new(key.encode(), raw, hashlib.sha256).hexdigest()
         with self.assertRaises(b.BillingError): self.bill.webhook(note, sign(note, 'wrong'))
-        self.assertFalse(self.bill.webhook(note, sign(note))['used'])        # Dejoiy Pay says the link isn't paid yet
-        self.pay.links[link['id']] = 'paid'
+        self.assertFalse(self.bill.webhook(note, sign(note))['used'])      # Dejoiy Pay says nothing is paid yet
+        self.pay.charge(out['id'])
         self.assertTrue(self.bill.webhook(note, sign(note))['used'])
         self.assertEqual(self.bill.status('kaali.in')['state'], 'active')
         other = json.dumps({'event': 'payment.failed', 'payload': {}}).encode()

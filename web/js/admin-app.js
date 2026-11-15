@@ -323,35 +323,38 @@ async function billing(main, d){
   const day = s => new Date(s*1000).toLocaleDateString([], {day:"numeric",month:"short",year:"numeric"});
   let period = billing.period || (b.period==="month"?"month":"year");
   const now = {trial:["warn",`Free trial · ${b.daysLeft} day${b.daysLeft===1?"":"s"} left`],active:["good",`${esc(b.planName)} · ${b.period==="year"?"yearly":"monthly"}`],expired:["bad","Ended"]}[b.state];
-  const ends = b.state==="active"?`Paid until ${day(b.ends)}`:b.state==="trial"?`Trial ends ${day(b.ends)}. Pick a plan any time; the days left are kept.`:`Ended on ${day(b.ends)}. Pick a plan to keep using Dejoiy Mail and Shine.`;
+  const ends = b.state==="active"?(b.renewing?`Renews by itself on ${day(b.ends)} (AutoPay)`:`Paid until ${day(b.ends)}. Auto-renew is off.`):b.state==="trial"?`Trial ends ${day(b.ends)}. Pick a plan any time; the days left are kept.`:`Ended on ${day(b.ends)}. Pick a plan to keep using Dejoiy Mail and Shine.`;
   const draw = ()=>{ $("bl-body").innerHTML=`
     ${b.payReady?"":`<div class="adm-card adm-error">Payments are not switched on for this server yet (Dejoiy Pay keys missing). The platform team sets them up.</div>`}
     ${b.payMode==="test"?`<div class="adm-card adm-note"><b>Test mode.</b> Dejoiy Pay is using a test key: payments are simulated and no money moves.</div>`:""}
     <div class="adm-card"><div class="adm-card-head"><h2>${esc(b.domain)}</h2><span class="adm-pill ${now[0]}">${now[1]}</span></div>
       <p>${ends}</p>${b.mailboxes!==undefined&&b.plan?`<p class="adm-muted">${b.mailboxes===null?"Unlimited":"Up to "+b.mailboxes} mailboxes, and Shine for everyone in them.</p>`:""}
-      ${b.open?`<p class="bl-open">A payment is waiting: ${inr(b.open.amount)} for ${esc(b.plans.find(p=>p.id===b.open.plan)?.name||b.open.plan)}. <a class="adm-btn primary sm" href="${esc(b.open.url)}" target="_blank" rel="noopener">Pay on Dejoiy Pay</a> <button class="adm-btn ghost sm" id="bl-check">I've paid, check</button></p>`:""}</div>
+      ${b.renewing?`<p class="bl-open"><span class="adm-pill good">Auto-renew on</span> ${inr(b.renewing.amount)} is charged every ${b.renewing.period==="year"?"year":"month"} until you stop it. <button class="adm-btn ghost sm" id="bl-stop">Turn off auto-renew</button></p>`:""}
+      ${b.open?`<p class="bl-open">A payment is waiting: ${inr(b.open.amount)} for ${esc(b.plans.find(p=>p.id===b.open.plan)?.name||b.open.plan)}. <a class="adm-btn primary sm" href="${esc(b.open.url)}" target="_blank" rel="noopener">Set up AutoPay and pay</a> <button class="adm-btn ghost sm" id="bl-check">I've paid, check</button></p>`:""}</div>
     <div class="adm-card"><div class="adm-card-head"><h2>Plans</h2>
       <div class="bl-period" role="group" aria-label="Billing period"><button class="${period==="month"?"on":""}" data-period="month" aria-pressed="${period==="month"}">Monthly</button><button class="${period==="year"?"on":""}" data-period="year" aria-pressed="${period==="year"}">Yearly · save up to 33%</button></div></div>
-      <p class="adm-muted">One flat price for the whole company, not per person. Shine (chat, calls, meetings) comes with every plan; it is not sold on its own. Prices include ${b.gst}% GST.</p>
+      <p class="adm-muted">One flat price for the whole company, not per person, with Shine (chat, calls, meetings) included. Prices include ${b.gst}% GST. You approve UPI AutoPay or a card once on Dejoiy Pay; after that it renews by itself until you turn it off.</p>
       <div class="bl-plans">${b.plans.map(p=>{ const paise=period==="year"?p.yearPaise:p.monthPaise, mine=b.state==="active"&&b.plan===p.id&&b.period===period;
         return `<div class="bl-plan ${mine?"is-mine":""}"><h3>${esc(p.name)}</h3><p class="bl-price"><b>${inr(paise)}</b>/${period==="year"?"year":"month"}</p>
           <p class="adm-muted">₹${p[period].toLocaleString("en-IN")} + GST${period==="year"?` · ${inr(paise/12)} a month`:""}</p>
           <p>${p.mailboxes===null?"Unlimited":"Up to "+p.mailboxes} mailboxes · Shine included</p>
-          <button class="adm-btn ${mine?"ghost":"primary"}" data-plan="${p.id}" ${b.payReady?"":"disabled"}>${mine?"Pay to extend":b.state==="active"&&b.plan===p.id?"Switch to "+(period==="year"?"yearly":"monthly"):"Choose "+esc(p.name)}</button></div>`; }).join("")}</div>
-      <p class="adm-muted">A new payment adds its time after what is already paid. Changing plan applies from the next payment.</p><p role="alert" class="adm-error" id="bl-err"></p></div>
+          <button class="adm-btn ${mine?"ghost":"primary"}" data-plan="${p.id}" ${b.payReady&&!mine&&!b.renewing?"":"disabled"}>${mine?"Your plan":"Subscribe to "+esc(p.name)}</button></div>`; }).join("")}</div>
+      <p class="adm-muted">${b.renewing?"To change plan, turn auto-renew off first: the new plan starts when you subscribe to it.":"Trial days left are not charged: the first payment starts the paid time."}</p><p role="alert" class="adm-error" id="bl-err"></p></div>
     <div class="adm-card adm-flush"><div class="adm-card-head adm-pad"><h2>Payments</h2></div>
       ${b.invoices.length?`<table class="adm-table"><thead><tr><th>Date</th><th>Plan</th><th>Amount</th><th>Status</th></tr></thead><tbody>${b.invoices.map(x=>`<tr><td><small>${day(x.paidAt||x.created)}</small></td>
         <td>${esc(b.plans.find(p=>p.id===x.plan)?.name||x.plan)} · ${x.period==="year"?"yearly":"monthly"}${x.mode==="test"?` <span class="adm-pill warn">test</span>`:""}</td><td>${inr(x.amount)}</td>
-        <td><span class="adm-pill ${x.status==="paid"?"good":x.status==="created"?"warn":""}">${{paid:"Paid",created:"Waiting",replaced:"Not used",expired:"Expired",cancelled:"Cancelled"}[x.status]||esc(x.status)}</span></td></tr>`).join("")}</tbody></table>`
+        <td><span class="adm-pill ${x.status==="paid"||x.status==="active"?"good":x.status==="created"?"warn":""}">${{paid:"Paid",created:"Waiting",replaced:"Not used",expired:"Expired",cancelled:"Cancelled",active:`AutoPay · ${x.charges} paid`,cancelling:`Auto-renew off · ${x.charges} paid`,ended:"Ended"}[x.status]||esc(x.status)}</span></td></tr>`).join("")}</tbody></table>`
         :`<p class="adm-muted adm-pad">No payments yet.</p>`}</div>`;
     main.querySelectorAll("[data-period]").forEach(x=>x.addEventListener("click",()=>{ period=billing.period=x.dataset.period; draw(); }));
     $("bl-check")?.addEventListener("click",()=>billing(main,d));
+    $("bl-stop")?.addEventListener("click",async e=>{ if(!confirm("Turn off auto-renew? Nothing more is charged; the time already paid still runs.")) return; e.currentTarget.disabled=true;
+      try{ await act({op:"billing_cancel",domain}); toast("Auto-renew is off."); billing(main,d); }catch(x){ toast(x.message); e.currentTarget.disabled=false; } });
     main.querySelectorAll("[data-plan]").forEach(x=>x.addEventListener("click",async()=>{
       // open the tab now (a click), then point it at the link: browsers block tabs opened after a wait
       const tab=window.open("about:blank","_blank"); x.disabled=true; $("bl-err").textContent="";
       try{ const out=await act({op:"billing_checkout",domain,plan:x.dataset.plan,period});
         if(tab) tab.location.href=out.url; else location.href=out.url;
-        toast("Pay in the new tab. This page updates once it's paid."); watch(); billing(main,d);
+        toast("Set up AutoPay and pay in the new tab. This page updates once it's paid."); watch(); billing(main,d);
       }catch(e){ tab?.close(); $("bl-err").textContent=e.message; x.disabled=false; } }));
   };
   // while a payment waits, look again every 10 seconds for up to 10 minutes
