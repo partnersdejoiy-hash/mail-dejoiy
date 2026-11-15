@@ -19,7 +19,7 @@ const TREE = [
     ["monitor/sessions","contacts","Active sessions","sessions"],["monitor/reports","note","Reports","reports"]]],
   ["Manage",[["manage/accounts","contacts","Accounts","users"],["manage/teams","tag","Teams & roles","org"],
     ["manage/lists","mail","Distribution lists","lists"],["manage/resources","calendar","Resources","resources"],
-    ["manage/domains","building","Domains","domains"],["manage/chat","chat","Chat & meetings","shine"]]],
+    ["manage/domains","building","Domains","domains"],["manage/chat","chat","Chat & meetings","shine"],["manage/billing","card","Plan & billing","billing"]]],
   ["Configure",[["configure/cos","tag","Class of service","cos",P],["configure/global-settings","settings","Global settings","globalSettings",P],
     ["configure/policies","shield","Mailbox policies","policies"],["configure/admins","shield","Admins & rights","rights",P],
     ["configure/zimlets","layoutlist","Add-ons","zimlets",P],["configure/certificates","check","Certificates","certs",P],
@@ -114,7 +114,7 @@ async function load(){
 function renderSection(){
   const main=$("adm-main"), found=findRoute(state.section);
   if(!found){ navigate("monitor/overview",true); return; }
-  const pages={overview,users,org,domains,lists,policies,reports,shine,plans,settings,tickets,help,...(window.AdminPages||{})};
+  const pages={overview,users,org,domains,lists,policies,reports,shine,plans,settings,tickets,help,billing,...(window.AdminPages||{})};
   const fn=(found.rest&&pages[found.item[3]+"Detail"])||pages[found.item[3]]||overview;
   document.title=found.item[2]+" · Dejoiy Mail Admin";
   Promise.resolve(fn(main, state.data, helpers, found.rest)).catch(e=>{ main.innerHTML=head(found.item[2])+`<div class="adm-card adm-error">${esc(e.message)}</div>`; });
@@ -309,6 +309,57 @@ const OPS={create_user:"Created mailbox",delete_user:"Deleted mailbox",password:
   company_settings:"Changed company settings",create_domain:"Added domain",delete_domain:"Removed domain",domain_status:"Changed domain status",create_list:"Created list",
   delete_list:"Deleted list",add_member:"Added list member",remove_member:"Removed list member",create_department:"Created department",set_department:"Changed department",
   policies_save:"Changed mailbox policies",policy_assign:"Changed a mailbox's policy",shine_set_active:"Switched chat on or off",shine_end_meeting:"Ended a meeting",brand_set:"Changed name or logo",login_host_set:"Set sign-in address",login_host_remove:"Removed sign-in address",plan_update:"Edited plan",settings_update:"Changed server settings"};
+// Plan & billing: Dejoiy Mail with Shine, paid on pay.dejoiy.com. The server asks Dejoiy Pay, so nothing here is trusted.
+async function billing(main, d){
+  const domains = d.scope ? [d.scope] : d.domains.map(x=>x.domain);
+  let domain = d.scope || billing.domain || domains.find(x=>state.user && state.user.email.endsWith("@"+x)) || domains[0] || "";
+  const pick = d.scope ? "" : `<label class="adm-inline">Company <select id="bl-domain">${domains.map(x=>`<option ${x===domain?"selected":""}>${esc(x)}</option>`).join("")}</select></label>`;
+  main.innerHTML=head("Plan & billing","Dejoiy Mail with Shine chat, calls and meetings, in one subscription. Paid securely on pay.dejoiy.com.",pick)+`<div id="bl-body"><p class="adm-muted">Loading…</p></div>`;
+  $("bl-domain")?.addEventListener("change",e=>{ billing.domain=e.target.value; billing(main,d); });
+  let b; try{ b=await act({op:"billing_get",domain}); }catch(e){ if($("bl-body")) $("bl-body").innerHTML=`<div class="adm-card adm-error">${esc(e.message)}</div>`; return; }
+  if(!$("bl-body")) return;
+  if(b.state==="internal"){ $("bl-body").innerHTML=`<div class="adm-card"><h2>${esc(b.domain)}</h2><p class="adm-muted">This is one of Dejoiy's own domains, so it has no subscription to pay.</p></div>`; return; }
+  const inr = paise => "₹"+(paise/100).toLocaleString("en-IN",{minimumFractionDigits:paise%100?2:0,maximumFractionDigits:2});
+  const day = s => new Date(s*1000).toLocaleDateString([], {day:"numeric",month:"short",year:"numeric"});
+  let period = billing.period || (b.period==="month"?"month":"year");
+  const now = {trial:["warn",`Free trial · ${b.daysLeft} day${b.daysLeft===1?"":"s"} left`],active:["good",`${esc(b.planName)} · ${b.period==="year"?"yearly":"monthly"}`],expired:["bad","Ended"]}[b.state];
+  const ends = b.state==="active"?`Paid until ${day(b.ends)}`:b.state==="trial"?`Trial ends ${day(b.ends)}. Pick a plan any time; the days left are kept.`:`Ended on ${day(b.ends)}. Pick a plan to keep using Dejoiy Mail and Shine.`;
+  const draw = ()=>{ $("bl-body").innerHTML=`
+    ${b.payReady?"":`<div class="adm-card adm-error">Payments are not switched on for this server yet (Dejoiy Pay keys missing). The platform team sets them up.</div>`}
+    ${b.payMode==="test"?`<div class="adm-card adm-note"><b>Test mode.</b> Dejoiy Pay is using a test key: payments are simulated and no money moves.</div>`:""}
+    <div class="adm-card"><div class="adm-card-head"><h2>${esc(b.domain)}</h2><span class="adm-pill ${now[0]}">${now[1]}</span></div>
+      <p>${ends}</p>${b.mailboxes!==undefined&&b.plan?`<p class="adm-muted">${b.mailboxes===null?"Unlimited":"Up to "+b.mailboxes} mailboxes, and Shine for everyone in them.</p>`:""}
+      ${b.open?`<p class="bl-open">A payment is waiting: ${inr(b.open.amount)} for ${esc(b.plans.find(p=>p.id===b.open.plan)?.name||b.open.plan)}. <a class="adm-btn primary sm" href="${esc(b.open.url)}" target="_blank" rel="noopener">Pay on Dejoiy Pay</a> <button class="adm-btn ghost sm" id="bl-check">I've paid, check</button></p>`:""}</div>
+    <div class="adm-card"><div class="adm-card-head"><h2>Plans</h2>
+      <div class="bl-period" role="group" aria-label="Billing period"><button class="${period==="month"?"on":""}" data-period="month" aria-pressed="${period==="month"}">Monthly</button><button class="${period==="year"?"on":""}" data-period="year" aria-pressed="${period==="year"}">Yearly · save up to 33%</button></div></div>
+      <p class="adm-muted">One flat price for the whole company, not per person. Shine (chat, calls, meetings) comes with every plan; it is not sold on its own. Prices include ${b.gst}% GST.</p>
+      <div class="bl-plans">${b.plans.map(p=>{ const paise=period==="year"?p.yearPaise:p.monthPaise, mine=b.state==="active"&&b.plan===p.id&&b.period===period;
+        return `<div class="bl-plan ${mine?"is-mine":""}"><h3>${esc(p.name)}</h3><p class="bl-price"><b>${inr(paise)}</b>/${period==="year"?"year":"month"}</p>
+          <p class="adm-muted">₹${p[period].toLocaleString("en-IN")} + GST${period==="year"?` · ${inr(paise/12)} a month`:""}</p>
+          <p>${p.mailboxes===null?"Unlimited":"Up to "+p.mailboxes} mailboxes · Shine included</p>
+          <button class="adm-btn ${mine?"ghost":"primary"}" data-plan="${p.id}" ${b.payReady?"":"disabled"}>${mine?"Pay to extend":b.state==="active"&&b.plan===p.id?"Switch to "+(period==="year"?"yearly":"monthly"):"Choose "+esc(p.name)}</button></div>`; }).join("")}</div>
+      <p class="adm-muted">A new payment adds its time after what is already paid. Changing plan applies from the next payment.</p><p role="alert" class="adm-error" id="bl-err"></p></div>
+    <div class="adm-card adm-flush"><div class="adm-card-head adm-pad"><h2>Payments</h2></div>
+      ${b.invoices.length?`<table class="adm-table"><thead><tr><th>Date</th><th>Plan</th><th>Amount</th><th>Status</th></tr></thead><tbody>${b.invoices.map(x=>`<tr><td><small>${day(x.paidAt||x.created)}</small></td>
+        <td>${esc(b.plans.find(p=>p.id===x.plan)?.name||x.plan)} · ${x.period==="year"?"yearly":"monthly"}${x.mode==="test"?` <span class="adm-pill warn">test</span>`:""}</td><td>${inr(x.amount)}</td>
+        <td><span class="adm-pill ${x.status==="paid"?"good":x.status==="created"?"warn":""}">${{paid:"Paid",created:"Waiting",replaced:"Not used",expired:"Expired",cancelled:"Cancelled"}[x.status]||esc(x.status)}</span></td></tr>`).join("")}</tbody></table>`
+        :`<p class="adm-muted adm-pad">No payments yet.</p>`}</div>`;
+    main.querySelectorAll("[data-period]").forEach(x=>x.addEventListener("click",()=>{ period=billing.period=x.dataset.period; draw(); }));
+    $("bl-check")?.addEventListener("click",()=>billing(main,d));
+    main.querySelectorAll("[data-plan]").forEach(x=>x.addEventListener("click",async()=>{
+      // open the tab now (a click), then point it at the link: browsers block tabs opened after a wait
+      const tab=window.open("about:blank","_blank"); x.disabled=true; $("bl-err").textContent="";
+      try{ const out=await act({op:"billing_checkout",domain,plan:x.dataset.plan,period});
+        if(tab) tab.location.href=out.url; else location.href=out.url;
+        toast("Pay in the new tab. This page updates once it's paid."); watch(); billing(main,d);
+      }catch(e){ tab?.close(); $("bl-err").textContent=e.message; x.disabled=false; } }));
+  };
+  // while a payment waits, look again every 10 seconds for up to 10 minutes
+  const watch = ()=>{ clearInterval(billing.timer); let n=0; billing.timer=setInterval(async()=>{
+    if(!$("bl-body")||++n>60) return clearInterval(billing.timer);
+    try{ const fresh=await act({op:"billing_get",domain}); if(!fresh.open){ clearInterval(billing.timer); toast(fresh.state==="active"?"Payment received. Thank you!":"The payment link closed."); billing(main,d); } }catch(_){} },10000); };
+  draw(); if(b.open) watch();
+}
 async function reports(main, d){
   main.innerHTML=head("Reports",d.scope?`Email and sign-in activity on ${d.scope}.`:"Email and sign-in activity across all domains.",`<button class="adm-btn ghost" id="rp-refresh">${icon("refresh")} Refresh</button>`)+`<div id="rp-body"><p class="adm-muted">Loading…</p></div>`;
   $("rp-refresh").addEventListener("click",()=>reports(main,d));
@@ -595,7 +646,7 @@ const companyRoles = (d, u) => (d.domains.find(x=>u&&u.email.endsWith("@"+x.doma
 const can = perm => !state.data?.perms || state.data.perms.includes(perm);
 const CONSOLE_ONLY = perm => (state.data?.consolePermissions || []).includes(perm);
 const PERM_GROUPS = [["Mail",["updates.post","mail.everyone","tickets.manage"]],
-  ["Admin console",["mailboxes.manage","mailboxes.delete","teams.manage","roles.manage","domain.view","reports.view"]]];
+  ["Admin console",["mailboxes.manage","mailboxes.delete","teams.manage","roles.manage","domain.view","reports.view","billing.manage"]]];
 // Shine's roles and the old starter roles, by name, for "Reset"
 const STARTER = {"member":["mail.everyone"],"team lead":["mail.everyone","updates.post"],"department head":["mail.everyone","updates.post"]};
 const defaultsFor = name => { const n=String(name||"").trim().toLowerCase(), shine=(state.data?.shineRoles||[]).find(r=>r.name.toLowerCase()===n);

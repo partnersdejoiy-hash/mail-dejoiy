@@ -340,3 +340,17 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;backgrou
 .adm-cell.is-locked,.adm-cell:has(input:disabled){cursor:not-allowed;opacity:.55}
 .adm-matrix-tools td{white-space:nowrap}
 .adm-matrix-tools .adm-btn{margin:2px}
+
+/* Plan & billing */
+.bl-period{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:3px;gap:2px;background:var(--surface-2)}
+.bl-period button{border:0;background:none;border-radius:999px;padding:6px 14px;font:inherit;font-size:13px;font-weight:600;color:var(--ink-2);cursor:pointer}
+.bl-period button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgb(0 0 0/.12)}
+.bl-plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin:12px 0}
+.bl-plan{border:1px solid var(--line);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:6px}
+.bl-plan h3{margin:0;font-size:17px}.bl-plan p{margin:0}
+.bl-plan .adm-btn{margin-top:auto;align-self:flex-start}
+.bl-plan.is-mine{border-color:var(--pop,var(--accent));box-shadow:0 0 0 1px var(--pop,var(--accent))}
+.bl-price b{font-size:26px;letter-spacing:-.02em}
+.bl-open{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.adm-note{border-left:4px solid var(--warn)}
+.adm-inline{display:flex;align-items:center;gap:8px;font-weight:600}.adm-inline select{margin:0;width:auto}

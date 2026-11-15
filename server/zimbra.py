@@ -28,6 +28,7 @@ import zconsole
 from webhooks import Webhooks, WebhookError
 from newmail import NewMailWatcher
 import relay
+from billing import Billing, BillingError, DejoiyPay
 import passkeys
 from tickets import Tickets, TicketError, Who
 from automations import Automations, AutomationError
@@ -1504,11 +1505,11 @@ DEPARTMENT_MARK='dejoiy:department'
 PERMISSIONS={'updates.post':'Post in the company box','mailboxes.manage':'Add and edit mailboxes','mailboxes.delete':'Delete mailboxes',
     'teams.manage':'Manage departments and team lists','domain.view':'See the DNS setup','roles.manage':'Manage roles, permissions and the company box',
     'tickets.manage':'See and handle every help desk ticket','mail.everyone':'Mail the whole company at once (@all)',
-    'reports.view':'See mail reports and the activity log'}
+    'reports.view':'See mail reports and the activity log','billing.manage':'See and pay the subscription'}
 CONSOLE_PERMISSIONS=set(PERMISSIONS)-{'updates.post','tickets.manage','mail.everyone'}
 # The order permissions are stored in (one bit each). Only ever add at the end: saved roles depend on it.
-PERM_ORDER=('updates.post','mailboxes.manage','mailboxes.delete','teams.manage','domain.view','roles.manage','tickets.manage','mail.everyone','reports.view')
-ORG_VERSION=2   # 2: mail.everyone and reports.view exist; older saved roles get them as they behaved before (see read_org)
+PERM_ORDER=('updates.post','mailboxes.manage','mailboxes.delete','teams.manage','domain.view','roles.manage','tickets.manage','mail.everyone','reports.view','billing.manage')
+ORG_VERSION=3   # 2: mail.everyone and reports.view exist; 3: billing.manage. Older saved roles get them as they behaved before (see read_org)
 ORG_NOTES_LIMIT=1000   # the mail server keeps a domain's notes to about 1024 characters
 DEFAULT_ROLES=[{'name':'Member','access':'User','perms':['mail.everyone']},{'name':'Team lead','access':'User','perms':['mail.everyone','updates.post']},
     {'name':'Department head','access':'User','perms':['mail.everyone','updates.post']},{'name':'IT admin','access':'Domain admin','perms':sorted(PERMISSIONS)}]
@@ -1577,8 +1578,10 @@ def read_org(notes):
         access='Domain admin' if role.get('access')=='Domain admin' else 'User'
         # Roles saved before permissions existed: company admins could do everything, members nothing.
         perms=role.get('perms') if isinstance(role.get('perms'),list) else (sorted(PERMISSIONS) if access=='Domain admin' else [])
-        if data.get('v')!=ORG_VERSION:   # saved before version 2: everyone could use @all, and every company admin saw reports
+        version=data.get('v') if isinstance(data.get('v'),int) else 1
+        if version<2:   # saved before version 2: everyone could use @all, and every company admin saw reports
             perms=[*perms,'mail.everyone',*(['reports.view'] if access=='Domain admin' else [])]
+        if version<3 and access=='Domain admin': perms=[*perms,'billing.manage']   # billing had no permission of its own
         roles.append({'name':role['name'],'access':access,'perms':sorted({p for p in perms if p in PERMISSIONS and (access=='Domain admin' or p not in CONSOLE_PERMISSIONS)})})
     box=data.get('companyBox') if isinstance(data.get('companyBox'),str) else ''
     policies=[]
@@ -2887,6 +2890,7 @@ class Handler(SimpleHTTPRequestHandler):
         if not verified: raise APIError('We could not find the TXT record yet. DNS changes can take a few minutes.',409)
         if provisioner.domain_exists(pending['domain']): raise APIError('This domain already uses Dejoiy Mail.',409)
         provisioner.provision(pending['domain'],pending['company'],pending['email'],pending['name'],password)
+        if getattr(self.server,'billing',None): self.server.billing.start_trial(pending['domain'])
         self.server.signups.delete(token)
         return self.start_session(pending['email'],password)
     # ---------- update boxes: Dejoiy Updates for every mailbox, and each company's own box ----------
@@ -3203,6 +3207,26 @@ class Handler(SimpleHTTPRequestHandler):
         if not text or len(text)>4000: raise APIError('Give "text" of up to 4000 characters.')
         out=self.shine_admin_post({'op':'post','scope':tok['domain'],'actor':tok['by'],'channel':channel,'text':text})
         return {'ok':True,'channel':out.get('channel',channel)}
+    def billing_action(self, s, data):
+        """The company's subscription (Dejoiy Mail with Shine) and paying for it through Dejoiy Pay."""
+        billing=getattr(self.server,'billing',None)
+        if not billing: raise APIError('Billing is not set up on this server.',503)
+        client,token,scope=self.admin_session(s)
+        perms=client.actor_perms(token,s['user']['email'],scope)
+        if perms is not None and 'billing.manage' not in perms:
+            raise APIError('Your role does not allow this. Ask an admin for "'+PERMISSIONS['billing.manage']+'".',403)
+        domain=scope or str(data.get('domain') or s['user']['email'].rsplit('@',1)[1]).strip().lower()
+        if not DOMAIN_NAME.fullmatch(domain): raise APIError('Pick a domain.')
+        reserved=self.server.reserved_domains
+        if any(domain==r or domain.endswith('.'+r) for r in reserved):
+            return {'domain':domain,'state':'internal'}   # Dejoiy's own domains don't pay themselves
+        try:
+            if data['op']=='billing_checkout':
+                out=billing.checkout(domain,str(data.get('plan','')),str(data.get('period','')),s['user']['email'],s['user'].get('name') or '',by=s['user']['email'])
+                self.log('admin:billing_checkout',s['user']['email'],domain)
+                return out
+            return {'domain':domain,**billing.status(domain)}
+        except BillingError as e: raise APIError(str(e),400)
     def admin_session(self, session):
         client=getattr(self.server,'admin',None)
         if not client: raise APIError('Mail administration is not configured on this server.',503)
@@ -3227,6 +3251,13 @@ class Handler(SimpleHTTPRequestHandler):
                 if not isinstance(data,dict): raise APIError('JSON object required')
                 if self.path=='/api/shine/avatar': return self.reply(200,self.shine_avatar(data))
                 return self.reply(200,self.shine_calendar(data) if self.path=='/api/shine/calendar' else self.shine_login(data))
+            if self.path=='/api/pay/webhook':   # Dejoiy Pay telling us a payment went through: signed, no browser
+                billing=getattr(self.server,'billing',None)
+                if not billing: raise APIError('Billing is not set up on this server.',503)
+                length=int(self.headers.get('Content-Length','0'))
+                if not 0<length<=MAX_REQUEST_BYTES: raise APIError('Request too large or empty',413)
+                try: return self.reply(200,billing.webhook(self.rfile.read(length),self.headers.get('X-Dejoiy-Signature','')))
+                except BillingError as e: raise APIError(str(e),400)
             origin=self.headers.get('Origin')
             custom=self.custom_host()  # a company's own verified sign-in address counts as this site, for itself only
             if not origin or origin not in (self.server.app_origin,getattr(self.server,'admin_origin',None),'https://'+custom['host'] if custom else None): raise APIError('Invalid request origin',403)
@@ -3340,6 +3371,8 @@ class Handler(SimpleHTTPRequestHandler):
             if self.path=='/api/admin/action' and data.get('op') in APITOKEN_OPS:
                 return self.reply(200,self.apitoken_action(s,data))
             if self.path=='/api/admin/action' and data.get('op')=='passkeys_reset': return self.reply(200,self.passkeys_reset(s,data))
+            if self.path=='/api/admin/action' and data.get('op') in ('billing_get','billing_checkout'):
+                return self.reply(200,self.billing_action(s,data))
             if self.path=='/api/admin/action' and data.get('op')=='reports':
                 client,token,scope=self.admin_session(s)
                 perms=client.actor_perms(token,s['user']['email'],scope)
@@ -3477,6 +3510,9 @@ def serve():
         server.admin.app_url=server.app_origin
         server.admin.dkim_dir=os.environ.get('DKIM_DIR') or (str(state/'dkim') if state else None)
     server.signups=SignupStore(str(state/'signups.sqlite') if state else None)
+    pay_key=os.environ.get('DEJOIY_PAY_KEY_ID',''); pay_secret=os.environ.get('DEJOIY_PAY_KEY_SECRET','')
+    server.billing=Billing(state/'billing.sqlite',DejoiyPay(os.environ.get('DEJOIY_PAY_URL','https://pay.dejoiy.com'),pay_key,pay_secret) if pay_key and pay_secret else None,
+        os.environ.get('DEJOIY_PAY_WEBHOOK_SECRET','')) if state else None
     server.relays=relay.Relays(state/'relays.json',key_file=state/'relay.key') if state else None   # a company's own outgoing mail service
     server.reserved_domains={d.strip().lower() for d in os.environ.get('RESERVED_DOMAINS','dejoiy.com').split(',') if d.strip()}
     server.provisioner=Provisioner(server.admin,os.environ['PROVISION_ADMIN'],os.environ['PROVISION_ADMIN_PASSWORD']) if server.admin and os.environ.get('PROVISION_ADMIN') and os.environ.get('PROVISION_ADMIN_PASSWORD') else None

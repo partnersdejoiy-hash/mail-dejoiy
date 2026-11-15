@@ -3,6 +3,7 @@
 'use strict';
 const paths={
  mail:'M3 5h18v14H3z M3 6l9 7 9-7',
+ card:'M2 5h20v14H2z M2 10h20 M6 15h4',
  megaphone:'M3 10v4h3l7 5V5L6 10H3z M16 8a5 5 0 0 1 0 8 M18.5 5.5a9 9 0 0 1 0 13',
  building:'M4 21V4h11v17 M15 9h5v12 M2 21h20 M7 8h2 M11 8h1 M7 12h2 M11 12h1 M7 16h2 M11 16h1',
  inbox:'M4 4h16l2 12v4H2v-4L4 4z M2 15h6l2 3h4l2-3h6',
