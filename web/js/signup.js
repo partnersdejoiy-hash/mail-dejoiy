@@ -90,7 +90,8 @@ function verify(r){
   const records = r.records && r.records.length ? r.records : [{kind:"Verification", purpose:"Proves you own the domain", ...r.record}];
   body.innerHTML = `<div>
     <h2>Connect ${esc(r.domain)}</h2>
-    <p>Sign in where your domain's DNS is managed (GoDaddy, Cloudflare, Hostinger, etc.) and add <b>all ${records.length} records</b> below. The first one proves you own the domain; the others let your team send and receive mail without landing in spam.</p>
+    <p>Sign in where your domain's DNS is managed (GoDaddy, Cloudflare, Hostinger, etc.) and add <b>all ${records.length} records</b> below. The first one proves you own the domain; the others let your team send and receive mail and help it reach the inbox.</p>
+    <p class="su-fine">Good to know: whether mail lands in the inbox at Gmail or Outlook also depends on your domain's own sending reputation. A new or little-used domain can land in spam at first; that is about the domain, not a fault in Dejoiy Mail. For better delivery, add the Swiss Mail add-on (₹199 + GST a month, 10,000 mails) in Admin → Domains → Mail service.</p>
     ${recordList(records)}
     <p class="su-status" id="su-status" role="status">Waiting for the verification record…</p>
     <button class="su-btn" id="su-check">I've added them — check now</button>

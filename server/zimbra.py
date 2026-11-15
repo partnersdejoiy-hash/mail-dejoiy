@@ -29,6 +29,7 @@ from webhooks import Webhooks, WebhookError
 from newmail import NewMailWatcher
 import relay
 from billing import Billing, BillingError, DejoiyPay
+import billing as billing_mod
 import passkeys
 from tickets import Tickets, TicketError, Who
 from automations import Automations, AutomationError
@@ -467,7 +468,22 @@ def host_points_here(host, mail_host, lookup=None):
     ours=set(lookup(mail_host,'A')); theirs=set(lookup(host,'A'))
     return bool(theirs) and theirs<=ours
 
-# Outgoing mail to Gmail and other outside domains is relayed through Amazon SES, so SES may send for every domain.
+def promoted_domains(server):
+    try: return set(json.loads(Path(server.promoted_file).read_text())) if server.promoted_file else set()
+    except (OSError, ValueError): return set()
+def write_ses_list(server, promoted=None):
+    """The list deploy/outgoing-mail.sh reads: '*.domain' = that domain and every subdomain (Dejoiy's own), else one domain."""
+    if promoted is not None and server.promoted_file:
+        tmp=Path(server.promoted_file).with_suffix('.tmp'); tmp.write_text(json.dumps(sorted(promoted))); os.replace(tmp,server.promoted_file)
+    if not server.ses_file: return
+    lines=[f'*.{d}' for d in sorted(server.reserved_domains)]+sorted(promoted if promoted is not None else promoted_domains(server))
+    try:
+        tmp=Path(server.ses_file).with_suffix('.tmp'); tmp.write_text('\n'.join(lines)+'\n'); os.replace(tmp,server.ses_file)
+    except OSError: pass
+def uses_ses(server, domain):
+    return any(domain==r or domain.endswith('.'+r) for r in server.reserved_domains) or domain in promoted_domains(server)
+
+# Dejoiy's own domains (and promoted ones) are relayed through Amazon SES; SES's include in SPF is harmless for the rest.
 SPF_INCLUDES=[x for x in os.environ.get('SPF_INCLUDES','amazonses.com').replace(',',' ').split() if re.fullmatch(r'[a-z0-9.-]+',x)]
 def merged_spf(existing, mail_host):
     """One SPF record per domain is allowed, so ours is merged into the one already published."""
@@ -2400,7 +2416,7 @@ class Handler(SimpleHTTPRequestHandler):
         if data.get('id') and re.fullmatch(r'\d+',str(data['id'])):
             try: z.action(token,{'ids':[str(data['id'])],'op':'delete'}); removed=True
             except APIError: pass
-        return {'id':sent_id,'accepted':True,'draftRemoved':removed,'via':cfg['host'],**({} if sent_id else {'sentCopyMissing':True})}
+        return {'id':sent_id,'accepted':True,'draftRemoved':removed,'via':cfg.get('host') or 'Dejoiy Swiss Mail',**({} if sent_id else {'sentCopyMissing':True})}
     def relay_action(self, session, data):
         """Admin console: see, save, test or remove a company's own outgoing mail service."""
         relays=getattr(self.server,'relays',None)
@@ -2411,8 +2427,58 @@ class Handler(SimpleHTTPRequestHandler):
         domain=str(data.get('domain','')).strip().lower()
         if not DOMAIN_NAME.fullmatch(domain) or (scope and domain!=scope): raise APIError('You can only change your own domain.',403)
         lookup=node(ADMIN,'GetDomainRequest'); lookup.append(node(ADMIN,'domain',{'by':'name'},domain)); client.call(lookup,token)  # the domain exists and this admin may see it
-        try: return relays.action(data.get('op'),data,domain,session['user']['email'].lower())
-        except relay.RelayError as e: raise APIError(str(e),502 if data.get('op')=='relay_test' else 400)
+        op=data.get('op'); billing=getattr(self.server,'billing',None); me=session['user']['email'].lower()
+        try:
+            if op=='ses_promote':
+                if scope: raise APIError('Only Dejoiy super admins can choose this.',403)
+                promoted=promoted_domains(self.server)
+                if data.get('on') is True: promoted.add(domain)
+                else: promoted.discard(domain)
+                write_ses_list(self.server,promoted)
+            elif op in ('swiss_buy','swiss_stop'):
+                if not billing: raise APIError('Billing is not set up on this server.',503)
+                if not self.server.swiss: raise APIError('The Swiss Mail add-on is not switched on for this server yet.',503)
+                if op=='swiss_buy': return {'domain':domain,**billing.addon_checkout(domain,me,session['user'].get('name') or '',by=me)}
+                billing.addon_cancel(domain)
+            elif op=='swiss_check':
+                if not self.server.swiss: raise APIError('The Swiss Mail add-on is not switched on for this server yet.',503)
+                self.swiss_status(domain,check=True)
+            else: relays.action(op,data,domain,me)
+            return {**self.mail_route(domain,scope),**({'sent':True} if op=='relay_test' else {})}
+        except relay.RelayError as e: raise APIError(str(e),502 if op in ('relay_test','swiss_check') else 400)
+        except BillingError as e: raise APIError(str(e),400)
+    def swiss_status(self, domain, check=False):
+        """The add-on's state in Swiss Mail (DNS records to publish, verified or not, this month's use), or None."""
+        cfg=self.server.relays.all.get(domain) or {}
+        if not (self.server.swiss and cfg.get('kind')=='swiss' and cfg.get('addon')): return None
+        out=self.server.swiss.get(domain,check)
+        verified=(out.get('domain') or {}).get('verification_status')=='verified'
+        if verified!=bool(cfg.get('verified')): self.server.relays.set_addon(domain,suspended=bool(cfg.get('suspended')),verified=verified)
+        return out
+    def sync_addon(self, domain):
+        """Paid for and not set up yet: set it up in Swiss Mail and keep the key. Ran out: Swiss Mail stops it; renewed: starts again."""
+        billing,relays,swiss=getattr(self.server,'billing',None),self.server.relays,getattr(self.server,'swiss',None)
+        if not (billing and relays and swiss): return None
+        ad=billing.addon(domain); cfg=relays.all.get(domain) or {}; mine=cfg.get('kind')=='swiss' and cfg.get('addon')
+        if ad['active'] and not mine:
+            made=swiss.setup(domain,domain,billing_mod.SWISS['mails']); relays.set_addon(domain,made['api_key'])
+        elif ad['active'] and cfg.get('suspended'):
+            swiss.update(domain,status='active'); relays.set_addon(domain)
+        elif not ad['active'] and mine and not cfg.get('suspended'):
+            swiss.update(domain,status='suspended'); relays.set_addon(domain,suspended=True)
+        return ad
+    def mail_route(self, domain, scope):
+        """Admin console → Domains → Mail service: how this domain's mail leaves, and the ways to make it land better."""
+        relays=self.server.relays; cfg=relays.all.get(domain) or {}
+        ad=None; swiss=None; trouble=None
+        try:
+            ad=self.sync_addon(domain); swiss=self.swiss_status(domain)
+        except (relay.RelayError,BillingError) as e: trouble=str(e)
+        reserved=any(domain==r or domain.endswith('.'+r) for r in self.server.reserved_domains)
+        own=bool(cfg.get('active')) and (not cfg.get('addon') or (relays.addon_until(domain)>time.time() and bool((relays.all.get(domain) or {}).get('verified'))))
+        via='company' if own else 'ses' if uses_ses(self.server,domain) else 'direct'
+        return {'domain':domain,'relay':relays.public(cfg or None),'via':via,'reserved':reserved,'promoted':domain in promoted_domains(self.server),
+                'canPromote':not scope and not reserved,'addon':ad,'swiss':swiss,'swissReady':bool(getattr(self.server,'swiss',None)),**({'trouble':trouble} if trouble else {})}
     def log(self, kind, actor, target='', n=1):
         audit=getattr(self.server,'audit',None)
         if audit: audit.add(kind,actor,target,self.client_ip(),n)
@@ -3295,8 +3361,12 @@ class Handler(SimpleHTTPRequestHandler):
                 if not billing: raise APIError('Billing is not set up on this server.',503)
                 length=int(self.headers.get('Content-Length','0'))
                 if not 0<length<=MAX_REQUEST_BYTES: raise APIError('Request too large or empty',413)
-                try: return self.reply(200,billing.webhook(self.rfile.read(length),self.headers.get('X-Dejoiy-Signature','')))
+                try: out=billing.webhook(self.rfile.read(length),self.headers.get('X-Dejoiy-Signature',''))
                 except BillingError as e: raise APIError(str(e),400)
+                if out.get('plan')=='swiss' and self.server.relays:
+                    try: self.sync_addon(out['domain'])
+                    except (relay.RelayError,BillingError): pass   # done again when an admin opens Mail service
+                return self.reply(200,out)
             origin=self.headers.get('Origin')
             custom=self.custom_host()  # a company's own verified sign-in address counts as this site, for itself only
             if not origin or origin not in (self.server.app_origin,getattr(self.server,'admin_origin',None),'https://'+custom['host'] if custom else None): raise APIError('Invalid request origin',403)
@@ -3420,7 +3490,7 @@ class Handler(SimpleHTTPRequestHandler):
                 audit=getattr(self.server,'audit',None)
                 if not audit: raise APIError('Reports are not switched on for this server.',503)
                 return self.reply(200,audit.report(scope))
-            if self.path=='/api/admin/action' and data.get('op') in ('relay_get','relay_set','relay_remove','relay_test'):
+            if self.path=='/api/admin/action' and data.get('op') in ('relay_get','relay_set','relay_remove','relay_test','ses_promote','swiss_buy','swiss_stop','swiss_check'):
                 out=self.relay_action(s,data)
                 if data.get('op')!='relay_get': self.log('admin:'+data['op'],s['user']['email'],out.get('domain'))   # never the password
                 return self.reply(200,out)
@@ -3554,6 +3624,13 @@ def serve():
         os.environ.get('DEJOIY_PAY_WEBHOOK_SECRET','')) if state else None
     server.relays=relay.Relays(state/'relays.json',key_file=state/'relay.key') if state else None   # a company's own outgoing mail service
     server.reserved_domains={d.strip().lower() for d in os.environ.get('RESERVED_DOMAINS','dejoiy.com').split(',') if d.strip()}
+    if server.relays and server.billing: server.relays.addon_until=server.billing.addon_until
+    server.swiss=relay.SwissPartner(os.environ['SWISS_PARTNER_SECRET']) if os.environ.get('SWISS_PARTNER_SECRET') else None
+    # which domains leave through Dejoiy's own Amazon SES: Dejoiy's domains, and those a super admin promoted.
+    # The app writes the list; a root job (deploy/outgoing-mail.sh) turns it into the mail system's routing table.
+    server.ses_file=os.environ.get('SES_DOMAINS_FILE') or (str(Path(os.environ['SESSION_DB']).with_name('ses-domains.txt')) if os.environ.get('SESSION_DB') else (str(state/'ses-domains.txt') if state else None))
+    server.promoted_file=state/'ses-promoted.json' if state else None
+    write_ses_list(server)
     server.provisioner=Provisioner(server.admin,os.environ['PROVISION_ADMIN'],os.environ['PROVISION_ADMIN_PASSWORD']) if server.admin and os.environ.get('PROVISION_ADMIN') and os.environ.get('PROVISION_ADMIN_PASSWORD') else None
     # 'mail.received' webhooks: incoming mail never passes this server, so a watcher looks once a minute (only for companies that asked)
     # ready-made automations (Configure > Automations), run here on the new-mail watcher

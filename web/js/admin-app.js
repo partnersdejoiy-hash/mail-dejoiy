@@ -304,7 +304,7 @@ async function shine(main, d){
 
 /* Reports: email numbers for the last 14 days, sign-ins (failed ones flagged) and who changed what. */
 const OPS={create_user:"Created mailbox",delete_user:"Deleted mailbox",password:"Reset password",status:"Changed status",quota:"Changed storage limit",forward:"Changed forwarding",
-  relay_set:"Changed the company mail service",relay_remove:"Removed the company mail service",relay_test:"Tested the company mail service",
+  relay_set:"Changed the company mail service",relay_remove:"Removed the company mail service",relay_test:"Tested the company mail service",ses_promote:"Changed who uses Dejoiy's SES",swiss_buy:"Started buying Swiss Mail",swiss_stop:"Turned off Swiss Mail auto-renew",swiss_check:"Checked Swiss Mail DNS",
   add_alias:"Added alias",remove_alias:"Removed alias",set_name:"Renamed",set_plan:"Changed plan",role:"Changed role",set_title:"Changed title",save_roles:"Edited roles",
   company_settings:"Changed company settings",create_domain:"Added domain",delete_domain:"Removed domain",domain_status:"Changed domain status",create_list:"Created list",
   delete_list:"Deleted list",add_member:"Added list member",remove_member:"Removed list member",create_department:"Created department",set_department:"Changed department",
@@ -551,36 +551,82 @@ function tplStatus(d, status){
 const RELAY_PRESETS=[["","Choose a service to fill this in…"],["email-smtp.ap-south-1.amazonaws.com|587|starttls","Amazon SES (Mumbai). Use your SES SMTP user name and password."],
   ["smtp.resend.com|465|ssl|resend","Resend. User name is resend, password is your API key."],["smtp-relay.brevo.com|587|starttls","Brevo"],["smtp.mailgun.org|587|starttls","Mailgun"],
   ["smtp.postmarkapp.com|587|starttls","Postmark"],["smtp.sendgrid.net|587|starttls|apikey","SendGrid. User name is apikey, password is your API key."]];
+const rupees = paise => "₹"+(paise/100).toLocaleString("en-IN",{minimumFractionDigits:paise%100?2:0,maximumFractionDigits:2});
 async function mailService(domain, d){
   const root=dialog({title:"Mail service · "+domain, wide:true, body:`<p class="adm-muted">Loading…</p>`});
   const body=root.querySelector(".adm-dialog-body"), depts=(d.departments||[]).map(x=>x.name);
+  let timer=null;
   const draw=(out,note)=>{
-    const r=out.relay||{}, on=r.configured, chosen=r.departments||[];
+    const r=out.relay||{}, on=r.configured, smtp=on&&r.kind!=="swiss", ownSwiss=on&&r.kind==="swiss"&&!r.addon, chosen=r.departments||[];
+    const ad=out.addon, sw=out.swiss, addonOn=ad&&ad.active;
+    const route = out.via==="company" ? [`good`, ownSwiss||r.addon?"Dejoiy Swiss Mail":`Your own service · ${r.host}`, `Mail to outside addresses leaves through ${ownSwiss||r.addon?"your Swiss Mail":"your company's own mail service"}, with its sending reputation.`]
+      : out.via==="ses" ? [`good`, "Dejoiy's mail service (Amazon SES)", out.reserved?`One of Dejoiy's own domains: its mail always leaves through Dejoiy's mail service.`:`A Dejoiy super admin chose to send ${domain} through Dejoiy's own mail service.`]
+      : [`warn`, "Straight from Dejoiy Mail's server", `Mail is sent and delivered as usual. Whether it lands in the inbox at Gmail, Outlook and others depends on ${domain}'s own sending reputation and its DNS records (SPF, DKIM, DMARC). A new or little-used domain can land in spam; that is about the domain, not a fault in Dejoiy Mail. For better delivery, add Swiss Mail below or connect a mail service your company already uses.`];
     body.innerHTML=`${note?`<p class="${note.bad?"adm-error":"adm-muted"}" role="status">${esc(note.text)}</p>`:""}
-      <p class="adm-muted">Mail that people at ${esc(domain)} send to outside addresses (Gmail, Outlook, customers) can leave through a mail service your company already uses, so it carries your own sending reputation. Mail inside ${esc(domain)} keeps going the usual way. Verify ${esc(domain)} with that service first, or it will refuse to send.</p>
-      ${on&&r.last?`<p><span class="adm-pill ${r.last.ok?"good":"bad"}">${r.last.ok?"Working":"Last try failed"}</span> <small>${esc(r.last.note)} · ${esc(new Date(r.last.at*1000).toLocaleString())}</small></p>`:""}
+      ${out.trouble?`<p class="adm-error">${esc(out.trouble)}</p>`:""}
+      <section class="ms-block"><h3>How mail from ${esc(domain)} leaves</h3>
+        <p><span class="adm-pill ${route[0]==="good"?"good":"warn"}">${esc(route[1])}</span></p><p class="adm-muted">${esc(route[2])}</p>
+        ${out.canPromote?`<label class="adm-check"><input type="checkbox" id="ms-ses" ${out.promoted?"checked":""}> Send ${esc(domain)} through Dejoiy's own Amazon SES (only for domains Dejoiy runs or trusts)</label>`:""}
+        ${on&&r.last?`<p><span class="adm-pill ${r.last.ok?"good":"bad"}">${r.last.ok?"Working":"Last try failed"}</span> <small>${esc(r.last.note)} · ${esc(new Date(r.last.at*1000).toLocaleString())}</small></p>`:""}
+        ${on?`<div class="adm-dialog-actions">${r.addon?"":`<button class="adm-btn ghost" id="rl-remove">Stop using it</button>`}<button class="adm-btn" id="rl-test">Send me a test mail</button></div>`:""}
+      </section>
+      <section class="ms-block"><h3>Swiss Mail add-on</h3>
+        ${addonOn?`<p><span class="adm-pill good">Active</span> Paid until ${esc(new Date(ad.paidUntil*1000).toLocaleDateString())}${ad.renewing?" · renews by itself (AutoPay)":" · auto-renew is off"}</p>
+          ${sw?`<p class="adm-muted">${(sw.used_this_month||0).toLocaleString("en-IN")} of ${(sw.monthly_limit||ad.mails).toLocaleString("en-IN")} mails used this month.</p>
+            <p>Sending domain: <span class="adm-pill ${sw.domain?.verification_status==="verified"?"good":"warn"}">${sw.domain?.verification_status==="verified"?"Verified":"Waiting for DNS"}</span></p>
+            ${sw.domain?.verification_status==="verified"?"":`<p class="adm-muted">Add these records where ${esc(domain)}'s DNS is kept (keep only one SPF record: merge if you have one). ${sw.domain?.dkim_ready?"":"Dejoiy adds your DKIM key within one working day; it shows here then."} Until it is verified, mail leaves the usual way.</p>
+            <table class="adm-table"><thead><tr><th>Type</th><th>Name</th><th>Value</th></tr></thead><tbody>${(sw.dns||[]).map(x=>`<tr><td>${esc(x.type)}</td><td><code>${esc(x.name)}</code></td><td>${x.value&&!(x.note==="DKIM"&&!sw.domain?.dkim_ready)?`<code class="ms-val">${esc(x.value)}</code>`:`<span class="adm-muted">Shown here once Dejoiy adds it</span>`}</td></tr>`).join("")}</tbody></table>
+            <div class="adm-dialog-actions"><button class="adm-btn" id="sw-check">Check DNS again</button></div>`}`:`<p class="adm-muted">Being set up. Open this again in a minute.</p>`}
+          ${ad.renewing?`<div class="adm-dialog-actions"><button class="adm-btn ghost" id="sw-stop">Turn off auto-renew</button></div>`:""}`
+        :`<p>Mail from ${esc(domain)} to outside addresses goes through Dejoiy Swiss Mail, built for landing in the inbox, with its own DKIM and SPF for your domain.</p>
+          <p><b>${ad?rupees(ad.pricePaise):"₹234.82"}</b> a month (₹${ad?ad.price:199} + ${ad?ad.gst:18}% GST) for ${(ad?ad.mails:10000).toLocaleString("en-IN")} mails a month. Approve UPI AutoPay or a card once; it renews by itself and you can stop it any time.</p>
+          ${ad?.open?`<p>A payment is waiting. <a href="${esc(ad.open.url)}" target="_blank" rel="noopener">Set up AutoPay and pay</a></p>`:""}
+          ${ad?.payMode==="test"?`<p class="adm-muted">Test mode: payments are simulated and no money moves.</p>`:""}
+          <div class="adm-dialog-actions"><button class="adm-btn primary" id="sw-buy" ${ad?.payReady&&out.swissReady?"":"disabled"}>Get Swiss Mail</button></div>
+          ${ad?.payReady&&out.swissReady?"":`<p class="adm-muted">The add-on can't be bought on this server yet.</p>`}
+          <details class="ms-more" ${ownSwiss?"open":""}><summary>Already have a Swiss Mail API key?</summary>
+            <div class="adm-form"><label>Swiss Mail API key<input id="sw-key" type="password" autocomplete="off" placeholder="${ownSwiss?`Saved (${esc(r.keyStart||"")}…). Paste a new one to replace it.`:"djy_live_…"}"></label></div>
+            <p class="adm-muted">Your ${esc(domain)} must already be verified in Swiss Mail. The key is kept encrypted and never shown again.</p>
+            <div class="adm-dialog-actions"><button class="adm-btn" id="sw-save">Use this key</button></div></details>`}
+      </section>
+      <details class="ms-block ms-more" ${smtp?"open":""}><summary><h3>Use a mail service you already have</h3></summary>
+      <p class="adm-muted">Amazon SES, Resend, Brevo, Mailgun or any SMTP service your company pays for. Mail inside ${esc(domain)} keeps going the usual way. Verify ${esc(domain)} with that service first, or it will refuse to send.</p>
       <div class="adm-form">
         <label>Quick fill<select id="rl-preset">${RELAY_PRESETS.map(([v,t])=>`<option value="${esc(v)}">${esc(t)}</option>`).join("")}</select></label>
-        <label>SMTP server<input id="rl-host" value="${esc(r.host||"")}" placeholder="smtp.resend.com" autocapitalize="off" spellcheck="false"></label>
-        <label>Port<select id="rl-port">${[587,465,2587,2465,25].map(p=>`<option ${p===(r.port||587)?"selected":""}>${p}</option>`).join("")}</select></label>
+        <label>SMTP server<input id="rl-host" value="${esc(smtp?r.host:"")}" placeholder="smtp.resend.com" autocapitalize="off" spellcheck="false"></label>
+        <label>Port<select id="rl-port">${[587,465,2587,2465,25].map(p=>`<option ${p===((smtp&&r.port)||587)?"selected":""}>${p}</option>`).join("")}</select></label>
         <label>Connection<select id="rl-sec"><option value="starttls" ${r.security!=="ssl"?"selected":""}>STARTTLS (port 587)</option><option value="ssl" ${r.security==="ssl"?"selected":""}>SSL (port 465)</option></select></label>
-        <label>User name<input id="rl-user" value="${esc(r.user||"")}" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
-        <label>Password or API key<input id="rl-pass" type="password" autocomplete="new-password" placeholder="${on?"Saved. Leave empty to keep it.":""}"></label>
+        <label>User name<input id="rl-user" value="${esc(smtp?r.user||"":"")}" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+        <label>Password or API key<input id="rl-pass" type="password" autocomplete="new-password" placeholder="${smtp?"Saved. Leave empty to keep it.":""}"></label>
         ${depts.length?`<fieldset class="adm-fieldset"><legend>Who uses it</legend><p class="adm-muted">Tick departments to use it only for them. Nothing ticked means everyone at ${esc(domain)}.</p>
           <div class="adm-chips">${depts.map(n=>`<label class="adm-check"><input type="checkbox" name="rl-dept" value="${esc(n)}" ${chosen.some(c=>c.toLowerCase()===n.toLowerCase())?"checked":""}> ${esc(n)}</label>`).join("")}</div></fieldset>`:""}
-        <label class="adm-check"><input type="checkbox" id="rl-active" ${!on||r.active?"checked":""}> Switched on</label>
+        <label class="adm-check"><input type="checkbox" id="rl-active" ${!smtp||r.active?"checked":""}> Switched on</label>
       </div>
-      <p class="adm-muted">The password is kept encrypted on the mail server and is never shown again. If the service refuses a mail, the sender is told and the mail stays in their Drafts.</p>
-      <div class="adm-dialog-actions">${on?`<button class="adm-btn ghost" id="rl-remove">Remove</button><button class="adm-btn" id="rl-test">Send me a test mail</button>`:""}<button class="adm-btn primary" id="rl-save">Save</button></div>`;
+      <p class="adm-muted">The password is kept encrypted on the mail server and is never shown again. If the service refuses a mail, the sender is told and the mail stays in their Drafts.${r.addon?" Saving this replaces the Swiss Mail add-on for sending (it stays paid until you turn it off).":""}</p>
+      <div class="adm-dialog-actions"><button class="adm-btn primary" id="rl-save">Save</button></div></details>`;
     const fail=e=>{ const old=body.querySelector("[role=status]"); if(old) old.remove(); body.insertAdjacentHTML("afterbegin",`<p class="adm-error" role="status">${esc(e.message)}</p>`); body.scrollTop=0; };
     const go=(id,payload,text)=>{ const b=$(id); if(!b) return; b.addEventListener("click",async()=>{ b.disabled=true; try{ draw(await act(payload()),{text}); }catch(e){ b.disabled=false; fail(e); } }); };
     $("rl-preset").addEventListener("change",e=>{ const [host,port,sec,user]=e.target.value.split("|"); if(!host) return; $("rl-host").value=host; $("rl-port").value=port; $("rl-sec").value=sec; if(user) $("rl-user").value=user; });
     go("rl-save",()=>({op:"relay_set",domain,host:$("rl-host").value,port:Number($("rl-port").value),security:$("rl-sec").value,user:$("rl-user").value,password:$("rl-pass").value,
       departments:[...body.querySelectorAll("[name=rl-dept]:checked")].map(c=>c.value),active:$("rl-active").checked}),"Saved. Send yourself a test mail to check it.");
-    go("rl-test",()=>({op:"relay_test",domain}),"Test mail sent through your service. Check your inbox.");
-    go("rl-remove",()=>({op:"relay_remove",domain}),"Removed. Mail goes out the usual way again.");
+    go("rl-test",()=>({op:"relay_test",domain}),"Test mail sent. Check your inbox.");
+    go("rl-remove",()=>({op:"relay_remove",domain}),"Stopped. Mail leaves the usual way again.");
+    go("sw-save",()=>({op:"relay_set",domain,kind:"swiss",key:$("sw-key").value}),"Saved. Send yourself a test mail to check it.");
+    go("sw-check",()=>({op:"swiss_check",domain}),"Checked the DNS records again.");
+    $("ms-ses")?.addEventListener("change",async e=>{ e.target.disabled=true; try{ draw(await act({op:"ses_promote",domain,on:e.target.checked}),{text:e.target.checked?`${domain} now leaves through Dejoiy's SES (within 2 minutes).`:`${domain} no longer uses Dejoiy's SES (within 2 minutes).`}); }catch(x){ e.target.checked=!e.target.checked; e.target.disabled=false; fail(x); } });
+    $("sw-stop")?.addEventListener("click",async e=>{ if(!confirm("Turn off auto-renew for Swiss Mail? Nothing more is charged; it works until the paid month ends.")) return; e.currentTarget.disabled=true;
+      try{ draw(await act({op:"swiss_stop",domain}),{text:"Auto-renew is off."}); }catch(x){ fail(x); } });
+    $("sw-buy")?.addEventListener("click",async e=>{
+      const tab=window.open("about:blank","_blank"); e.currentTarget.disabled=true;   // opened on the click; browsers block tabs opened later
+      try{ const made=await act({op:"swiss_buy",domain}); if(tab) tab.location.href=made.url; else location.href=made.url;
+        toast("Set up AutoPay and pay in the new tab. This updates once it's paid."); watch();
+      }catch(x){ tab?.close(); e.currentTarget.disabled=false; fail(x); } });
   };
-  try{ draw(await act({op:"relay_get",domain})); }catch(e){ body.innerHTML=`<p class="adm-error">${esc(e.message)}</p>`; }
+  // after paying: look every 10 seconds for up to 10 minutes, then the add-on sets itself up
+  const watch=()=>{ clearInterval(timer); let n=0; timer=setInterval(async()=>{
+    if(!body.isConnected||++n>60) return clearInterval(timer);
+    try{ const fresh=await act({op:"relay_get",domain}); if(fresh.addon?.active){ clearInterval(timer); draw(fresh,{text:"Payment received. Swiss Mail is being set up for "+domain+"."}); } }catch(_){} },10000); };
+  try{ const out=await act({op:"relay_get",domain}); draw(out); if(out.addon?.open) watch(); }catch(e){ body.innerHTML=`<p class="adm-error">${esc(e.message)}</p>`; }
 }
 
 function manageUser(u, d){

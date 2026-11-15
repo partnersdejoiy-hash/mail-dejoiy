@@ -15,7 +15,7 @@ Stands alone (standard library only). Wiring it in:
 The password is kept encrypted (key in a separate file, both readable by the mail app only) and is
 never sent back to the browser. Someone with root on the server can still read it.
 """
-import hashlib, hmac, json, os, re, secrets, smtplib, socket, ssl, threading, ipaddress
+import base64, hashlib, hmac, json, os, re, secrets, smtplib, socket, ssl, threading, time, ipaddress, urllib.error, urllib.request
 from email.message import EmailMessage
 from email.utils import formatdate, make_msgid, formataddr
 from pathlib import Path
@@ -24,6 +24,8 @@ PORTS = (465, 587, 2465, 2587, 25)
 SECURITY = ('starttls', 'ssl')
 DOMAIN = re.compile(r'^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$')
 ADDRESS = re.compile(r'^[^\s<>@,;]+@[^\s<>@,;]+\.[^\s<>@,;]+$')
+SWISS_URL = os.environ.get('SWISS_URL', 'https://api-mail.dejoiy.com').rstrip('/')
+SWISS_KEY = re.compile(r'^djy_(live|test)_[A-Za-z0-9_-]{16,80}$')
 
 
 class RelayError(ValueError):
@@ -70,6 +72,7 @@ def slug(text):
 class Relays:
     def __init__(self, path, key_file=None, key=None, is_public=public_host, deliver=None):
         self.path, self.is_public, self.deliver = Path(path), is_public, deliver or send
+        self.addon_until = lambda domain: float('inf')   # the server sets this to billing's record of the paid add-on
         self.lock = threading.Lock()
         if key is None:
             key_file = Path(key_file)
@@ -92,9 +95,37 @@ class Relays:
     def public(cfg):
         """What the admin page may see: everything but the password."""
         if not cfg: return {'configured': False}
-        return {'configured': True, **{k: cfg[k] for k in ('host', 'port', 'security', 'user', 'departments', 'active', 'last')}}
+        if cfg.get('kind') == 'swiss':
+            return {'configured': True, 'kind': 'swiss', 'host': 'Dejoiy Swiss Mail', **{k: cfg.get(k) for k in ('keyStart', 'addon', 'departments', 'active', 'last')}}
+        return {'configured': True, 'kind': 'smtp', **{k: cfg[k] for k in ('host', 'port', 'security', 'user', 'departments', 'active', 'last')}}
+
+    def clean_swiss(self, payload, old):
+        """A Swiss Mail API key the company already has (bought from Dejoiy Swiss Mail directly)."""
+        key = str(payload.get('key') or '').strip()
+        if key:
+            if not SWISS_KEY.fullmatch(key): raise RelayError('Paste the whole Swiss Mail API key; it starts with djy_live_.')
+            sealed, start = seal(self.key, key), key[:12]
+        elif old and old.get('kind') == 'swiss' and not old.get('addon'): sealed, start = old['password'], old.get('keyStart')
+        else: raise RelayError('Paste your Swiss Mail API key.')
+        return {'kind': 'swiss', 'password': sealed, 'keyStart': start, 'addon': False, 'departments': [],
+                'active': payload.get('active', True) is not False, 'last': old.get('last') if old else None}
+
+    def set_addon(self, domain, key=None, suspended=False, verified=None):
+        """The add-on Dejoiy set up: a new key replaces the old one; suspended notes that Swiss Mail was told to stop it;
+        verified says Swiss Mail has checked the domain's DNS (until then mail goes the usual way)."""
+        with self.lock:
+            old = self.all.get(domain) or {}
+            if key: cfg = {'kind': 'swiss', 'password': seal(self.key, key), 'keyStart': key[:12], 'departments': [], 'active': True, 'addon': True,
+                           'last': old.get('last') if old.get('kind') == 'swiss' else None}
+            elif old.get('kind') == 'swiss' and old.get('addon'): cfg = dict(old)
+            else: return False
+            cfg['suspended'] = suspended
+            if verified is not None: cfg['verified'] = verified
+            self.all[domain] = cfg; self.save()
+            return True
 
     def clean(self, payload, old):
+        if payload.get('kind') == 'swiss': return self.clean_swiss(payload, old)
         host = str(payload.get('host') or '').strip().lower().rstrip('.')
         if not DOMAIN.fullmatch(host) or len(host) > 253: raise RelayError('Enter the SMTP server name, like email-smtp.ap-south-1.amazonaws.com or smtp.resend.com.')
         port = payload.get('port')
@@ -142,6 +173,7 @@ class Relays:
         and at least one recipient is outside the mail server's own domains."""
         with self.lock: cfg = self.all.get(domain)
         if not cfg or not cfg.get('active'): return None
+        if cfg.get('addon') and (self.addon_until(domain) < time.time() or not cfg.get('verified')): return None   # not paid, or Swiss Mail can't send for the domain yet
         if cfg['departments'] and slug(department) not in {slug(d) for d in cfg['departments']}: return None
         inside = {d.lower() for d in local} | {domain}
         if all(r.rsplit('@', 1)[-1].lower() in inside for r in recipients): return None
@@ -150,7 +182,6 @@ class Relays:
     def record(self, domain, ok, note):
         with self.lock:
             if domain in self.all:
-                import time
                 self.all[domain]['last'] = {'at': int(time.time()), 'ok': ok, 'note': str(note)[:200]}; self.save()
 
     def test(self, domain, me):
@@ -158,8 +189,9 @@ class Relays:
         cfg = self.config(domain)
         if not cfg: raise RelayError('Save the mail service first.')
         if not ADDRESS.fullmatch(me or '') or me.rsplit('@', 1)[1].lower() != domain: raise RelayError('The test goes to your own ' + domain + ' address.')
+        via = 'Dejoiy Swiss Mail' if cfg.get('kind') == 'swiss' else cfg['host']
         msg = build(me, '', [me], [], 'Dejoiy Mail test: your mail service works',
-                    'This test went out through ' + cfg['host'] + '.\nMail from ' + domain + ' to outside addresses now uses it.', None, [])
+                    'This test went out through ' + via + '.\nMail from ' + domain + ' to outside addresses now uses it.', None, [])
         try: self.deliver(cfg, me, [me], msg)
         except RelayError as e:
             self.record(domain, False, str(e)); raise
@@ -185,8 +217,38 @@ def build(sender, name, to, cc, subject, text, html, attachments, in_reply_to=''
     return msg
 
 
+def swiss_call(method, path, token, body=None, timeout=60, opener=None):
+    """One call to Dejoiy Swiss Mail's API; its refusals come back as RelayError with Swiss Mail's own words."""
+    request = urllib.request.Request(SWISS_URL + path, method=method, data=json.dumps(body).encode() if body is not None else None,
+                                     headers={'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json', 'User-Agent': 'DejoiyMail'})
+    try:
+        with (opener or urllib.request.urlopen)(request, timeout=timeout) as response: return json.loads(response.read() or b'{}')
+    except urllib.error.HTTPError as e:
+        try: why = json.loads(e.read() or b'{}').get('error', {}).get('message')
+        except (ValueError, AttributeError): why = None
+        if e.code == 401: why = 'Swiss Mail did not accept the key.'
+        raise RelayError(('Swiss Mail: ' + why) if why and not why.startswith('Swiss') else (why or f'Swiss Mail answered {e.code}.'))
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        raise RelayError('Could not reach Swiss Mail (' + (str(e) or type(e).__name__)[:120] + ').')
+
+
+def send_swiss(cfg, sender, recipients, msg, opener=None):
+    """The whole message, as it is, through the company's Swiss Mail key."""
+    swiss_call('POST', '/v1/emails/raw', cfg['password'],
+               {'mail_from': sender, 'rcpt_to': list(recipients), 'data': base64.b64encode(msg.as_bytes()).decode()}, opener=opener)
+
+
+class SwissPartner:
+    """Dejoiy Mail sets up and manages its companies' add-on in Swiss Mail (needs SWISS_PARTNER_SECRET)."""
+    def __init__(self, secret, opener=None): self.secret, self.opener = secret, opener
+    def setup(self, domain, name, monthly_limit): return swiss_call('POST', '/v1/partner/companies', self.secret, {'domain': domain, 'name': name[:120] or domain, 'monthly_limit': monthly_limit}, opener=self.opener)
+    def get(self, domain, check=False): return swiss_call('GET', f'/v1/partner/companies/{domain}' + ('?check=1' if check else ''), self.secret, opener=self.opener)
+    def update(self, domain, **change): return swiss_call('POST', f'/v1/partner/companies/{domain}', self.secret, change, opener=self.opener)
+
+
 def send(cfg, sender, recipients, msg, timeout=30):
     """Hands the mail to the company's service. Raises RelayError with the service's own answer when it says no."""
+    if cfg.get('kind') == 'swiss': return send_swiss(cfg, sender, recipients, msg)
     context = ssl.create_default_context()
     try:
         if cfg['security'] == 'ssl': server = smtplib.SMTP_SSL(cfg['host'], cfg['port'], timeout=timeout, context=context)

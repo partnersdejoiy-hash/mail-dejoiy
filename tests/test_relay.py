@@ -150,3 +150,64 @@ class SendThroughIt(unittest.TestCase):
         self.assertIsNone(h.relay_route(self.SESSION, {'to': 'b@acme.in', 'cc': '', 'bcc': ''}))
 
 if __name__ == '__main__': unittest.main()
+
+
+class SwissMail(unittest.TestCase):
+    """The Swiss Mail add-on (set up by Dejoiy) and a Swiss Mail key a company pastes itself."""
+    KEY_ = 'djy_live_' + 'A' * 28
+    def setUp(self): self.tmp = tempfile.mkdtemp(); self.r = store(self.tmp)
+
+    def test_pasted_key_is_sealed_and_mail_goes_to_the_raw_api(self):
+        with self.assertRaises(relay.RelayError): self.r.action('relay_set', {'kind': 'swiss', 'key': 'nope'}, 'acme.in')
+        out = self.r.action('relay_set', {'kind': 'swiss', 'key': self.KEY_}, 'acme.in')
+        self.assertEqual((out['relay']['kind'], out['relay']['keyStart']), ('swiss', self.KEY_[:12]))
+        self.assertNotIn(self.KEY_, (Path(self.tmp) / 'relays.json').read_text())
+        cfg = self.r.route('acme.in', '', ['x@gmail.com'])
+        seen = {}
+        class Resp:
+            def __enter__(s): return s
+            def __exit__(s, *a): pass
+            def read(s): return b'{"id":"em_1"}'
+        def opener(request, timeout):
+            seen.update(url=request.full_url, auth=request.headers['Authorization'], body=json.loads(request.data)); return Resp()
+        msg = relay.build('boss@acme.in', 'Boss', ['x@gmail.com'], [], 'Hi', 'Hello', None, [(b'pdf', 'a.pdf', 'application/pdf')])
+        relay.send_swiss(cfg, 'boss@acme.in', ['x@gmail.com', 'y@gmail.com'], msg, opener=opener)
+        self.assertEqual(seen['url'], relay.SWISS_URL + '/v1/emails/raw')
+        self.assertEqual(seen['auth'], 'Bearer ' + self.KEY_)
+        self.assertEqual(seen['body']['rcpt_to'], ['x@gmail.com', 'y@gmail.com'])
+        import base64
+        self.assertIn(b'filename="a.pdf"', base64.b64decode(seen['body']['data']))
+
+    def test_swiss_refusals_are_readable(self):
+        import io, urllib.error
+        def opener(request, timeout):
+            raise urllib.error.HTTPError(request.full_url, 429, 'x', {}, io.BytesIO(b'{"error":{"message":"This month\'s 10,000 mails are used up."}}'))
+        with self.assertRaisesRegex(relay.RelayError, '10,000 mails'): relay.swiss_call('POST', '/v1/emails/raw', 'k', {}, opener=opener)
+        def nokey(request, timeout): raise urllib.error.HTTPError(request.full_url, 401, 'x', {}, io.BytesIO(b'{}'))
+        with self.assertRaisesRegex(relay.RelayError, 'did not accept the key'): relay.swiss_call('GET', '/x', 'k', opener=nokey)
+
+    def test_addon_is_used_only_while_paid(self):
+        paid = {'acme.in': 0}
+        self.r.addon_until = lambda d: paid.get(d, 0)
+        self.assertTrue(self.r.set_addon('acme.in', self.KEY_))
+        self.assertIsNone(self.r.route('acme.in', '', ['x@gmail.com']))           # not paid: the usual way
+        import time
+        paid['acme.in'] = time.time() + 86400
+        self.assertIsNone(self.r.route('acme.in', '', ['x@gmail.com']))           # paid, but Swiss Mail hasn't verified the domain
+        self.r.set_addon('acme.in', verified=True)
+        self.assertEqual(self.r.route('acme.in', '', ['x@gmail.com'])['password'], self.KEY_)
+        self.assertFalse(self.r.set_addon('other.in'))                              # nothing to update without a key
+        self.assertTrue(self.r.set_addon('acme.in', suspended=True))
+        self.assertTrue(self.r.all['acme.in']['suspended'])
+
+
+class SesList(unittest.TestCase):
+    def test_dejoiy_domains_and_promoted_ones(self):
+        tmp = Path(tempfile.mkdtemp())
+        class S: reserved_domains = {'dejoiy.com'}; ses_file = str(tmp / 'ses.txt'); promoted_file = tmp / 'p.json'
+        z.write_ses_list(S)
+        self.assertEqual((tmp / 'ses.txt').read_text(), '*.dejoiy.com\n')
+        z.write_ses_list(S, {'kaali.in'})
+        self.assertEqual((tmp / 'ses.txt').read_text(), '*.dejoiy.com\nkaali.in\n')
+        self.assertTrue(z.uses_ses(S, 'corp.dejoiy.com')); self.assertTrue(z.uses_ses(S, 'kaali.in'))
+        self.assertFalse(z.uses_ses(S, 'notdejoiy.com'))

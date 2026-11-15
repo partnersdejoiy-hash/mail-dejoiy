@@ -354,3 +354,11 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;backgrou
 .bl-open{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 .adm-note{border-left:4px solid var(--warn)}
 .adm-inline{display:flex;align-items:center;gap:8px;font-weight:600}.adm-inline select{margin:0;width:auto}
+/* Mail service dialog: how mail leaves, Swiss Mail add-on, own service */
+.ms-block{border-top:1px solid var(--line);padding-top:14px;margin-top:14px}
+.ms-block:first-of-type{border-top:0;padding-top:0;margin-top:0}
+.ms-block h3{font-size:15px;margin:0 0 8px}
+.ms-more>summary{cursor:pointer;list-style-position:outside}
+.ms-more>summary h3{display:inline;font-size:15px}
+details.ms-more:not(.ms-block){margin-top:10px}
+.ms-val{word-break:break-all;font-size:12px}

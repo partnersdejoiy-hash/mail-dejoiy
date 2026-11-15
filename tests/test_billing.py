@@ -120,3 +120,67 @@ class ShineSend(unittest.TestCase):
         import smtpd_stub
         got = smtpd_stub.run(lambda port: __import__('zimbra').send_plain_mail('Shine <no-reply@mail.dejoiy.com>', 'a@b.in', 'Your code', '123456', '<b>123456</b>', host='127.0.0.1', port=port))
         self.assertIn('Subject: Your code', got); self.assertIn('To: a@b.in', got); self.assertIn('<b>123456</b>', got)
+
+
+class SwissAddon(unittest.TestCase):
+    def setUp(self):
+        self.clock = Clock(); self.pay = FakePay(self.clock)
+        self.bill = b.Billing(os.path.join(tempfile.mkdtemp(), 'billing.sqlite'), self.pay, 'whsec', clock=self.clock)
+
+    def test_addon_renews_on_its_own_and_does_not_touch_the_plan(self):
+        self.assertFalse(self.bill.addon('kaali.in')['active'])
+        plan = self.bill.checkout('kaali.in', 'team', 'month', 'a@kaali.in'); self.pay.charge(plan['id'])
+        out = self.bill.addon_checkout('kaali.in', 'a@kaali.in')
+        self.assertEqual(self.pay.made[-1]['plan']['amount'], 23482)                  # ₹199 + 18%
+        self.assertEqual(self.bill.addon('kaali.in')['open']['id'], out['id'])
+        self.pay.charge(out['id'])
+        ad = self.bill.addon('kaali.in')
+        self.assertTrue(ad['active']); self.assertEqual(ad['renewing']['id'], out['id'])
+        self.assertEqual(self.bill.addon_until('kaali.in'), self.clock.t + 30 * DAY)
+        s = self.bill.status('kaali.in')
+        self.assertEqual((s['plan'], s['renewing']['id']), ('team', plan['id']))       # the plan is its own subscription
+        self.assertTrue(all(i['plan'] != 'swiss' for i in s['invoices']))
+        with self.assertRaisesRegex(b.BillingError, 'already renews'): self.bill.addon_checkout('kaali.in', 'a@kaali.in')
+        self.bill.addon_cancel('kaali.in')
+        self.assertIsNone(self.bill.addon('kaali.in')['renewing'])
+        self.clock.t += 31 * DAY
+        self.assertFalse(self.bill.addon('kaali.in')['active'])
+
+    def test_webhook_says_which_company_and_product(self):
+        out = self.bill.addon_checkout('kaali.in', 'a@kaali.in'); self.pay.charge(out['id'])
+        note = json.dumps({'event': 'payment.captured', 'payload': {'id': 'pay_1', 'source': 'subscription', 'source_id': out['id']}}).encode()
+        got = self.bill.webhook(note, hmac.new(b'whsec', note, hashlib.sha256).hexdigest())
+        self.assertEqual((got['used'], got['domain'], got['plan']), (True, 'kaali.in', 'swiss'))
+
+
+class AddonSetsItselfUp(unittest.TestCase):
+    """Paid → Dejoiy Mail sets the company up in Swiss Mail and keeps the key; ran out → Swiss Mail stops it; renewed → on again."""
+    def test_life_of_an_addon(self):
+        import relay, zimbra
+        clock = Clock(); pay = FakePay(clock)
+        bill = b.Billing(os.path.join(tempfile.mkdtemp(), 'b.sqlite'), pay, 'whsec', clock=clock)
+        relays = relay.Relays(os.path.join(tempfile.mkdtemp(), 'r.json'), key=b'k' * 32, is_public=lambda h: True)
+        relays.addon_until = bill.addon_until
+        calls = []
+        class Swiss:
+            def setup(self, domain, name, limit): calls.append(('setup', domain, limit)); return {'api_key': 'djy_live_' + 'B' * 28}
+            def update(self, domain, **change): calls.append(('update', domain, change))
+            def get(self, domain, check=False): return {'domain': {'verification_status': 'pending'}}
+        class Server: billing = bill; swiss = Swiss()
+        Server.relays = relays
+        me = type('H', (), {'server': Server})()
+        sync = lambda: zimbra.Handler.sync_addon(me, 'kaali.in')
+        sync(); self.assertEqual(calls, [])                                           # nothing bought: nothing set up
+        out = bill.addon_checkout('kaali.in', 'a@kaali.in'); pay.charge(out['id'])
+        sync(); sync()
+        self.assertEqual(calls, [('setup', 'kaali.in', 10_000)])                      # once
+        self.assertEqual(relays.config('kaali.in')['password'], 'djy_live_' + 'B' * 28)
+        self.assertIsNone(relays.route('kaali.in', '', ['x@gmail.com']))              # DNS not checked yet: the usual way
+        relays.set_addon('kaali.in', verified=True)
+        bill.addon_cancel('kaali.in'); clock.t += 31 * DAY
+        sync(); sync()
+        self.assertEqual(calls[-1], ('update', 'kaali.in', {'status': 'suspended'})); self.assertEqual(len(calls), 2)
+        out = bill.addon_checkout('kaali.in', 'a@kaali.in'); pay.charge(out['id'])
+        sync()
+        self.assertEqual(calls[-1], ('update', 'kaali.in', {'status': 'active'}))
+        self.assertIsNotNone(relays.route('kaali.in', '', ['x@gmail.com']))
