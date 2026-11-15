@@ -104,3 +104,10 @@ class DejoiyPayClient(unittest.TestCase):
 
 
 if __name__ == '__main__': unittest.main()
+
+
+class ShineSend(unittest.TestCase):
+    def test_plain_mail_goes_to_the_local_mail_system(self):
+        import smtpd_stub
+        got = smtpd_stub.run(lambda port: __import__('zimbra').send_plain_mail('Shine <no-reply@mail.dejoiy.com>', 'a@b.in', 'Your code', '123456', '<b>123456</b>', host='127.0.0.1', port=port))
+        self.assertIn('Subject: Your code', got); self.assertIn('To: a@b.in', got); self.assertIn('<b>123456</b>', got)

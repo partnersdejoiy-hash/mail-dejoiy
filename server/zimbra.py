@@ -620,6 +620,18 @@ class FollowupMail:
         msg['Date']=formatdate(localtime=True); msg['Message-ID']=make_msgid(domain=self.sender.rsplit('@',1)[1]); msg.set_content(text)
         r=node(MAIL,'AddMsgRequest'); m=node(MAIL,'m',{'l':FOLDERS['inbox'],'f':'u'}); m.append(node(MAIL,'content',text=msg.as_string())); r.append(m)
         self.zimbra.call(r,self.token(email))
+def send_plain_mail(sender, to, subject, text, html_body='', host=None, port=25):
+    """One mail through this machine's own mail system (Zimbra's MTA on port 25, which relays outside mail as usual)."""
+    import smtplib
+    from email.message import EmailMessage
+    from email.utils import formatdate, make_msgid
+    msg=EmailMessage(); msg['From']=sender; msg['To']=to; msg['Subject']=subject; msg['Date']=formatdate(localtime=True)
+    msg['Message-ID']=make_msgid(domain=sender.rsplit('@',1)[1].rstrip('>'))
+    msg.set_content(text or 'Open this mail in an app that shows HTML.')
+    if html_body: msg.add_alternative(html_body,subtype='html')
+    try:
+        with smtplib.SMTP(host or os.environ.get('LOCAL_SMTP_HOST','127.0.0.1'),port,timeout=20) as smtp: smtp.send_message(msg)
+    except (smtplib.SMTPException,OSError) as e: raise APIError('The mail system did not take the mail: '+(str(e) or type(e).__name__)[:160],502)
 def domain_mailboxes(provisioner, domain):
     """Every person's address in one domain (system mailboxes left out)."""
     r=node(ADMIN,'GetAllAccountsRequest'); r.append(node(ADMIN,'domain',{'by':'name'},domain))
@@ -2532,6 +2544,19 @@ class Handler(SimpleHTTPRequestHandler):
         secret=self.server.shine_secret
         auth=self.headers.get('Authorization') or ''
         if not secret or not auth.startswith('Bearer ') or not hmac.compare_digest(auth[7:].strip().encode(),secret.encode()): raise APIError('Not allowed',403)
+    def shine_send(self, data):
+        """Shine's own emails (sign-up codes, invites), sent from no-reply@ through this server's mail system,
+        so Shine needs no mail service of its own. At most 60 a minute."""
+        to=str(data.get('to','')).strip().lower(); subject=str(data.get('subject',''))[:200]
+        html_body=str(data.get('html') or ''); text_body=str(data.get('text') or '')
+        if not EMAIL.fullmatch(to) or not subject or len(html_body)+len(text_body)>200_000 or not (html_body or text_body): raise APIError('Invalid email')
+        if any(c in subject for c in '\r\n'): raise APIError('Invalid subject')
+        with LOCK:
+            now=time.time(); sent=[t for t in getattr(self.server,'shine_sent',[]) if t>now-60]
+            if len(sent)>=60: raise APIError('Too many emails; try again in a minute.',429)
+            self.server.shine_sent=sent+[now]
+        send_plain_mail('Shine <no-reply@'+(self.server.mail_host or 'mail.dejoiy.com')+'>',to,subject,text_body,html_body)
+        return {'ok':True}
     def shine_plan(self, data):
         """Shine asks which plan a person's company is on: Shine comes with the company's Dejoiy Mail plan."""
         email=str(data.get('email','')).strip().lower()
@@ -3253,7 +3278,7 @@ class Handler(SimpleHTTPRequestHandler):
                 data=json.loads(self.rfile.read(length))
                 if not isinstance(data,dict): raise APIError('JSON object required')
                 return self.reply(200,self.joi_mailbox(data))
-            if self.path in ('/api/shine/calendar','/api/shine/login','/api/shine/avatar','/api/shine/plan'):
+            if self.path in ('/api/shine/calendar','/api/shine/login','/api/shine/avatar','/api/shine/plan','/api/shine/send'):
                 self.shine_allowed()
                 length=int(self.headers.get('Content-Length','0'))
                 if not 0<length<=MAX_REQUEST_BYTES: raise APIError('Request too large or empty',413)
@@ -3261,6 +3286,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if not isinstance(data,dict): raise APIError('JSON object required')
                 if self.path=='/api/shine/avatar': return self.reply(200,self.shine_avatar(data))
                 if self.path=='/api/shine/plan': return self.reply(200,self.shine_plan(data))
+                if self.path=='/api/shine/send': return self.reply(200,self.shine_send(data))
                 return self.reply(200,self.shine_calendar(data) if self.path=='/api/shine/calendar' else self.shine_login(data))
             if self.path=='/api/pay/webhook':   # Dejoiy Pay telling us a payment went through: signed, no browser
                 billing=getattr(self.server,'billing',None)
