@@ -2453,19 +2453,19 @@ class Handler(SimpleHTTPRequestHandler):
         if not (self.server.swiss and cfg.get('kind')=='swiss' and cfg.get('addon')): return None
         out=self.server.swiss.get(domain,check)
         verified=(out.get('domain') or {}).get('verification_status')=='verified'
-        if verified!=bool(cfg.get('verified')): self.server.relays.set_addon(domain,suspended=bool(cfg.get('suspended')),verified=verified)
+        if verified!=bool(cfg.get('verified')): self.server.relays.set_addon(domain,verified=verified)
         return out
     def sync_addon(self, domain):
-        """Paid for and not set up yet: set it up in Swiss Mail and keep the key. Ran out: Swiss Mail stops it; renewed: starts again."""
+        """Paid for and not set up yet: set it up in Swiss Mail and keep the key. Renewed or ran out: Swiss Mail is told
+        the new paid-until date (it sends only while that lies ahead)."""
         billing,relays,swiss=getattr(self.server,'billing',None),self.server.relays,getattr(self.server,'swiss',None)
         if not (billing and relays and swiss): return None
         ad=billing.addon(domain); cfg=relays.all.get(domain) or {}; mine=cfg.get('kind')=='swiss' and cfg.get('addon')
         if ad['active'] and not mine:
-            made=swiss.setup(domain,domain,billing_mod.SWISS['mails']); relays.set_addon(domain,made['api_key'])
-        elif ad['active'] and cfg.get('suspended'):
-            swiss.update(domain,status='active'); relays.set_addon(domain)
-        elif not ad['active'] and mine and not cfg.get('suspended'):
-            swiss.update(domain,status='suspended'); relays.set_addon(domain,suspended=True)
+            made=swiss.setup(domain,domain,ad['paidUntil'])
+            relays.set_addon(domain,made['api_key'],verified=(made.get('domain') or {}).get('verification_status')=='verified',paid_until=ad['paidUntil'])
+        elif mine and cfg.get('paidUntil')!=ad['paidUntil']:
+            swiss.update(domain,paid_until=ad['paidUntil']); relays.set_addon(domain,paid_until=ad['paidUntil'])
         return ad
     def mail_route(self, domain, scope):
         """Admin console → Domains → Mail service: how this domain's mail leaves, and the ways to make it land better."""

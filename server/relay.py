@@ -24,8 +24,8 @@ PORTS = (465, 587, 2465, 2587, 25)
 SECURITY = ('starttls', 'ssl')
 DOMAIN = re.compile(r'^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$')
 ADDRESS = re.compile(r'^[^\s<>@,;]+@[^\s<>@,;]+\.[^\s<>@,;]+$')
-SWISS_URL = os.environ.get('SWISS_URL', 'https://api-mail.dejoiy.com').rstrip('/')
-SWISS_KEY = re.compile(r'^djy_(live|test)_[A-Za-z0-9_-]{16,80}$')
+SWISS_URL = os.environ.get('SWISS_URL', 'https://api-swiss.dejoiy.com').rstrip('/')
+SWISS_KEY = re.compile(r'^dsm_[A-Za-z0-9_-]{20,80}$')
 
 
 class RelayError(ValueError):
@@ -103,24 +103,24 @@ class Relays:
         """A Swiss Mail API key the company already has (bought from Dejoiy Swiss Mail directly)."""
         key = str(payload.get('key') or '').strip()
         if key:
-            if not SWISS_KEY.fullmatch(key): raise RelayError('Paste the whole Swiss Mail API key; it starts with djy_live_.')
+            if not SWISS_KEY.fullmatch(key): raise RelayError('Paste the whole Swiss Mail API key; it starts with dsm_.')
             sealed, start = seal(self.key, key), key[:12]
         elif old and old.get('kind') == 'swiss' and not old.get('addon'): sealed, start = old['password'], old.get('keyStart')
         else: raise RelayError('Paste your Swiss Mail API key.')
         return {'kind': 'swiss', 'password': sealed, 'keyStart': start, 'addon': False, 'departments': [],
                 'active': payload.get('active', True) is not False, 'last': old.get('last') if old else None}
 
-    def set_addon(self, domain, key=None, suspended=False, verified=None):
-        """The add-on Dejoiy set up: a new key replaces the old one; suspended notes that Swiss Mail was told to stop it;
-        verified says Swiss Mail has checked the domain's DNS (until then mail goes the usual way)."""
+    def set_addon(self, domain, key=None, verified=None, paid_until=None):
+        """The add-on Dejoiy set up: a new key replaces the old one; verified says Swiss Mail has checked the
+        domain's DNS (until then mail goes the usual way); paid_until is what Swiss Mail was last told."""
         with self.lock:
             old = self.all.get(domain) or {}
             if key: cfg = {'kind': 'swiss', 'password': seal(self.key, key), 'keyStart': key[:12], 'departments': [], 'active': True, 'addon': True,
                            'last': old.get('last') if old.get('kind') == 'swiss' else None}
             elif old.get('kind') == 'swiss' and old.get('addon'): cfg = dict(old)
             else: return False
-            cfg['suspended'] = suspended
             if verified is not None: cfg['verified'] = verified
+            if paid_until is not None: cfg['paidUntil'] = int(paid_until)
             self.all[domain] = cfg; self.save()
             return True
 
@@ -224,7 +224,8 @@ def swiss_call(method, path, token, body=None, timeout=60, opener=None):
     try:
         with (opener or urllib.request.urlopen)(request, timeout=timeout) as response: return json.loads(response.read() or b'{}')
     except urllib.error.HTTPError as e:
-        try: why = json.loads(e.read() or b'{}').get('error', {}).get('message')
+        try:
+            body = json.loads(e.read() or b'{}'); why = body.get('message') or (body.get('error') or {}).get('message')
         except (ValueError, AttributeError): why = None
         if e.code == 401: why = 'Swiss Mail did not accept the key.'
         raise RelayError(('Swiss Mail: ' + why) if why and not why.startswith('Swiss') else (why or f'Swiss Mail answered {e.code}.'))
@@ -232,18 +233,44 @@ def swiss_call(method, path, token, body=None, timeout=60, opener=None):
         raise RelayError('Could not reach Swiss Mail (' + (str(e) or type(e).__name__)[:120] + ').')
 
 
+def swiss_payload(sender, recipients, msg):
+    """A built message as Swiss Mail's send request (Resend-style JSON): the same From, To, Cc, Bcc, subject,
+    bodies, attachments and reply threading."""
+    from email.utils import getaddresses
+    heads = lambda name: [a.lower() for _, a in getaddresses(msg.get_all(name, [])) if a]
+    to, cc = heads('To'), heads('Cc')
+    bcc = [r for r in recipients if r.lower() not in to and r.lower() not in cc]
+    if not to: to, bcc = bcc[:1], bcc[1:]
+    if len(to) + len(cc) + len(bcc) > 50: raise RelayError('Swiss Mail takes up to 50 recipients a mail.')
+    out = {'from': str(msg['From'] or sender), 'to': to, 'cc': cc, 'bcc': bcc, 'subject': str(msg['Subject'] or '(no subject)'), 'attachments': []}
+    if msg['Reply-To']: out['reply_to'] = heads('Reply-To')
+    out['headers'] = {h: str(msg[h]) for h in ('In-Reply-To', 'References') if msg[h]}
+    for part in msg.walk():
+        if part.is_multipart(): continue
+        kind, name = part.get_content_type(), part.get_filename()
+        if not name and kind == 'text/html' and 'html' not in out: out['html'] = part.get_content()
+        elif not name and kind == 'text/plain' and 'text' not in out: out['text'] = part.get_content()
+        else:
+            item = {'filename': name or 'attachment', 'content': base64.b64encode(part.get_payload(decode=True) or b'').decode(), 'content_type': kind}
+            if part['Content-ID']: item['content_id'] = part['Content-ID'].strip('<>')
+            out['attachments'].append(item)
+    if 'html' not in out and 'text' not in out: out['text'] = ''
+    if not out['attachments']: del out['attachments']
+    return out
+
+
 def send_swiss(cfg, sender, recipients, msg, opener=None):
-    """The whole message, as it is, through the company's Swiss Mail key."""
-    swiss_call('POST', '/v1/emails/raw', cfg['password'],
-               {'mail_from': sender, 'rcpt_to': list(recipients), 'data': base64.b64encode(msg.as_bytes()).decode()}, opener=opener)
+    """The whole message through the company's Swiss Mail key."""
+    swiss_call('POST', '/emails', cfg['password'], swiss_payload(sender, recipients, msg), opener=opener)
 
 
 class SwissPartner:
-    """Dejoiy Mail sets up and manages its companies' add-on in Swiss Mail (needs SWISS_PARTNER_SECRET)."""
+    """Dejoiy Mail sets up its companies' add-on in Swiss Mail (needs SWISS_PARTNER_SECRET). Swiss Mail sends for a
+    company only while the paid_until Dejoiy Mail gave it lies ahead."""
     def __init__(self, secret, opener=None): self.secret, self.opener = secret, opener
-    def setup(self, domain, name, monthly_limit): return swiss_call('POST', '/v1/partner/companies', self.secret, {'domain': domain, 'name': name[:120] or domain, 'monthly_limit': monthly_limit}, opener=self.opener)
-    def get(self, domain, check=False): return swiss_call('GET', f'/v1/partner/companies/{domain}' + ('?check=1' if check else ''), self.secret, opener=self.opener)
-    def update(self, domain, **change): return swiss_call('POST', f'/v1/partner/companies/{domain}', self.secret, change, opener=self.opener)
+    def setup(self, domain, name, paid_until): return swiss_call('POST', '/partner/companies', self.secret, {'domain': domain, 'name': name[:120] or domain, 'paid_until': int(paid_until)}, opener=self.opener)
+    def get(self, domain, check=False): return swiss_call('GET', f'/partner/companies/{domain}' + ('?check=1' if check else ''), self.secret, opener=self.opener)
+    def update(self, domain, **change): return swiss_call('POST', f'/partner/companies/{domain}', self.secret, change, opener=self.opener)
 
 
 def send(cfg, sender, recipients, msg, timeout=30):

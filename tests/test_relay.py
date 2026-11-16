@@ -154,10 +154,10 @@ if __name__ == '__main__': unittest.main()
 
 class SwissMail(unittest.TestCase):
     """The Swiss Mail add-on (set up by Dejoiy) and a Swiss Mail key a company pastes itself."""
-    KEY_ = 'djy_live_' + 'A' * 28
+    KEY_ = 'dsm_' + 'A' * 32
     def setUp(self): self.tmp = tempfile.mkdtemp(); self.r = store(self.tmp)
 
-    def test_pasted_key_is_sealed_and_mail_goes_to_the_raw_api(self):
+    def test_pasted_key_is_sealed_and_mail_goes_to_the_send_api(self):
         with self.assertRaises(relay.RelayError): self.r.action('relay_set', {'kind': 'swiss', 'key': 'nope'}, 'acme.in')
         out = self.r.action('relay_set', {'kind': 'swiss', 'key': self.KEY_}, 'acme.in')
         self.assertEqual((out['relay']['kind'], out['relay']['keyStart']), ('swiss', self.KEY_[:12]))
@@ -170,35 +170,38 @@ class SwissMail(unittest.TestCase):
             def read(s): return b'{"id":"em_1"}'
         def opener(request, timeout):
             seen.update(url=request.full_url, auth=request.headers['Authorization'], body=json.loads(request.data)); return Resp()
-        msg = relay.build('boss@acme.in', 'Boss', ['x@gmail.com'], [], 'Hi', 'Hello', None, [(b'pdf', 'a.pdf', 'application/pdf')])
-        relay.send_swiss(cfg, 'boss@acme.in', ['x@gmail.com', 'y@gmail.com'], msg, opener=opener)
-        self.assertEqual(seen['url'], relay.SWISS_URL + '/v1/emails/raw')
+        msg = relay.build('boss@acme.in', 'Boss', ['x@gmail.com'], ['c@gmail.com'], 'Hi', 'Hello', '<p>Hello</p>', [(b'pdf', 'a.pdf', 'application/pdf')])
+        msg['In-Reply-To'] = '<abc@gmail.com>'
+        relay.send_swiss(cfg, 'boss@acme.in', ['x@gmail.com', 'c@gmail.com', 'hidden@gmail.com'], msg, opener=opener)
+        self.assertEqual(seen['url'], relay.SWISS_URL + '/emails')
         self.assertEqual(seen['auth'], 'Bearer ' + self.KEY_)
-        self.assertEqual(seen['body']['rcpt_to'], ['x@gmail.com', 'y@gmail.com'])
+        b = seen['body']
+        self.assertEqual((b['to'], b['cc'], b['bcc']), (['x@gmail.com'], ['c@gmail.com'], ['hidden@gmail.com']))
+        self.assertIn('boss@acme.in', b['from']); self.assertEqual(b['subject'], 'Hi')
+        self.assertIn('Hello', b['text']); self.assertIn('<p>Hello</p>', b['html'])
+        self.assertEqual(b['headers'], {'In-Reply-To': '<abc@gmail.com>'})
         import base64
-        self.assertIn(b'filename="a.pdf"', base64.b64decode(seen['body']['data']))
+        self.assertEqual((b['attachments'][0]['filename'], base64.b64decode(b['attachments'][0]['content'])), ('a.pdf', b'pdf'))
 
     def test_swiss_refusals_are_readable(self):
         import io, urllib.error
         def opener(request, timeout):
-            raise urllib.error.HTTPError(request.full_url, 429, 'x', {}, io.BytesIO(b'{"error":{"message":"This month\'s 10,000 mails are used up."}}'))
-        with self.assertRaisesRegex(relay.RelayError, '10,000 mails'): relay.swiss_call('POST', '/v1/emails/raw', 'k', {}, opener=opener)
+            raise urllib.error.HTTPError(request.full_url, 429, 'x', {}, io.BytesIO(b'{"statusCode":429,"name":"monthly_quota_exceeded","message":"You have used all 10,000 emails."}'))
+        with self.assertRaisesRegex(relay.RelayError, '10,000 emails'): relay.swiss_call('POST', '/emails', 'k', {}, opener=opener)
         def nokey(request, timeout): raise urllib.error.HTTPError(request.full_url, 401, 'x', {}, io.BytesIO(b'{}'))
         with self.assertRaisesRegex(relay.RelayError, 'did not accept the key'): relay.swiss_call('GET', '/x', 'k', opener=nokey)
 
-    def test_addon_is_used_only_while_paid(self):
+    def test_addon_is_used_only_while_paid_and_verified(self):
+        import time
         paid = {'acme.in': 0}
         self.r.addon_until = lambda d: paid.get(d, 0)
         self.assertTrue(self.r.set_addon('acme.in', self.KEY_))
         self.assertIsNone(self.r.route('acme.in', '', ['x@gmail.com']))           # not paid: the usual way
-        import time
         paid['acme.in'] = time.time() + 86400
         self.assertIsNone(self.r.route('acme.in', '', ['x@gmail.com']))           # paid, but Swiss Mail hasn't verified the domain
         self.r.set_addon('acme.in', verified=True)
         self.assertEqual(self.r.route('acme.in', '', ['x@gmail.com'])['password'], self.KEY_)
         self.assertFalse(self.r.set_addon('other.in'))                              # nothing to update without a key
-        self.assertTrue(self.r.set_addon('acme.in', suspended=True))
-        self.assertTrue(self.r.all['acme.in']['suspended'])
 
 
 class SesList(unittest.TestCase):

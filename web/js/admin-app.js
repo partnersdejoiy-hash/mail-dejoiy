@@ -574,8 +574,8 @@ async function mailService(domain, d){
         ${addonOn?`<p><span class="adm-pill good">Active</span> Paid until ${esc(new Date(ad.paidUntil*1000).toLocaleDateString())}${ad.renewing?" · renews by itself (AutoPay)":" · auto-renew is off"}</p>
           ${sw?`<p class="adm-muted">${(sw.used_this_month||0).toLocaleString("en-IN")} of ${(sw.monthly_limit||ad.mails).toLocaleString("en-IN")} mails used this month.</p>
             <p>Sending domain: <span class="adm-pill ${sw.domain?.verification_status==="verified"?"good":"warn"}">${sw.domain?.verification_status==="verified"?"Verified":"Waiting for DNS"}</span></p>
-            ${sw.domain?.verification_status==="verified"?"":`<p class="adm-muted">Add these records where ${esc(domain)}'s DNS is kept (keep only one SPF record: merge if you have one). ${sw.domain?.dkim_ready?"":"Dejoiy adds your DKIM key within one working day; it shows here then."} Until it is verified, mail leaves the usual way.</p>
-            <table class="adm-table"><thead><tr><th>Type</th><th>Name</th><th>Value</th></tr></thead><tbody>${(sw.dns||[]).map(x=>`<tr><td>${esc(x.type)}</td><td><code>${esc(x.name)}</code></td><td>${x.value&&!(x.note==="DKIM"&&!sw.domain?.dkim_ready)?`<code class="ms-val">${esc(x.value)}</code>`:`<span class="adm-muted">Shown here once Dejoiy adds it</span>`}</td></tr>`).join("")}</tbody></table>
+            ${sw.domain?.verification_status==="verified"?"":`<p class="adm-muted">Add these records where ${esc(domain)}'s DNS is kept, then press Check DNS again. If ${esc(domain)} already has a DMARC record, keep yours. Until it is verified, mail leaves the usual way.</p>
+            <table class="adm-table"><thead><tr><th>Type</th><th>Name</th><th>Value</th></tr></thead><tbody>${(sw.dns||[]).map(x=>`<tr><td>${esc(x.type)}</td><td><code>${esc(x.name)}</code></td><td><code class="ms-val">${esc(x.value)}</code></td></tr>`).join("")}</tbody></table>
             <div class="adm-dialog-actions"><button class="adm-btn" id="sw-check">Check DNS again</button></div>`}`:`<p class="adm-muted">Being set up. Open this again in a minute.</p>`}
           ${ad.renewing?`<div class="adm-dialog-actions"><button class="adm-btn ghost" id="sw-stop">Turn off auto-renew</button></div>`:""}`
         :`<p>Mail from ${esc(domain)} to outside addresses goes through Dejoiy Swiss Mail, built for landing in the inbox, with its own DKIM and SPF for your domain.</p>
@@ -585,7 +585,7 @@ async function mailService(domain, d){
           <div class="adm-dialog-actions"><button class="adm-btn primary" id="sw-buy" ${ad?.payReady&&out.swissReady?"":"disabled"}>Get Swiss Mail</button></div>
           ${ad?.payReady&&out.swissReady?"":`<p class="adm-muted">The add-on can't be bought on this server yet.</p>`}
           <details class="ms-more" ${ownSwiss?"open":""}><summary>Already have a Swiss Mail API key?</summary>
-            <div class="adm-form"><label>Swiss Mail API key<input id="sw-key" type="password" autocomplete="off" placeholder="${ownSwiss?`Saved (${esc(r.keyStart||"")}…). Paste a new one to replace it.`:"djy_live_…"}"></label></div>
+            <div class="adm-form"><label>Swiss Mail API key<input id="sw-key" type="password" autocomplete="off" placeholder="${ownSwiss?`Saved (${esc(r.keyStart||"")}…). Paste a new one to replace it.`:"dsm_…"}"></label></div>
             <p class="adm-muted">Your ${esc(domain)} must already be verified in Swiss Mail. The key is kept encrypted and never shown again.</p>
             <div class="adm-dialog-actions"><button class="adm-btn" id="sw-save">Use this key</button></div></details>`}
       </section>

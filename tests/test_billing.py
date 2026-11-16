@@ -154,7 +154,7 @@ class SwissAddon(unittest.TestCase):
 
 
 class AddonSetsItselfUp(unittest.TestCase):
-    """Paid → Dejoiy Mail sets the company up in Swiss Mail and keeps the key; ran out → Swiss Mail stops it; renewed → on again."""
+    """Paid → Dejoiy Mail sets the company up in Swiss Mail and keeps the key; renewed or ran out → Swiss Mail is told the new date."""
     def test_life_of_an_addon(self):
         import relay, zimbra
         clock = Clock(); pay = FakePay(clock)
@@ -163,9 +163,9 @@ class AddonSetsItselfUp(unittest.TestCase):
         relays.addon_until = bill.addon_until
         calls = []
         class Swiss:
-            def setup(self, domain, name, limit): calls.append(('setup', domain, limit)); return {'api_key': 'djy_live_' + 'B' * 28}
+            def setup(self, domain, name, paid_until): calls.append(('setup', domain, paid_until)); return {'api_key': 'dsm_' + 'B' * 32, 'domain': {'verification_status': 'pending'}}
             def update(self, domain, **change): calls.append(('update', domain, change))
-            def get(self, domain, check=False): return {'domain': {'verification_status': 'pending'}}
+            def get(self, domain, check=False): return {'domain': {'verification_status': 'verified'}}
         class Server: billing = bill; swiss = Swiss()
         Server.relays = relays
         me = type('H', (), {'server': Server})()
@@ -173,14 +173,13 @@ class AddonSetsItselfUp(unittest.TestCase):
         sync(); self.assertEqual(calls, [])                                           # nothing bought: nothing set up
         out = bill.addon_checkout('kaali.in', 'a@kaali.in'); pay.charge(out['id'])
         sync(); sync()
-        self.assertEqual(calls, [('setup', 'kaali.in', 10_000)])                      # once
-        self.assertEqual(relays.config('kaali.in')['password'], 'djy_live_' + 'B' * 28)
-        self.assertIsNone(relays.route('kaali.in', '', ['x@gmail.com']))              # DNS not checked yet: the usual way
-        relays.set_addon('kaali.in', verified=True)
-        bill.addon_cancel('kaali.in'); clock.t += 31 * DAY
-        sync(); sync()
-        self.assertEqual(calls[-1], ('update', 'kaali.in', {'status': 'suspended'})); self.assertEqual(len(calls), 2)
-        out = bill.addon_checkout('kaali.in', 'a@kaali.in'); pay.charge(out['id'])
-        sync()
-        self.assertEqual(calls[-1], ('update', 'kaali.in', {'status': 'active'}))
+        end = bill.addon_until('kaali.in')
+        self.assertEqual(calls, [('setup', 'kaali.in', int(end))])                    # once
+        self.assertEqual(relays.config('kaali.in')['password'], 'dsm_' + 'B' * 32)
+        self.assertIsNone(relays.route('kaali.in', '', ['x@gmail.com']))              # DNS not verified yet: the usual way
+        zimbra.Handler.swiss_status(me, 'kaali.in')                                   # Swiss Mail now says verified
         self.assertIsNotNone(relays.route('kaali.in', '', ['x@gmail.com']))
+        clock.t += 30 * DAY; pay.charge(out['id'])                                    # AutoPay renews
+        sync()
+        self.assertEqual(calls[-1], ('update', 'kaali.in', {'paid_until': int(bill.addon_until('kaali.in'))}))
+        sync(); self.assertEqual(len(calls), 2)
