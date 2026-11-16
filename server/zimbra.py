@@ -20,6 +20,7 @@ import urllib.error
 import http.client
 import urllib.parse
 import security
+import feeds
 import xml.etree.ElementTree as ET
 from http.cookies import SimpleCookie
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -2197,6 +2198,7 @@ class Handler(SimpleHTTPRequestHandler):
                     return self.reply(200,{'posts':[{k:p.get(k) for k in ('id','kind','title','body','date','pinned','link','files','photo','art')} for p in posts[:12]]})
                 if self.path.startswith('/api/public/photo/'): return self.update_photo(self.path.rsplit('/',1)[1])
                 if self.path.startswith('/api/public/avatar?'): return self.public_avatar()
+                if self.path.startswith('/api/public/feeds/'): return self.feed(self.path)
                 if self.path.startswith('/api/public/booking/'): return self.reply(200,self.public_booking(self.path.rsplit('/',1)[1]))
                 if self.path=='/api/shine/directory': return self.reply(200,self.shine_directory())
                 if self.path.startswith('/api/public/update-file?'):
@@ -2326,6 +2328,32 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_response(200); self.send_header('Content-Type',mime); self.send_header('Content-Length',str(len(raw)))
         self.send_header('Cache-Control',cache); self.send_header('Content-Security-Policy',"default-src 'none'; sandbox")
         self.end_headers(); self.wfile.write(raw)
+    def feed(self, path):
+        """/api/public/feeds/<token>/<name>.csv: the numbers for a live spreadsheet (feeds.py). Wrong token: not found."""
+        parts=path.split('?',1)[0].split('/')
+        want=getattr(self.server,'feed_token',None)
+        if len(parts)!=6 or not want or not hmac.compare_digest(parts[4].encode(),want.encode()) or not parts[5].endswith('.csv') or parts[5][:-4] not in feeds.NAMES:
+            return self.send_error(404)
+        name=parts[5][:-4]
+        if name=='mail': body=feeds.mail(self.server,extra=self.feed_totals()[0])
+        elif name=='admin': body=feeds.admin(self.server)
+        elif name=='daily': body=feeds.daily(self.server)
+        else: body=feeds.companies(self.server,mailboxes=self.feed_totals()[1])
+        raw=body.encode('utf-8-sig')   # the BOM makes spreadsheets read ₹ and other letters right
+        self.send_response(200); self.send_header('Content-Type','text/csv; charset=utf-8'); self.send_header('Content-Length',str(len(raw)))
+        self.send_header('Cache-Control','no-store'); self.send_header('X-Robots-Tag','noindex'); self.end_headers(); self.wfile.write(raw)
+    def feed_totals(self):
+        """Domains and mailboxes from the mail server, asked at most every 10 minutes."""
+        hit=self.server.__dict__.get('feed_totals')
+        if hit and hit[0]>time.time(): return hit[1]
+        out=({},{})
+        if getattr(self.server,'provisioner',None):
+            try:
+                boxes={d:len(domain_mailboxes(self.server.provisioner,d)) for d in all_domains(self.server.provisioner)}
+                out=({'Domains':len(boxes),'Mailboxes':sum(boxes.values())},boxes)
+            except Exception: out=hit[1] if hit else ({},{})
+        self.server.__dict__['feed_totals']=(time.time()+600,out)
+        return out
     def sender_photo(self, email):
         """Gravatar photo for an outside address, remembered for a day (and "has none" for twelve hours)."""
         cache=self.server.__dict__.setdefault('gravatar_cache',{}); now=time.time(); hit=cache.get(email)
@@ -3738,6 +3766,9 @@ def serve():
     server.tickets=Tickets(state_dir/'tickets.sqlite') if state_dir else None
     server.automations=Automations(state_dir/'automations.json',lambda payload: shine_admin_call(server.shine_site,server.shine_secret,payload),server.audit,mail=followup_mail) if state_dir else None
     if server.automations: server.automations.start()
+    # live spreadsheet feeds (feeds.py): /api/public/feeds/<token>/<name>.csv
+    server.feed_token=feeds.token(state_dir)
+    server.live_sessions=lambda: sum(1 for v in list(SESSIONS.values()) if v.get('expires',0)>time.time())
     # spam/phishing marks: the admins' list (kept 90 days), filled as people open mail and by a watcher on every mailbox
     server.security=security.SecurityLog(str(state_dir/'security.sqlite')) if state_dir else None
     if server.zimbra: server.zimbra.own_domains=tuple(server.reserved_domains)
