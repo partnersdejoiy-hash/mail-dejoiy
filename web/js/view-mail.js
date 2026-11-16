@@ -104,12 +104,12 @@ Views.mail = function(el, folder){
       previousGroup=group;
       return `${grouped?`<div class="message-group">${esc(group)}</div>`:''}
       <div class="msg-row ${e.read?"":"unread"} ${ui.activeTab===e.latest.id||ui.sel.has(e.id)?"selected":""}" data-tone="${toneOf(e)}" data-id="${e.id}" data-latest-id="${e.latest.id}" role="button" tabindex="0">
-        ${Profile.avatar(e.latest.from?.email, e.latest.from?.name, "m-avatar", e.latest.verified)}
+        ${Profile.avatar(e.latest.from?.email, e.latest.from?.name, "m-avatar", e.latest.risk?.level?"":e.latest.verified)}
         <input type="checkbox" class="m-check" data-check="${e.id}" ${ui.sel.has(e.id)?"checked":""} aria-label="Select message">
         <button class="star ${e.starred?"on":""}" data-star="${e.id}" aria-label="${e.starred?'Unstar message':'Star message'}" aria-pressed="${!!e.starred}">${Icons.get("star")}</button>
         <div class="m-main">
           <div class="m-top">${indicator(e)}<span class="m-from">${esc(listName(e))}${e.messages.length>1?` <span class="m-count">${e.messages.length}</span>`:""}</span>
-            <span class="m-flags">${e.important?Icons.get("important"):""}${e.hasAttachment?Icons.get("paperclip"):""}</span>
+            <span class="m-flags">${riskChip(e.latest.risk)}${e.important?Icons.get("important"):""}${e.hasAttachment?Icons.get("paperclip"):""}</span>
             <span class="m-date">${fmtDate(e.date)}</span>${hover?`<span class="m-hover"><button data-hact="archive" title="Archive" aria-label="Archive">${Icons.get("archive")}</button><button data-hact="trash" title="Delete" aria-label="Delete">${Icons.get("trash")}</button><button data-hact="read" title="${e.read?'Mark as unread':'Mark as read'}" aria-label="${e.read?'Mark as unread':'Mark as read'}">${Icons.get("unread")}</button></span>`:""}</div>
           <div class="m-subj">${esc(e.subject)}</div>
           <div class="m-snip">${esc(strip(e.latest.body)).slice(0,90)}</div>
@@ -290,12 +290,18 @@ Views.mail = function(el, folder){
     if(/no-?reply|newsletter|notifications?@|updates?@|digest|unsubscribe/.test(from+" "+text)) return "updates";
     return "";
   }
-  function toneOf(e){ if(e.important||(e.messages||[]).some(m=>m.important)) return "important"; if(ui.folder==="spam") return "danger";
+  function toneOf(e){ if(e.latest?.risk?.level==="phishing") return "danger"; if(e.important||(e.messages||[]).some(m=>m.important)) return "important"; if(ui.folder==="spam") return "danger";
     const found=(e.labels||[]).map(labelTone).filter(Boolean);
     return ["danger","money","work","personal","fun"].find(t=>found.includes(t)) || autoTone(e); }
   function toneName(t){ return {important:"Important", danger:"Urgent", security:"Security", money:"Money", work:"Work", personal:"Personal", fun:"Ideas", updates:"Updates"}[t]||""; }
   window.MailTone = {autoTone, labelTone, toneName};
   function chip(l){ return `<span class="lbl" data-tone="${labelTone(l)}">${esc(l)}</span>`; }
+  /* The server marks mail that looks like phishing or spam (security.py); the reasons are shown in the message. */
+  function riskChip(r){ return r&&r.level?`<span class="risk-chip ${r.level}" title="${esc((r.reasons||[]).join(" "))}">${r.level==="phishing"?"⚠ Phishing?":"Spam?"}</span>`:""; }
+  function riskNote(r){ if(!r||!r.level) return ""; const ph=r.level==="phishing";
+    return `<div class="risk-note ${r.level}" role="note"><b>${ph?"⚠ Be careful: this looks like phishing":"This looks like spam"}</b>
+      <ul>${(r.reasons||[]).map(x=>`<li>${esc(x)}</li>`).join("")}</ul>
+      <p>${ph?"Its links are switched off. Don't open its attachments or share passwords, OTPs or payment details. If it claims to be from someone you know, check with them another way.":"Be careful with its links and attachments. If it's fine, carry on."}</p></div>`; }
   const me = ()=> (Store.state.user.email||"").toLowerCase();
   const recipients = m=> [...(m.to||[]),...(m.cc||[])].map(a=>a.toLowerCase()===me()?"me":a).join(", ") || "undisclosed recipients";
   /* Gmail's "to me ▾": who it's from, everyone it went to, and when. Each address opens a small menu. */
@@ -306,7 +312,7 @@ Views.mail = function(el, folder){
       + row("Date", esc(new Date(m.date).toLocaleString([], {day:"numeric",month:"short",year:"numeric",hour:"numeric",minute:"2-digit"}))); };
   const messageHtml = (m, open)=>`<article class="thread-message ${open?"open":""}" data-mid="${esc(m.id)}">
       <div class="tm-head" role="button" tabindex="0" aria-expanded="${open}">
-        ${Profile.avatar(m.from.email, m.from.name, "r-avatar", m.verified)}
+        ${Profile.avatar(m.from.email, m.from.name, "r-avatar", m.risk?.level?"":m.verified)}
         <div class="tm-who"><div class="tm-line"><b>${esc(m.from.name||m.from.email)}</b>${Profile.isJoi(m.from.email)?` <span class="ai-badge" title="Joi is an AI. It can make mistakes.">AI</span>`:""} <span class="tm-email">&lt;${esc(m.from.email)}&gt;</span>${(u=>u?` <button class="tm-unsub" data-unsub="${esc(u)}">Unsubscribe</button>`:"")(unsubLink(m))}</div>
           <div class="tm-ps" data-ps="${esc(String(m.from.email||"").toLowerCase())}" hidden></div>
           <button class="tm-to" data-details aria-expanded="false" title="Show details">to ${esc(recipients(m))} <span class="tm-caret" aria-hidden="true">▾</span></button>
@@ -318,9 +324,10 @@ Views.mail = function(el, folder){
       <div class="tm-details" hidden>${detailsHtml(m)}</div>
       <div class="tm-content">
         ${Profile.isJoi(m.from.email)?`<p class="ai-note"><span aria-hidden="true">&#129302;</span> Joi is an AI. It can make mistakes.</p>`:""}
+        ${riskNote(m.risk)}
         ${(m.labels||[]).length?`<div class="thread-labels">${m.labels.map(chip).join(" ")}</div>`:""}
         ${(m.attachments||[]).length ? `<div class="thread-attachments">${m.attachments.map(a=>window.Live?.enabled && a.mid && a.part?`<a class="attach-chip" href="/api/attachment?mid=${encodeURIComponent(a.mid)}&amp;part=${encodeURIComponent(a.part)}&amp;name=${encodeURIComponent(a.name)}" download>📎 ${esc(a.name)} <span style="color:var(--ink-3)">${esc(a.size)} bytes</span></a>`:`<span class="attach-chip">📎 ${esc(a.name)} <span style="color:var(--ink-3)">${esc(a.size)}</span></span>`).join("")}</div>`:""}
-        <div class="r-body">${m.body}</div>
+        <div class="r-body${m.risk?.level==="phishing"?" links-off":""}">${m.body}</div>
       </div>
     </article>`;
   function renderReader(){

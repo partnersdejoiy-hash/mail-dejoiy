@@ -16,7 +16,7 @@ const TREE = [
   ["Monitor",[["monitor/overview","home","Overview","overview"],["monitor/servers","settings","Server status","servers",P],
     ["monitor/statistics","refresh","Server statistics","statistics",P],["monitor/mail-queues","mail","Mail queues","queues",P],
     ["monitor/undelivered","mail","Undelivered mail","undelivered"],["monitor/tickets","note","Help desk tickets","tickets"],
-    ["monitor/sessions","contacts","Active sessions","sessions"],["monitor/reports","note","Reports","reports"]]],
+    ["monitor/sessions","contacts","Active sessions","sessions"],["monitor/reports","note","Reports","reports"],["monitor/security","shield","Phishing & spam","security"]]],
   ["Manage",[["manage/accounts","contacts","Accounts","users"],["manage/teams","tag","Teams & roles","org"],
     ["manage/lists","mail","Distribution lists","lists"],["manage/resources","calendar","Resources","resources"],
     ["manage/domains","building","Domains","domains"],["manage/chat","chat","Chat & meetings","shine"],["manage/billing","card","Plan & billing","billing"]]],
@@ -114,7 +114,7 @@ async function load(){
 function renderSection(){
   const main=$("adm-main"), found=findRoute(state.section);
   if(!found){ navigate("monitor/overview",true); return; }
-  const pages={overview,users,org,domains,lists,policies,reports,shine,plans,settings,tickets,help,billing,...(window.AdminPages||{})};
+  const pages={overview,users,org,domains,lists,policies,reports,shine,plans,settings,tickets,help,billing,security,...(window.AdminPages||{})};
   const fn=(found.rest&&pages[found.item[3]+"Detail"])||pages[found.item[3]]||overview;
   document.title=found.item[2]+" · Dejoiy Mail Admin";
   Promise.resolve(fn(main, state.data, helpers, found.rest)).catch(e=>{ main.innerHTML=head(found.item[2])+`<div class="adm-card adm-error">${esc(e.message)}</div>`; });
@@ -309,6 +309,39 @@ const OPS={create_user:"Created mailbox",delete_user:"Deleted mailbox",password:
   company_settings:"Changed company settings",create_domain:"Added domain",delete_domain:"Removed domain",domain_status:"Changed domain status",create_list:"Created list",
   delete_list:"Deleted list",add_member:"Added list member",remove_member:"Removed list member",create_department:"Created department",set_department:"Changed department",
   policies_save:"Changed mailbox policies",policy_assign:"Changed a mailbox's policy",shine_set_active:"Switched chat on or off",shine_end_meeting:"Ended a meeting",brand_set:"Changed name or logo",login_host_set:"Set sign-in address",login_host_remove:"Removed sign-in address",plan_update:"Edited plan",settings_update:"Changed server settings"};
+// Phishing & spam: every mail the server marked, in every mailbox this admin looks after (server/security.py).
+// Company admins see their own domain; Dejoiy super admins see every company.
+async function security(main, d){
+  const st = security.st || (security.st = {level:"", days:30, q:""});
+  main.innerHTML = head("Phishing & spam", d.scope?`Mail marked as phishing or spam in ${d.scope} mailboxes.`:"Mail marked as phishing or spam in every company's mailboxes.",`<button class="adm-btn ghost" id="sc-refresh">${icon("refresh")} Refresh</button>`)+`<div id="sc-body"><p class="adm-muted">Loading…</p></div>`;
+  const body = $("sc-body");
+  const load = async () => {
+    let out; try{ out = await act({op:"security_list", level:st.level, days:st.days}); }catch(e){ body.innerHTML=`<p class="adm-error">${esc(e.message)}</p>`; return; }
+    const c = out.counts||{}, q = st.q.toLowerCase();
+    const items = (out.items||[]).filter(x=>!q || [x.mailbox,x.from,x.name,x.subject].join(" ").toLowerCase().includes(q));
+    body.innerHTML = `<div class="adm-stats">
+        <div class="adm-card adm-stat"><b>${(c.phishing||0).toLocaleString("en-IN")}</b><span>Phishing</span></div>
+        <div class="adm-card adm-stat"><b>${(c.suspicious||0).toLocaleString("en-IN")}</b><span>Spam</span></div>
+        <div class="adm-card adm-stat"><b>${new Set((out.items||[]).map(x=>x.mailbox)).size.toLocaleString("en-IN")}</b><span>People affected</span></div>
+        <div class="adm-card adm-stat"><b>${st.days===1?"24 h":st.days+" days"}</b><span>Period</span></div></div>
+      <div class="sc-tools">
+        <select id="sc-level" aria-label="Kind"><option value="">Phishing and spam</option><option value="phishing" ${st.level==="phishing"?"selected":""}>Phishing only</option><option value="suspicious" ${st.level==="suspicious"?"selected":""}>Spam only</option></select>
+        <select id="sc-days" aria-label="Period">${[1,7,30,90].map(n=>`<option value="${n}" ${st.days===n?"selected":""}>Last ${n===1?"24 hours":n+" days"}</option>`).join("")}</select>
+        <input id="sc-q" type="search" placeholder="Search person, sender or subject" value="${esc(st.q)}"></div>
+      ${items.length?`<div class="adm-card sc-wrap"><table class="adm-table"><thead><tr><th>When</th><th>Kind</th><th>Mailbox</th><th>From</th><th>Subject</th><th>Why</th></tr></thead><tbody>
+        ${items.map(x=>`<tr><td>${esc(new Date(x.at*1000).toLocaleString([], {dateStyle:"medium",timeStyle:"short"}))}</td>
+          <td><span class="adm-pill ${x.level==="phishing"?"bad":"warn"}">${x.level==="phishing"?"Phishing":"Spam"}</span></td>
+          <td>${esc(x.mailbox)}</td><td>${x.name?`<b>${esc(x.name)}</b><br>`:""}<small>${esc(x.from)}</small></td><td>${esc(x.subject||"(no subject)")}</td>
+          <td><small>${(x.reasons||[]).map(esc).join("<br>")}</small></td></tr>`).join("")}</tbody></table></div>`
+        :`<p class="adm-muted">Nothing marked in this period. Mail is checked as it arrives and when people open their mailbox.</p>`}`;
+    $("sc-level").addEventListener("change",e=>{ st.level=e.target.value; load(); });
+    $("sc-days").addEventListener("change",e=>{ st.days=+e.target.value; load(); });
+    $("sc-q").addEventListener("input",e=>{ st.q=e.target.value; clearTimeout(security.t); security.t=setTimeout(load,250); });
+  };
+  $("sc-refresh").addEventListener("click",load);
+  load();
+}
+
 // Plan & billing: Dejoiy Mail with Shine, paid on pay.dejoiy.com. The server asks Dejoiy Pay, so nothing here is trusted.
 async function billing(main, d){
   const domains = d.scope ? [d.scope] : d.domains.map(x=>x.domain);

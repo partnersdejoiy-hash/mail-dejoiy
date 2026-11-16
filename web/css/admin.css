@@ -362,3 +362,9 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;backgrou
 .ms-more>summary h3{display:inline;font-size:15px}
 details.ms-more:not(.ms-block){margin-top:10px}
 .ms-val{word-break:break-all;font-size:12px}
+/* Monitor → Phishing & spam */
+.sc-tools{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.sc-tools input{flex:1 1 220px;min-width:0}
+.sc-wrap{padding:0;overflow-x:auto}
+.sc-wrap td{vertical-align:top}
+.sc-wrap td:last-child{min-width:240px}

@@ -19,6 +19,7 @@ import urllib.request
 import urllib.error
 import http.client
 import urllib.parse
+import security
 import xml.etree.ElementTree as ET
 from http.cookies import SimpleCookie
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -381,6 +382,8 @@ def dns_lookup(name, kind='TXT'):
 
 def txt_records(domain): return dns_lookup(domain,'TXT')
 
+# headers asked for with every message: our server's checks and spam score feed the spam/phishing mark
+RISK_HEADERS=('Authentication-Results','X-Spam-Flag','X-Spam-Score','X-Spam-Status')
 # ---------- sender logos (BIMI): the brand logo a domain publishes for its own mail ----------
 def verified_sender(results, sender, authserv):
     """The sender's domain when OUR mail server checked the message and DMARC passed for that very domain, else ''.
@@ -423,6 +426,29 @@ def fetch_bimi_logo(url, limit=131072):
 def clean_bimi_svg(raw, limit=131072):
     """A BIMI logo is a plain picture: an <svg> with no scripts, links, embedded pages or outside references."""
     return 0<len(raw)<=limit and b'<svg' in raw[:2048].lower() and not BIMI_UNSAFE.search(raw)
+
+# ---------- outside senders' photos: what a person put on Gravatar for their own address ----------
+def image_kind(raw):
+    """The picture type from the file's first bytes (never from what the other server says), or ''."""
+    if raw[:8]==b'\x89PNG\r\n\x1a\n': return 'image/png'
+    if raw[:3]==b'\xff\xd8\xff': return 'image/jpeg'
+    if raw[:6] in (b'GIF87a',b'GIF89a'): return 'image/gif'
+    if raw[:4]==b'RIFF' and raw[8:12]==b'WEBP': return 'image/webp'
+    return ''
+class GravatarOnly(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        u=urllib.parse.urlsplit(newurl)
+        return super().redirect_request(req,fp,code,msg,headers,newurl) if u.scheme=='https' and (u.hostname or '').endswith('gravatar.com') else None
+def fetch_gravatar(email, opener=None, limit=200_000):
+    """The sender's own Gravatar photo (rated G), or None. Asked by this server, so the reader's address never reaches
+    Gravatar; only real PNG/JPEG/GIF/WebP pictures under 200 KB come back."""
+    url='https://www.gravatar.com/avatar/'+hashlib.sha256(email.strip().lower().encode()).hexdigest()+'?s=128&d=404&r=g'
+    try:
+        with (opener or urllib.request.build_opener(GravatarOnly).open)(urllib.request.Request(url,headers={'User-Agent':'DejoiyMail/1.0'}),timeout=5) as response:
+            raw=response.read(limit+1)
+    except (OSError,ValueError): return None
+    kind=image_kind(raw)
+    return (kind,raw) if kind and len(raw)<=limit else None
 
 # ---------- a company's own sign-in address (mail.theircompany.com) ----------
 LOGIN_HOST=re.compile(r'(?=.{4,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.){2,}[a-z]{2,63}')
@@ -653,6 +679,9 @@ def domain_mailboxes(provisioner, domain):
     r=node(ADMIN,'GetAllAccountsRequest'); r.append(node(ADMIN,'domain',{'by':'name'},domain))
     return [a.get('name') for a in provisioner.admin.call(r,provisioner.token()).findall('{'+ADMIN+'}account')
             if a.get('name') and not any(x.get('n')=='zimbraIsSystemResource' and x.text=='TRUE' for x in a.findall('{'+ADMIN+'}a'))]
+def all_domains(provisioner):
+    """Every mail domain on the server (for the security watcher)."""
+    return [d.get('name') for d in provisioner.admin.call(node(ADMIN,'GetAllDomainsRequest'),provisioner.token()).findall('{'+ADMIN+'}domain') if d.get('name')]
 class Provisioner:
     """Creates a company's domain and first administrator with a dedicated service admin account."""
     def __init__(self, admin, email, password):
@@ -956,7 +985,7 @@ class Zimbra:
         # Only our own hosted signature images are shown; other remote images could track the reader.
         if self.joi_images and self.joi_images.fullmatch(src): return True   # Joi is ours: her letters show their pictures
         return bool(self.media_prefix) and src.startswith(self.media_prefix) and bool(MEDIA_NAME.fullmatch(src[len(self.media_prefix):]))
-    def messages(self, token, offset=0):
+    def messages(self, token, offset=0, mailbox=''):
         folders=self.folder_map(token); reverse={v:k for k,v in folders.items()}; result=[]; more=False
         # "Always display external images" lets plain https images through; otherwise only our own hosted ones show.
         prefs=node(ACCOUNT,'GetPrefsRequest'); prefs.append(node(ACCOUNT,'pref',{'name':'zimbraPrefDisplayExternalImages'}))
@@ -966,7 +995,8 @@ class Zimbra:
         r.append(node(MAIL,'query',text='is:anywhere'))
         out=self.call(r,token); more=out.get('more')=='1'
         for summary in out.findall('{'+MAIL+'}m'):
-            req=node(MAIL,'GetMsgRequest'); wanted=node(MAIL,'m',{'id':summary.get('id'),'read':'0','html':'1','neuter':'1'}); wanted.append(node(MAIL,'header',{'n':'Authentication-Results'}))
+            req=node(MAIL,'GetMsgRequest'); wanted=node(MAIL,'m',{'id':summary.get('id'),'read':'0','html':'1','neuter':'1'})
+            for h in RISK_HEADERS: wanted.append(node(MAIL,'header',{'n':h}))
             req.append(wanted)
             response=self.call(req,token); m=response.find('{'+MAIL+'}m')
             if m is None: continue
@@ -983,8 +1013,36 @@ class Zimbra:
             flags=m.get('f',''); attachments=[{'name':p.get('filename'),'size':p.get('s',''),'mid':m.get('id'),'part':p.get('part')} for p in m.iter('{'+MAIL+'}mp') if p.get('filename')]
             subject=m.find('{'+MAIL+'}su')
             result.append({'id':m.get('id'),'conversationId':m.get('cid') or m.get('id'),'messageId':m.get('mid') or '', 'inReplyTo':m.get('irt') or '', 'from':{'name':sender.get('p') or sender.get('a','') if sender is not None else '', 'email':sender.get('a','') if sender is not None else ''},'to':[e.get('a','') for e in addresses if e.get('t')=='t'],'cc':[e.get('a','') for e in addresses if e.get('t')=='c'],'bcc':[e.get('a','') for e in addresses if e.get('t')=='b'],'replyTo':next((e.get('a','') for e in addresses if e.get('t')=='r'),''),
-                'verified':verified_sender([h.text for h in m.findall('{'+MAIL+'}header') if (h.get('n') or '').lower()=='authentication-results'],sender.get('a','') if sender is not None else '',getattr(self,'authserv','') or getattr(self,'mail_host','')),'subject':subject.text or '' if subject is not None else '', 'body':display,'folder':reverse.get(m.get('l'),'other'),'read':'u' not in flags,'starred':'f' in flags,'important':'+' in flags or '!' in flags,'date':int(m.get('d','0')),'labels':[label for label in m.get('tn','').split(',') if label],'hasAttachment':bool(attachments),'attachments':attachments})
+                'verified':verified_sender([h.text for h in m.findall('{'+MAIL+'}header') if (h.get('n') or '').lower()=='authentication-results'],sender.get('a','') if sender is not None else '',getattr(self,'authserv','') or getattr(self,'mail_host','')),'subject':subject.text or '' if subject is not None else '', 'body':display,
+                'risk':self.risk_of(m,sender,rich,value,attachments,subject.text or '' if subject is not None else '',mailbox),'folder':reverse.get(m.get('l'),'other'),'read':'u' not in flags,'starred':'f' in flags,'important':'+' in flags or '!' in flags,'date':int(m.get('d','0')),'labels':[label for label in m.get('tn','').split(',') if label],'hasAttachment':bool(attachments),'attachments':attachments})
         return {'emails':result,'more':more,'limit':50,'offset':offset,'nextOffset':offset+len(out.findall('{'+MAIL+'}m'))}
+    own_domains=()   # Dejoiy's own domains: mail pretending to come from them is marked (set when the server starts)
+    def risk_of(self, m, sender, rich, text, attachments, subject, mailbox=''):
+        """Spam/phishing mark for one fetched message (security.risk on what our mail server stamped and what it shows)."""
+        heads={}
+        for h in m.findall('{'+MAIL+'}header'): heads.setdefault((h.get('n') or '').lower(),[]).append(h.text or '')
+        authserv=getattr(self,'authserv','') or getattr(self,'mail_host','')
+        address=sender.get('a','') if sender is not None else ''
+        status=' '.join(heads.get('x-spam-status',[])); score=(heads.get('x-spam-score') or [''])[0]
+        if not score: found=re.search(r'score=(-?[\d.]+)',status); score=found.group(1) if found else ''
+        return security.risk(sender=address,name=(sender.get('p') or '') if sender is not None else '',
+            reply_to=next((e.get('a','') for e in m.findall('{'+MAIL+'}e') if e.get('t')=='r'),''),subject=subject,html_body=rich or '',text_body=text or '',
+            attachments=[a['name'] for a in attachments],auth=security.auth_results(heads.get('authentication-results'),authserv),
+            spam_flag=(heads.get('x-spam-flag') or [''])[0] or ('YES' if status.lower().startswith('yes') else ''),spam_score=score,
+            verified=bool(verified_sender(heads.get('authentication-results',[]),address,authserv)),own_domains=self.own_domains,recipient=mailbox)
+    def verdict(self, token, msg_id, mailbox):
+        """One message's mark, for the security watcher (headers and bodies only; nothing is changed in the mailbox)."""
+        req=node(MAIL,'GetMsgRequest'); wanted=node(MAIL,'m',{'id':str(msg_id),'read':'0','html':'1','neuter':'1'})
+        for h in RISK_HEADERS: wanted.append(node(MAIL,'header',{'n':h}))
+        req.append(wanted); m=self.call(req,token).find('{'+MAIL+'}m')
+        if m is None: return None
+        sender=next((e for e in m.findall('{'+MAIL+'}e') if e.get('t')=='f'),None)
+        bodies=[(p.get('ct'),(p.find('{'+MAIL+'}content').text or '')) for p in m.iter('{'+MAIL+'}mp') if p.find('{'+MAIL+'}content') is not None and p.get('ct') in ('text/plain','text/html') and not p.get('filename')]
+        rich=next((v for t,v in bodies if t=='text/html'),None); text=next((v for t,v in bodies if t=='text/plain'),None) or plain(rich or '')
+        su=m.find('{'+MAIL+'}su'); subject=(su.text or '') if su is not None else ''
+        files=[{'name':p.get('filename')} for p in m.iter('{'+MAIL+'}mp') if p.get('filename')]
+        return {'from':sender.get('a','') if sender is not None else '','name':(sender.get('p') or '') if sender is not None else '','subject':subject,
+                'risk':self.risk_of(m,sender,rich,text,files,subject,mailbox)}
     def write_message(self, token, data, draft=False, sender=''):
         request=node(MAIL,'SaveDraftRequest' if draft else 'SendMsgRequest')
         attrs={}
@@ -2148,7 +2206,7 @@ class Handler(SimpleHTTPRequestHandler):
                     capabilities=self.server.zimbra.capabilities(s['token'])
                     brand=self.brand_for(self.domain(s))  # the company's own name and logo follow its people everywhere
                     return self.reply(200,{'user':{**s['user'],**capabilities},'csrf':s['csrf'],**({'brand':brand} if brand else {})})
-                if self.path=='/api/mail': return self.reply(200,self.server.zimbra.messages(s['token']))
+                if self.path=='/api/mail': return self.reply(200,self.mail_page(s,0))
                 if self.path=='/api/contacts': return self.reply(200,self.server.zimbra.contacts(s['token'],self.domain(s)))
                 if self.path=='/api/updates': return self.reply(200,self.updates_view(s))
                 if self.path.startswith('/api/calendar?'):
@@ -2184,6 +2242,15 @@ class Handler(SimpleHTTPRequestHandler):
                     if not DOMAIN_NAME.fullmatch(domain) or len(domain)>253: return self.send_error(404)
                     logo=self.bimi_logo(domain)
                     return self.image(logo,'image/svg+xml','private, max-age=86400') if logo else self.send_error(404)
+                if self.path.startswith('/api/sender-photo?'):
+                    # an outside sender's picture: their Gravatar, else their company's BIMI logo (never a free-mail provider's)
+                    email=urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get('email',[''])[0].strip().lower()
+                    if not EMAIL.fullmatch(email) or len(email)>254: return self.send_error(404)
+                    photo=self.sender_photo(email)
+                    if photo: return self.image(photo[1],photo[0],'private, max-age=86400')
+                    domain=email.rsplit('@',1)[1]
+                    logo=None if domain in security.FREE_MAIL else self.bimi_logo(domain)
+                    return self.image(logo,'image/svg+xml','private, max-age=86400') if logo else self.send_error(404)
                 if self.path.startswith('/api/avatar?'):
                     email=urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get('email',[''])[0].strip().lower()
                     found=(self.server.avatars.get(email) or self.import_shine_photo(email)) if EMAIL.fullmatch(email) else None
@@ -2194,7 +2261,7 @@ class Handler(SimpleHTTPRequestHandler):
                     try: offset=int(query.get('offset',['0'])[0])
                     except ValueError: raise APIError('Invalid mailbox page.')
                     if not 0<=offset<=1000000: raise APIError('Invalid mailbox page.')
-                    return self.reply(200,self.server.zimbra.messages(s['token'],offset))
+                    return self.reply(200,self.mail_page(s,offset))
                 if self.path.startswith('/api/attachment?'):
                     query=urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
                     raw=self.server.zimbra.download(s['token'],query.get('mid',[''])[0],query.get('part',[''])[0])
@@ -2259,6 +2326,15 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_response(200); self.send_header('Content-Type',mime); self.send_header('Content-Length',str(len(raw)))
         self.send_header('Cache-Control',cache); self.send_header('Content-Security-Policy',"default-src 'none'; sandbox")
         self.end_headers(); self.wfile.write(raw)
+    def sender_photo(self, email):
+        """Gravatar photo for an outside address, remembered for a day (and "has none" for twelve hours)."""
+        cache=self.server.__dict__.setdefault('gravatar_cache',{}); now=time.time(); hit=cache.get(email)
+        if hit and hit[0]>now: return hit[1]
+        photo=fetch_gravatar(email)
+        with LOCK:
+            if len(cache)>=5000: cache.clear()
+            cache[email]=(now+(86400 if photo else 43200),photo)
+        return photo
     def bimi_logo(self, domain):
         """A sender domain's published logo, remembered for a day (and "has none" for six hours)."""
         cache=self.server.__dict__.setdefault('bimi_cache',{}); now=time.time(); hit=cache.get(domain)
@@ -2455,6 +2531,27 @@ class Handler(SimpleHTTPRequestHandler):
         verified=(out.get('domain') or {}).get('verification_status')=='verified'
         if verified!=bool(cfg.get('verified')): self.server.relays.set_addon(domain,verified=verified)
         return out
+    def mail_page(self, s, offset):
+        """A page of the mailbox; mail that got a spam or phishing mark also goes on the admins' security list."""
+        me=s['user']['email'].lower(); out=self.server.zimbra.messages(s['token'],offset,me)
+        log=getattr(self.server,'security',None)
+        if log:
+            for e in out['emails']:
+                if e.get('risk',{}).get('level') and e.get('folder')!='sent':
+                    log.record(me,e['id'],e['from']['email'],e['from']['name'],e['subject'],e['risk'],at=e['date']/1000 or None)
+        return out
+    def security_list(self, s, data):
+        """Admin console → Monitor → Phishing & spam: marked mail in every mailbox the admin looks after."""
+        log=getattr(self.server,'security',None)
+        if not log: raise APIError('The security list is not set up on this server.',503)
+        client,token,scope=self.admin_session(s)
+        perms=client.actor_perms(token,s['user']['email'],scope)
+        if perms is not None and 'reports.view' not in perms:
+            raise APIError('Your role does not allow this. Ask an admin for "'+PERMISSIONS['reports.view']+'".',403)
+        level=data.get('level') if data.get('level') in ('phishing','suspicious') else None
+        try: days=max(1,min(90,int(data.get('days') or 30)))
+        except (TypeError,ValueError): days=30
+        return {'scope':scope or None,**log.list([scope] if scope else None,level,days)}
     def sync_addon(self, domain):
         """Paid for and not set up yet: set it up in Swiss Mail and keep the key. Renewed or ran out: Swiss Mail is told
         the new paid-until date (it sends only while that lies ahead)."""
@@ -3480,6 +3577,8 @@ class Handler(SimpleHTTPRequestHandler):
             if self.path=='/api/admin/action' and data.get('op') in APITOKEN_OPS:
                 return self.reply(200,self.apitoken_action(s,data))
             if self.path=='/api/admin/action' and data.get('op')=='passkeys_reset': return self.reply(200,self.passkeys_reset(s,data))
+            if self.path=='/api/admin/action' and data.get('op')=='security_list':
+                return self.reply(200,self.security_list(s,data))
             if self.path=='/api/admin/action' and data.get('op') in ('billing_get','billing_checkout','billing_cancel'):
                 return self.reply(200,self.billing_action(s,data))
             if self.path=='/api/admin/action' and data.get('op')=='reports':
@@ -3639,10 +3738,18 @@ def serve():
     server.tickets=Tickets(state_dir/'tickets.sqlite') if state_dir else None
     server.automations=Automations(state_dir/'automations.json',lambda payload: shine_admin_call(server.shine_site,server.shine_secret,payload),server.audit,mail=followup_mail) if state_dir else None
     if server.automations: server.automations.start()
-    if (server.hooks or server.automations) and server.provisioner and server.zimbra:
+    # spam/phishing marks: the admins' list (kept 90 days), filled as people open mail and by a watcher on every mailbox
+    server.security=security.SecurityLog(str(state_dir/'security.sqlite')) if state_dir else None
+    if server.zimbra: server.zimbra.own_domains=tuple(server.reserved_domains)
+    scanner=None
+    if server.security and server.provisioner and server.zimbra and os.environ.get('SECURITY_SCAN','1')!='0':
+        scanner=security.SecurityScanner(server.security,lambda: all_domains(server.provisioner),
+            lambda email,msg_id: server.zimbra.verdict(delegated_token(server.provisioner,email),msg_id,email))
+    listeners=[x for x in (server.automations,scanner) if x]
+    if (server.hooks or listeners) and server.provisioner and server.zimbra:
         NewMailWatcher(server.hooks,lambda domain: domain_mailboxes(server.provisioner,domain),
             lambda email: inbox_heads(server.zimbra,delegated_token(server.provisioner,email)),
-            listeners=[server.automations] if server.automations else []).start()
+            listeners=listeners).start()
     print(f'Dejoiy Mail: {origin}; backend '+('configured' if url else 'requires ZIMBRA_URL'))
     server.serve_forever()
 

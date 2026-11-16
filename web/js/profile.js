@@ -31,23 +31,24 @@ const Profile = {
     return key===String(Store.state.user.email||"").toLowerCase() ? (Store.state.prefs.avatar||"") : "";
   },
   /* brand: the sender's domain when the mail server verified the message really came from it (m.verified).
-     Its published logo (BIMI) then replaces the initials, like Gmail. */
+     Only then is an outside sender's own photo (Gravatar) or company logo (BIMI) shown instead of initials, like
+     Gmail: a forged sender never borrows someone's face. Mail marked as spam or phishing passes no brand. */
   avatar(email, name, cls, brand){
-    const url=this.photo(email);
+    const url=this.photo(email), key=String(email||"").toLowerCase();
     const dot = window.Presence ? Presence.dot(email) : "";
     return url ? `<span class="${cls} has-photo pres-host" aria-hidden="true"><img src="${esc(url)}" alt="" loading="lazy">${dot}</span>`
-      : `<span class="${cls} pres-host" aria-hidden="true" style="--h:${hue(email||name)}"${brand&&!NO_LOGO.has(brand)?` data-bimi="${esc(brand)}"`:""}><span class="av-initials">${esc(initials(name||email||"?"))}</span>${dot}</span>`;
+      : `<span class="${cls} pres-host" aria-hidden="true" style="--h:${hue(email||name)}"${brand&&key&&!NO_LOGO.has(key)?` data-sender="${esc(key)}" data-brand="${esc(brand)}"`:""}><span class="av-initials">${esc(initials(name||email||"?"))}</span>${dot}</span>`;
   },
-  /* Swap initials for the sender's brand logo where one exists. Domains without a logo are remembered, so they're asked once.
+  /* Swap initials for the sender's photo or logo where one exists. Senders without one are remembered, so they're asked once.
      No lazy loading: a lazy image that is not on the page yet never loads. */
   brandLogos(root){
     if(!window.Live?.enabled) return;
-    root.querySelectorAll("[data-bimi]").forEach(el=>{ const domain=el.dataset.bimi; el.removeAttribute("data-bimi");
-      if(NO_LOGO.has(domain)) return;
+    root.querySelectorAll("[data-sender]").forEach(el=>{ const email=el.dataset.sender, domain=el.dataset.brand; el.removeAttribute("data-sender");
+      if(NO_LOGO.has(email)) return;
       const img=new Image(); img.alt="";
       img.onload=()=>{ const initialsEl=el.querySelector(".av-initials"); if(initialsEl) initialsEl.replaceWith(img); el.classList.add("has-photo","is-brand"); el.title="Verified sender: "+domain; };
-      img.onerror=()=>NO_LOGO.add(domain);
-      img.src="/api/bimi?domain="+encodeURIComponent(domain); });
+      img.onerror=()=>NO_LOGO.add(email);
+      img.src="/api/sender-photo?email="+encodeURIComponent(email); });
   },
 
   /* Profile photos are cropped to a centred square and kept small, so lists stay fast. */

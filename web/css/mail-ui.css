@@ -338,3 +338,14 @@ html .reader.own-design .ai-note{background:rgba(255,255,255,.55);color:#121212}
 .help-view table{border-collapse:collapse;width:100%}
 .help-view th,.help-view td{border:1px solid var(--line);padding:.45em .6em;text-align:left;vertical-align:top}
 .help-view th{background:var(--surface-2)}
+/* spam / phishing marks (server/security.py) */
+.risk-chip{display:inline-block;margin-right:4px;padding:1px 7px;border-radius:999px;font-size:11px;font-weight:700;line-height:16px;white-space:nowrap}
+.risk-chip.phishing{background:#d92d20;color:#fff}
+.risk-chip.suspicious{background:color-mix(in srgb,#f79009 22%,transparent);color:#9a5b00}
+.risk-note{margin:0 0 12px;padding:10px 14px;border-radius:12px;font-size:13px;line-height:1.45;color:var(--ink-1,inherit)}
+.risk-note.phishing{background:color-mix(in srgb,#d92d20 12%,transparent);border:1px solid color-mix(in srgb,#d92d20 45%,transparent)}
+.risk-note.suspicious{background:color-mix(in srgb,#f79009 12%,transparent);border:1px solid color-mix(in srgb,#f79009 40%,transparent)}
+.risk-note ul{margin:6px 0 6px 18px;padding:0}
+.risk-note p{margin:0;color:var(--ink-2,inherit)}
+.r-body.links-off a{pointer-events:none;cursor:not-allowed;text-decoration:line-through}
+@media (prefers-color-scheme:dark){.risk-chip.suspicious{color:#fdb022}}
