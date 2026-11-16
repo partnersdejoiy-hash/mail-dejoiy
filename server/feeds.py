@@ -5,16 +5,18 @@ Google Sheets IMPORTDATA). GET /feeds/<token>/<name>.csv on mail.dejoiy.com.
   admin.csv      admin-mail.dejoiy.com: companies, plans, money, add-ons, help desk, integrations
   daily.csv      one row a day for the last 30 days (for charts)
   companies.csv  one row per company
+  status.csv     every Dejoiy service up or down right now, and this server's health
 
 Counts only: never mail content, passwords or keys. Subjects and addresses do not appear in any feed.
 The token is in <state>/feed-token (made on first start, 0600); change or delete it to cut off old links.
 """
-import csv, io, secrets, time
+import csv, io, os, secrets, shutil, subprocess, time, urllib.error, urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 DAY = 86400
 WINDOWS = (('24h', DAY), ('7d', 7 * DAY), ('30d', 30 * DAY), ('90d', 90 * DAY))
-NAMES = ('mail', 'admin', 'daily', 'companies')
+NAMES = ('mail', 'admin', 'daily', 'companies', 'status')
 
 
 def token(state_dir):
@@ -156,3 +158,69 @@ def companies(s, now=None, mailboxes=None):
                      'yes' if addons.get(d, 0) > now else '', 'Swiss Mail' if cfg.get('kind') == 'swiss' else cfg.get('host', '') if cfg.get('active') else ''])
     return to_csv(['Company', 'State', 'Plan', 'Period', 'Paid or trial until', 'Mailboxes', 'People active 30d', 'Mails sent 30d',
                    'Phishing 30d', 'Spam 30d', 'Swiss add-on', 'Own mail service'], rows)
+
+
+# ---------- live status ----------
+# Name|URL pairs; STATUS_CHECKS (comma-separated, same form) replaces them. Up = it answered below 500.
+CHECKS = (('Dejoiy Mail (mail.dejoiy.com)', 'https://mail.dejoiy.com/api/config'),
+          ('Dejoiy Mail Admin (admin-mail.dejoiy.com)', 'https://admin-mail.dejoiy.com/'),
+          ('Shine app (app.shine.dejoiy.com)', 'https://app.shine.dejoiy.com/'),
+          ('Shine backend (convex-site.shine.dejoiy.com)', 'https://convex-site.shine.dejoiy.com/'),
+          ('Swiss Mail API', 'https://nvxvtkwmqmoycptznefs.supabase.co/functions/v1/api/health'),
+          ('Dejoiy Pay (pay.dejoiy.com)', 'https://pay.dejoiy.com/'),
+          ('dejoiy.com', 'https://dejoiy.com/'))
+SLOW_MS = 2000
+
+
+def checks():
+    raw = os.environ.get('STATUS_CHECKS', '').strip()
+    if not raw: return CHECKS
+    return tuple(tuple(x.split('|', 1)) for x in raw.split(',') if '|' in x)
+
+
+def probe(url, timeout=8, opener=None):
+    """(state, milliseconds, http code) for one address."""
+    start = time.monotonic()
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'DejoiyStatus/1.0'})
+        with (opener or urllib.request.urlopen)(req, timeout=timeout) as r: code = r.status
+    except urllib.error.HTTPError as e: code = e.code
+    except Exception: return 'DOWN', int((time.monotonic() - start) * 1000), ''
+    ms = int((time.monotonic() - start) * 1000)
+    return ('DOWN' if code >= 500 else 'SLOW' if ms > SLOW_MS else 'UP'), ms, code
+
+
+def server_health(state_dir='/', zimbra_ok=None):
+    """This server's own numbers: disk, memory, load, uptime, mail queue, the mail system."""
+    rows = []
+    try:
+        d = shutil.disk_usage(state_dir or '/'); rows.append(['Disk used', f'{d.used / d.total * 100:.0f}%', f'{d.free / 2**30:.1f} GB free'])
+    except OSError: pass
+    try:
+        mem = dict(l.split(':', 1) for l in Path('/proc/meminfo').read_text().splitlines() if ':' in l)
+        total, avail = int(mem['MemTotal'].split()[0]), int(mem['MemAvailable'].split()[0])
+        rows.append(['Memory used', f'{(total - avail) / total * 100:.0f}%', f'{avail / 2**20:.1f} GB free'])
+    except (OSError, KeyError, ValueError): pass
+    try:
+        one, five, _ = os.getloadavg(); rows.append(['CPU load (1 min / 5 min)', f'{one:.2f}', f'{five:.2f} · {os.cpu_count()} CPUs'])
+    except OSError: pass
+    try: rows.append(['Up for', f'{float(Path("/proc/uptime").read_text().split()[0]) / 86400:.1f} days', ''])
+    except (OSError, ValueError): pass
+    try:
+        out = subprocess.run(['/opt/zimbra/common/sbin/postqueue', '-j'], capture_output=True, text=True, timeout=10)
+        if out.returncode == 0: rows.append(['Mails waiting in the queue', str(sum(1 for l in out.stdout.splitlines() if l.strip())), ''])
+    except (OSError, subprocess.SubprocessError): pass
+    if zimbra_ok is not None: rows.append(['Mail system (Zimbra) answering', 'UP' if zimbra_ok else 'DOWN', ''])
+    return rows
+
+
+def status(state_dir=None, zimbra_ok=None, opener=None, now=None):
+    now = now or time.time(); stamp = time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime(now))
+    todo = checks()
+    with ThreadPoolExecutor(max_workers=max(1, len(todo))) as pool:
+        found = list(pool.map(lambda c: probe(c[1], opener=opener), todo))
+    rows = [[name, *res, stamp] for (name, _), res in zip(todo, found)]
+    up = sum(1 for r in rows if r[1] != 'DOWN')
+    rows += [[], ['Services up', f'{up} of {len(rows)}', '', '', stamp], [], ['THIS SERVER', 'Value', 'More', '', '']]
+    rows += [[*r, '', ''] for r in server_health(state_dir, zimbra_ok)]
+    return to_csv(['Service', 'Status', 'Response (ms)', 'HTTP', 'Checked (UTC)'], rows)

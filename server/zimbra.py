@@ -2338,10 +2338,22 @@ class Handler(SimpleHTTPRequestHandler):
         if name=='mail': body=feeds.mail(self.server,extra=self.feed_totals()[0])
         elif name=='admin': body=feeds.admin(self.server)
         elif name=='daily': body=feeds.daily(self.server)
+        elif name=='status': body=self.feed_status()
         else: body=feeds.companies(self.server,mailboxes=self.feed_totals()[1])
         raw=body.encode('utf-8-sig')   # the BOM makes spreadsheets read ₹ and other letters right
         self.send_response(200); self.send_header('Content-Type','text/csv; charset=utf-8'); self.send_header('Content-Length',str(len(raw)))
         self.send_header('Cache-Control','no-store'); self.send_header('X-Robots-Tag','noindex'); self.end_headers(); self.wfile.write(raw)
+    def feed_status(self):
+        """status.csv, worked out at most once a minute (it asks every service over the network)."""
+        hit=self.server.__dict__.get('feed_status')
+        if hit and hit[0]>time.time(): return hit[1]
+        ok=None
+        if getattr(self.server,'provisioner',None):
+            try: self.server.provisioner.token(); ok=True
+            except Exception: ok=False
+        body=feeds.status(os.environ.get('SESSION_DB') and os.path.dirname(os.environ['SESSION_DB']) or '/',ok)
+        self.server.__dict__['feed_status']=(time.time()+60,body)
+        return body
     def feed_totals(self):
         """Domains and mailboxes from the mail server, asked at most every 10 minutes."""
         hit=self.server.__dict__.get('feed_totals')

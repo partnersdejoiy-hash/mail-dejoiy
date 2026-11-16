@@ -58,3 +58,25 @@ class Feeds(unittest.TestCase):
 
 
 if __name__ == '__main__': unittest.main()
+
+
+class Status(unittest.TestCase):
+    def test_up_slow_down_and_server_numbers(self):
+        import io as _io, urllib.error
+        class R(_io.BytesIO):
+            status = 200
+            def __enter__(self): return self
+            def __exit__(self, *a): pass
+        def opener(req, timeout):
+            if 'down' in req.full_url: raise OSError('refused')
+            if 'boom' in req.full_url: raise urllib.error.HTTPError(req.full_url, 502, 'x', {}, None)
+            return R(b'ok')
+        os.environ['STATUS_CHECKS'] = 'A|https://a.example/,B|https://down.example/,C|https://boom.example/'
+        try: rows = list(csv.reader(io.StringIO(feeds.status(tempfile.mkdtemp(), True, opener=opener))))
+        finally: del os.environ['STATUS_CHECKS']
+        by = {r[0]: r for r in rows if r}
+        self.assertEqual((by['A'][1], by['A'][3]), ('UP', '200'))
+        self.assertEqual(by['B'][1], 'DOWN'); self.assertEqual((by['C'][1], by['C'][3]), ('DOWN', '502'))
+        self.assertEqual(by['Services up'][1], '1 of 3')
+        self.assertEqual(by['Mail system (Zimbra) answering'][1], 'UP')
+        self.assertIn('Disk used', by)
