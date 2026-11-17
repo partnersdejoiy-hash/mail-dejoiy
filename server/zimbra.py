@@ -3192,12 +3192,15 @@ class Handler(SimpleHTTPRequestHandler):
         return {'people':people}
     def shine_sso(self):
         # Shine's "Continue with Dejoiy Mail": signed in here -> back to Shine with a token; otherwise sign in first.
-        back=safe_return(urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get('return',[''])[0])
+        # site=meet sends the person back to the meeting site (meet.dejoiy.com) instead of the Shine app.
+        query=urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+        back=safe_return(query.get('return',[''])[0]); meet=query.get('site',[''])[0]=='meet'
         if not self.server.shine_secret: return self.send_error(503,'Shine is not connected')
         try: _,s=self.session()
-        except APIError: return self.redirect('/?next=shine&return='+urllib.parse.quote(back,safe=''))
+        except APIError: return self.redirect('/?next=shine'+('&site=meet' if meet else '')+'&return='+urllib.parse.quote(back,safe=''))
         t=shine_token(self.server.shine_secret,s['user']['email'],s['user'].get('name',''),shine_admin(s['user']),self.shine_photo(s['user']['email']))
-        return self.redirect(self.server.shine_origin+'/auth/dejoiy#t='+urllib.parse.quote(t,safe='')+'&next='+urllib.parse.quote(back,safe=''))
+        origin=self.server.shine_meet_origin if meet else self.server.shine_origin
+        return self.redirect(origin+'/auth/dejoiy#t='+urllib.parse.quote(t,safe='')+'&next='+urllib.parse.quote(back,safe=''))
     def joi_sso(self):
         # Joi's "Sign in with Dejoiy Mail": signed in here -> back to Joi with a 5-minute token proving this mailbox.
         srv=self.server
@@ -4023,6 +4026,7 @@ def serve():
     server.ui_settings=AppearanceStore((str(Path(os.environ['SESSION_DB']).with_name('settings.sqlite')) if os.environ.get('SESSION_DB') else None),'ui_settings')
     server.mail_host=os.environ.get('MAIL_HOST') or parsed.hostname
     server.shine_origin=(os.environ.get('SHINE_ORIGIN') or 'https://app.shine.dejoiy.com').rstrip('/')
+    server.shine_meet_origin=(os.environ.get('SHINE_MEET_ORIGIN') or 'https://meet.dejoiy.com').rstrip('/')
     server.shine_secret=os.environ.get('SHINE_SSO_SECRET','')
     # Joi, DEJOIY's AI buddy, is the assistant here: her page, her API (once her server is up) and the mail app's secret on her admin page
     server.joi_url=(os.environ.get('JOI_URL') or 'https://joi-ai.dejoiy.com').rstrip('/')
