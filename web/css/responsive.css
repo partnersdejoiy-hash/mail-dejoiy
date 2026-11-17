@@ -271,6 +271,8 @@ html[data-scenic="true"] .mail-card{background:color-mix(in srgb,var(--card) 86%
     padding:calc(18px + env(safe-area-inset-top)) 12px calc(18px + env(safe-area-inset-bottom))!important;overflow-y:auto;overscroll-behavior:contain;
     border-radius:0 28px 28px 0;box-shadow:12px 0 40px rgba(0,0,0,.35)}
   body.nav-open #sidebar .nav-item.active{background:color-mix(in srgb,var(--pop,#ff4fa3) 22%,transparent)!important;color:var(--ink)!important;font-weight:800}
+  /* the open drawer is solid, not see-through, so it takes the theme's own text colours, not the photo-panel ones */
+  html[data-panel-ink] body.nav-open #sidebar{--ink:inherit;--ink-2:inherit;--ink-3:inherit;color:var(--ink);text-shadow:none}
 }
 /* The background photo is sized to the tallest screen, so the keyboard and Safari's bars
    opening or closing never rescale it (that was the shake on every tap). */
