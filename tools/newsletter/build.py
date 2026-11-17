@@ -9,7 +9,7 @@ SIGNUP = "https://mail.dejoiy.com/signup"
 BASE = "https://mail.dejoiy.com/assets/newsletter/"
 
 
-def build(cid, base=""):
+def build(cid, base="", greeting="Hi {{first_name}},", company="your company"):
     src = (lambda n: f"cid:{n.split('.')[0]}") if cid else (lambda n: base + n)
 
     def img(n, alt, w=600, h=None):
@@ -29,6 +29,12 @@ def build(cid, base=""):
                 f'<td style="background:{bg};border-radius:999px"><a href="{SIGNUP}" style="display:inline-block;padding:15px 28px;'
                 f'font:700 16px {FONT};color:{fg};text-decoration:none;border-radius:999px">{label} &rarr;</a></td></tr></table>')
 
+    def sales(bg, fg):
+        subj = ("Dejoiy Mail for " + company).replace(" ", "%20").replace("&", "%26")
+        return (f'<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:10px"><tr>'
+                f'<td style="border:2px solid {bg};border-radius:999px"><a href="mailto:deepak.sharma@dejoiy.com?subject={subj}" '
+                f'style="display:inline-block;padding:13px 26px;font:700 16px {FONT};color:{fg};text-decoration:none;border-radius:999px">Contact sales &rarr;</a></td></tr></table>')
+
     def plan(name, month, year, seats, hot=False):
         bg, fg, sub = (PINK, INK, INK) if hot else (INK, CREAM, "#c9c2bb")
         return (f'<tr><td style="padding:0 0 10px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" '
@@ -42,11 +48,11 @@ def build(cid, base=""):
     rows = [
         img("hero.gif", "Dejoiy Mail: company mail that finally feels like you.", 600, 560),
         text(INK, CREAM,
-             p("Hi {{first_name}},")
+             p(greeting)
              + p("Dejoiy Mail is business email on your own domain, made by DEJOIY in New Delhi. "
                  "You pay one flat price for the whole company, not a fee for every person who joins.")
              + p("Here is what's inside.")
-             + button("Start your 11-day trial", PINK, INK), "28px 32px 40px"),
+             + button("Start your 11-day trial", PINK, INK) + sales(CREAM, CREAM), "28px 32px 40px"),
         img("h_domain.png", "Your domain. Your whole inbox."),
         img("laptop.jpg", "Dejoiy Mail inbox on a laptop, dark theme"),
         text(CREAM, INK,
@@ -83,7 +89,8 @@ def build(cid, base=""):
         img("h_move.png", "Moving? That's on us."),
         text(INK, CREAM,
              p("Already on Gmail, Google Workspace or Zoho? Our team moves your existing mail and sets up your mailboxes for you, at no charge.")
-             + p("You keep working while it happens. Reply to this mail and we'll plan the move with you.", "#c9c2bb")),
+             + p("You keep working while it happens. Reply to this mail and we'll plan the move with you.", "#c9c2bb")
+             + sales(PINK, PINK)),
         img("h_plans.png", "One price. Whole company."),
         f'<tr><td style="background:{CREAM};padding:14px 32px 8px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">'
         + plan("Starter", "&#8377;99", "&#8377;790", "Up to 51 mailboxes")
@@ -92,14 +99,15 @@ def build(cid, base=""):
         + '</table></td></tr>',
         text(CREAM, INK,
              p("Prices are for the whole company, plus 18% GST. Shine is included. Pay with UPI AutoPay or a card through Dejoiy Pay.", "#5a524c")
-             + button("Start your 11-day trial", INK, CREAM), "6px 32px 40px"),
+             + button("Start your 11-day trial", INK, CREAM) + sales(INK, INK), "6px 32px 40px"),
         text(INK, CREAM,
              p("Questions? Just reply. A real person reads every one.")
              + p("<b>Deepak Sharma</b><br>DEJOIY", "#FFF4EA"), "36px 32px 20px"),
         f'<tr><td style="background:{INK};padding:8px 32px 36px;font:13px/1.6 {FONT};color:#9a938d">'
         f'<img src="{src("logo.png")}" width="164" height="32" alt="Dejoiy Mail" style="display:block;border:0;margin:0 0 16px">'
         'Dejoiy India Private Limited, New Delhi<br>'
-        '<span style="background:#3a2a32;color:#FF4FA3;padding:1px 6px;border-radius:4px">[postal address: to be added before sending]</span><br><br>'
+        '<a href="https://maps.google.com/?q=28.521157,77.238384" style="color:#9a938d">Location: 28.521157, 77.238384</a><br><br>'
+        'We found this address on your public business listing or website. '
         'Not interested? Reply "no thanks" and we won\'t email you again.</td></tr>',
     ]
     pre = ("One flat price for your whole company: your domain, roles, help desk and team chat in one place."
