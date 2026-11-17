@@ -2272,6 +2272,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if self.path=='/api/accounts': return self.reply(200,self.accounts_view(sid,s))
                 if self.path.split('?',1)[0]=='/api/tickets' or self.path.startswith('/api/tickets/'): return self.reply(200,self.desk_get(s,self.path))
                 if self.path=='/api/joi': return self.reply(200,self.joi(s,sid))
+                if self.path=='/api/joi?app=admin': return self.reply(200,self.joi(s,None,'mail-admin'))   # Joi in the admin console
                 if self.path=='/api/avatars': return self.reply(200,{'avatars':self.avatar_versions()})
                 if self.path.startswith('/api/bimi?'):
                     domain=urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get('domain',[''])[0].strip().lower()
@@ -3093,14 +3094,14 @@ class Handler(SimpleHTTPRequestHandler):
         out=self.shine_post('/dejoiy/people',{'emails':emails})
         if out is None: return {'enabled':False,'people':{}}
         return {'enabled':True,'people':out.get('people',{})}
-    def joi(self, session, sid=None):
+    def joi(self, session, sid=None, app='mail'):
         """Where Joi's chat lives, (for DEJOIY's own people) a token so she may use internal memory,
         and the grant that lets her read this person's own mailbox while they talk to her."""
         srv=self.server; url=getattr(srv,'joi_url','https://joi-ai.dejoiy.com')
         internal=self.domain(session) in getattr(srv,'joi_internal',[])
         secret=getattr(srv,'joi_secret','')
         grant=self.joi_grant(sid,session) if sid and secret else ''
-        return {'url':url,'api':getattr(srv,'joi_api',url),'token':joi_app_token(secret) if secret and internal else '',
+        return {'url':url,'api':getattr(srv,'joi_api',url),'token':joi_app_token(secret,app) if secret and internal else '',
             'grant':grant,'mailbox':srv.app_origin+'/api/joi/mailbox' if grant else ''}
     def joi_grant(self, sid, session):
         """A 12-hour grant for Joi naming this mailbox and this sign-in; signing out here ends it."""
