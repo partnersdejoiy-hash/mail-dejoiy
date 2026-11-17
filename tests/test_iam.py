@@ -231,6 +231,9 @@ class Wiring(unittest.TestCase):
         self.assertEqual(tickets[0]['team'], 'Company admin'); self.assertIn('Vendor quotes', tickets[0]['body'])
         self.assertTrue(h.outside_blocked(self.S, {'to': 'x@gmail.com'})['pending'])
         with self.assertRaises(self.z.APIError): h.access_request(self.S, {})               # asked already
+        store.assign_role(D, 'dejoiy', 'boss@kaali.in', store.role_id(D, 'super_admin'))
+        store.decide_request(D, 'boss@kaali.in', out['request']['id'], True, approver_perms=store.allowed_set(D, 'boss@kaali.in'))
+        self.assertIsNone(h.outside_blocked(self.S, {'to': 'x@gmail.com'}))                 # approving lifts the deny
 
     def test_old_role_permissions_unchanged_and_owner_becomes_super_admin(self):
         import zimbra as z
@@ -249,3 +252,20 @@ class Wiring(unittest.TestCase):
         self.assertFalse(store.decide(D, 'x@kaali.in', 'user.create', legacy_perms=['mailboxes.manage'])[0])
         store.assign_role(D, 'boss@kaali.in', 'y@kaali.in', store.role_id(D, 'auditor'), hours=1)   # temporary only: old role still counts
         self.assertTrue(store.decide(D, 'y@kaali.in', 'user.create', legacy_perms=['mailboxes.manage'])[0])
+
+
+class OwnDomain(unittest.TestCase):
+    """A super admin declares a company domain Dejoiy's own: free, and on Dejoiy's SES list; the server's own stay fixed."""
+    def test_declare_and_undo(self):
+        import tempfile, zimbra as z
+        from pathlib import Path
+        tmp = Path(tempfile.mkdtemp())
+        s = type('S', (), {})(); s.fixed_domains = {'dejoiy.com'}; s.own_file = tmp / 'own.json'; s.promoted_file = tmp / 'p.json'
+        s.ses_file = tmp / 'ses.txt'; s.reserved_domains = set(s.fixed_domains)
+        z.declare_own(s, 'anupurana-angan.co.in', True)
+        self.assertIn('anupurana-angan.co.in', s.reserved_domains)
+        self.assertIn('*.anupurana-angan.co.in', s.ses_file.read_text())
+        self.assertEqual(z.declared_domains(s), {'anupurana-angan.co.in'})
+        with self.assertRaises(z.APIError): z.declare_own(s, 'dejoiy.com', False)
+        z.declare_own(s, 'anupurana-angan.co.in', False)
+        self.assertEqual(s.reserved_domains, {'dejoiy.com'}); self.assertNotIn('anupurana', s.ses_file.read_text())

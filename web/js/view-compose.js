@@ -148,7 +148,7 @@ Views.compose = function(el, arg){
     if(!hold){
       const button=$("c-send"); button.disabled=true;
       try{ await deliver(d, archiveAfter); }
-      catch(error){ if(error.draftId) draftId=error.draftId; App.toast(error.message, {label:"OK", fn:()=>{}, duration:10000}); button.disabled=false; rearm(); return; }
+      catch(error){ if(error.draftId) draftId=error.draftId; if(error.blocked==="external") App.outsideBlocked(error); else App.toast(error.message, {label:"OK", fn:()=>{}, duration:10000}); button.disabled=false; rearm(); return; }
       App.go(archiveAfter?back:"mail:sent"); App.toast(/(^|\s)@joi\b/i.test(strip(d.body)) ? "Message sent ✓ Joi is copied in and will answer." : "Message sent ✓"); return;
     }
     /* Undo Send: the message waits a few seconds on this device before it goes to the server. */

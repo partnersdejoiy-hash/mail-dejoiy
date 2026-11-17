@@ -368,3 +368,28 @@ details.ms-more:not(.ms-block){margin-top:10px}
 .sc-wrap{padding:0;overflow-x:auto}
 .sc-wrap td{vertical-align:top}
 .sc-wrap td:last-child{min-width:240px}
+/* Roles & permissions (admin-iam.js) */
+.iam-rules ol{margin:6px 0 0 18px;display:grid;gap:4px;color:var(--ink-2)}
+.iam-perm-tools{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:0 0 12px}
+.iam-module{margin-bottom:10px;padding:0;overflow:hidden}
+.iam-module>summary{padding:14px 16px;cursor:pointer;list-style:none;display:flex;gap:10px;align-items:baseline}
+.iam-module>summary::-webkit-details-marker{display:none}
+.iam-module>summary::before{content:"›";display:inline-block;transition:transform .15s;color:var(--ink-3)}
+.iam-module[open]>summary::before{transform:rotate(90deg)}
+.iam-module .adm-table{border-top:1px solid var(--line)}
+.iam-perms td:nth-child(2){width:90px}.iam-perms td:last-child{width:150px}
+.iam-matrix-wrap{overflow:auto;max-height:70vh;padding:0}
+.iam-matrix{border-collapse:separate;border-spacing:0;font-size:12.5px}
+.iam-matrix th,.iam-matrix td{padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+.iam-matrix thead th{position:sticky;top:0;background:var(--surface-2);z-index:2;writing-mode:vertical-rl;transform:rotate(180deg);text-align:left;height:150px;font-weight:600}
+.iam-matrix thead th:first-child{writing-mode:horizontal-tb;transform:none;left:0;z-index:3;height:auto;vertical-align:bottom}
+.iam-matrix tbody th{position:sticky;left:0;background:var(--surface);text-align:left;font-weight:500;z-index:1;max-width:260px;overflow:hidden;text-overflow:ellipsis}
+.iam-matrix tbody th small{color:var(--ink-3)}
+.iam-matrix .iam-mrow th{background:var(--surface-2);font-weight:700;text-transform:uppercase;letter-spacing:.4px;font-size:11px;color:var(--ink-2)}
+.iam-matrix td{text-align:center;min-width:28px}
+.iam-matrix td.yes{color:var(--good);font-weight:700}.iam-matrix td.no{color:var(--bad);font-weight:700;background:var(--bad-bg)}
+.iam-src{display:inline-block;margin:2px 4px 2px 0;padding:2px 8px;border-radius:999px;background:var(--surface-2);font-size:12px;color:var(--ink-2)}
+.iam-src.no{background:var(--bad-bg);color:var(--bad)}
+.iam-answer{margin:10px 0}.iam-answer.yes{border-left:4px solid var(--good)}.iam-answer.no{border-left:4px solid var(--bad)}
+.iam-insp-table{max-height:46vh;overflow:auto}
+#iam-body .adm-role-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}

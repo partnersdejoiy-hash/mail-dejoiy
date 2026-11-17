@@ -84,6 +84,7 @@ const Live={enabled:!!window.DEJOIY_LIVE,csrf:'',more:false,avatars:{},
       if(response.status===401&&!['login','session','accounts/add'].includes(path)&&!path.startsWith('admin')) location.reload();   // a wrong password while adding an account is not a lost session
       const error=new Error(result.error||Live.statusMessage(response.status,path));
       error.status=response.status; if(result.draftId) error.draftId=result.draftId; if(result.notSent) error.notSent=true;
+      if(result.blocked){ error.blocked=result.blocked; error.outside=result.outside||[]; error.pending=!!result.pending; }
       throw error;
     }
     return result;

@@ -508,6 +508,21 @@ def write_ses_list(server, promoted=None):
     try:
         tmp=Path(server.ses_file).with_suffix('.tmp'); tmp.write_text('\n'.join(lines)+'\n'); os.replace(tmp,server.ses_file)
     except OSError: pass
+def declared_domains(server):
+    """Domains a Dejoiy super admin declared Dejoiy's own (Admin → Plan & billing): free, and sent through Dejoiy's mail service."""
+    try: return set(json.loads(Path(server.own_file).read_text())) if getattr(server,'own_file',None) else set()
+    except (OSError, ValueError): return set()
+def declare_own(server, domain, on):
+    """Adds or removes a declared domain; the domains in RESERVED_DOMAINS stay Dejoiy's whatever happens here."""
+    if domain in server.fixed_domains: raise APIError('This domain is always Dejoiy\'s own (set on the server).',409)
+    own=declared_domains(server)
+    if on: own.add(domain)
+    else: own.discard(domain)
+    if server.own_file:
+        tmp=Path(server.own_file).with_suffix('.tmp'); tmp.write_text(json.dumps(sorted(own))); os.replace(tmp,server.own_file)
+    server.reserved_domains=set(server.fixed_domains)|own
+    if getattr(server,'zimbra',None): server.zimbra.own_domains=tuple(server.reserved_domains)
+    write_ses_list(server)
 def uses_ses(server, domain):
     return any(domain==r or domain.endswith('.'+r) for r in server.reserved_domains) or domain in promoted_domains(server)
 
@@ -2599,7 +2614,12 @@ class Handler(SimpleHTTPRequestHandler):
                 return {'requests':store.requests(domain,status)}
             if op=='iam_decide':
                 need('permissions.approval_manage','roles.assign')
-                return {'request':store.decide_request(domain,actor,str(data.get('id','')),data.get('approve') is True,str(data.get('reason') or ''),mine,ip)}
+                req=store.decide_request(domain,actor,str(data.get('id','')),data.get('approve') is True,str(data.get('reason') or ''),mine,ip)
+                if req['status'] in ('approved','rejected'):   # tell them in their inbox, the same way help desk notices arrive
+                    text=(f'Your admin turned on "{req["label"]}" for you.' if req['status']=='approved' else
+                          f'Your admin said no to "{req["label"]}": {req["votes"][-1]["reason"]}')
+                    self.desk_notify([(req['requester'],f'Access request {req["status"]}',text+(f'\n\nHelp desk ticket {req["ticket"]}.' if req['ticket'] else ''))])
+                return {'request':req}
             if op=='iam_reviews':
                 need('roles.view'); return {'reviews':store.reviews(domain)}
             if op=='iam_review_start':
@@ -3666,9 +3686,14 @@ class Handler(SimpleHTTPRequestHandler):
             raise APIError('Your role does not allow this. Ask an admin for "'+PERMISSIONS['billing.manage']+'".',403)
         domain=scope or str(data.get('domain') or s['user']['email'].rsplit('@',1)[1]).strip().lower()
         if not DOMAIN_NAME.fullmatch(domain): raise APIError('Pick a domain.')
+        if data['op']=='billing_own':   # a Dejoiy super admin declares a domain Dejoiy's own: free, and sent like Dejoiy's mail
+            if scope: raise APIError('Only Dejoiy super admins can choose this.',403)
+            lookup=node(ADMIN,'GetDomainRequest'); lookup.append(node(ADMIN,'domain',{'by':'name'},domain)); client.call(lookup,token)   # it exists here
+            declare_own(self.server,domain,data.get('on') is True)
+            self.log('admin:billing_own_'+('on' if data.get('on') is True else 'off'),s['user']['email'],domain)
         reserved=self.server.reserved_domains
         if any(domain==r or domain.endswith('.'+r) for r in reserved):
-            return {'domain':domain,'state':'internal'}   # Dejoiy's own domains don't pay themselves
+            return {'domain':domain,'state':'internal','declared':domain in declared_domains(self.server)}   # Dejoiy's own domains don't pay themselves
         try:
             if data['op']=='billing_cancel':
                 out=billing.cancel(domain); self.log('admin:billing_cancel',s['user']['email'],domain); return out
@@ -3832,7 +3857,7 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.reply(200,self.iam_admin(s,data))
             if self.path=='/api/admin/action' and data.get('op')=='security_list':
                 return self.reply(200,self.security_list(s,data))
-            if self.path=='/api/admin/action' and data.get('op') in ('billing_get','billing_checkout','billing_cancel'):
+            if self.path=='/api/admin/action' and data.get('op') in ('billing_get','billing_checkout','billing_cancel','billing_own'):
                 return self.reply(200,self.billing_action(s,data))
             if self.path=='/api/admin/action' and data.get('op')=='reports':
                 client,token,scope=self.admin_session(s)
@@ -3979,7 +4004,9 @@ def serve():
     server.billing=Billing(state/'billing.sqlite',DejoiyPay(os.environ.get('DEJOIY_PAY_URL','https://pay.dejoiy.com'),pay_key,pay_secret) if pay_key and pay_secret else None,
         os.environ.get('DEJOIY_PAY_WEBHOOK_SECRET','')) if state else None
     server.relays=relay.Relays(state/'relays.json',key_file=state/'relay.key') if state else None   # a company's own outgoing mail service
-    server.reserved_domains={d.strip().lower() for d in os.environ.get('RESERVED_DOMAINS','dejoiy.com').split(',') if d.strip()}
+    server.fixed_domains={d.strip().lower() for d in os.environ.get('RESERVED_DOMAINS','dejoiy.com').split(',') if d.strip()}
+    server.own_file=state/'own-domains.json' if state else None   # domains a super admin declared Dejoiy's own
+    server.reserved_domains=server.fixed_domains|declared_domains(server)
     if server.relays and server.billing: server.relays.addon_until=server.billing.addon_until
     server.swiss=relay.SwissPartner(os.environ['SWISS_PARTNER_SECRET']) if os.environ.get('SWISS_PARTNER_SECRET') else None
     # which domains leave through Dejoiy's own Amazon SES: Dejoiy's domains, and those a super admin promoted.

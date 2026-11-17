@@ -17,7 +17,7 @@ const TREE = [
     ["monitor/statistics","refresh","Server statistics","statistics",P],["monitor/mail-queues","mail","Mail queues","queues",P],
     ["monitor/undelivered","mail","Undelivered mail","undelivered"],["monitor/tickets","note","Help desk tickets","tickets"],
     ["monitor/sessions","contacts","Active sessions","sessions"],["monitor/reports","note","Reports","reports"],["monitor/security","shield","Phishing & spam","security"]]],
-  ["Manage",[["manage/accounts","contacts","Accounts","users"],["manage/teams","tag","Teams & roles","org"],
+  ["Manage",[["manage/accounts","contacts","Accounts","users"],["manage/teams","tag","Teams & roles","org"],["manage/roles","shield","Roles & permissions","iam"],
     ["manage/lists","mail","Distribution lists","lists"],["manage/resources","calendar","Resources","resources"],
     ["manage/domains","building","Domains","domains"],["manage/chat","chat","Chat & meetings","shine"],["manage/billing","card","Plan & billing","billing"]]],
   ["Configure",[["configure/cos","tag","Class of service","cos",P],["configure/global-settings","settings","Global settings","globalSettings",P],
@@ -351,7 +351,13 @@ async function billing(main, d){
   $("bl-domain")?.addEventListener("change",e=>{ billing.domain=e.target.value; billing(main,d); });
   let b; try{ b=await act({op:"billing_get",domain}); }catch(e){ if($("bl-body")) $("bl-body").innerHTML=`<div class="adm-card adm-error">${esc(e.message)}</div>`; return; }
   if(!$("bl-body")) return;
-  if(b.state==="internal"){ $("bl-body").innerHTML=`<div class="adm-card"><h2>${esc(b.domain)}</h2><p class="adm-muted">This is one of Dejoiy's own domains, so it has no subscription to pay.</p></div>`; return; }
+  // Dejoiy super admins only: declare a company domain Dejoiy's own (free, and its mail leaves through Dejoiy's own mail service)
+  const own = on => confirmDialog(on?`Make ${domain} Dejoiy's own`:`Stop treating ${domain} as Dejoiy's own`,
+    on?`${domain} will be free (no subscription) and its mail will leave through Dejoiy's own mail service, like dejoiy.com. Use this only for domains Dejoiy runs.`
+      :`${domain} will need a subscription again (its trial or plan picks up where it was), and its mail goes back to the usual way.`,
+    on?"Make it Dejoiy's own":"Stop", async () => { await act({op:"billing_own", domain, on}); toast(on?"Now one of Dejoiy's own domains":"No longer Dejoiy's own"); billing(main,d); });
+  if(b.state==="internal"){ $("bl-body").innerHTML=`<div class="adm-card"><h2>${esc(b.domain)}</h2><p class="adm-muted">This is one of Dejoiy's own domains, so it has no subscription to pay.</p>
+    ${!d.scope&&b.declared?`<button class="adm-btn ghost" id="bl-own-off">Stop treating it as Dejoiy's own</button>`:""}</div>`; $("bl-own-off")?.addEventListener("click",()=>own(false)); return; }
   const inr = paise => "₹"+(paise/100).toLocaleString("en-IN",{minimumFractionDigits:paise%100?2:0,maximumFractionDigits:2});
   const day = s => new Date(s*1000).toLocaleDateString([], {day:"numeric",month:"short",year:"numeric"});
   let period = billing.period || (b.period==="month"?"month":"year");
@@ -373,6 +379,8 @@ async function billing(main, d){
           <p>${p.mailboxes===null?"Unlimited":"Up to "+p.mailboxes} mailboxes · Shine included</p>
           <button class="adm-btn ${mine?"ghost":"primary"}" data-plan="${p.id}" ${b.payReady&&!mine&&!b.renewing?"":"disabled"}>${mine?"Your plan":"Subscribe to "+esc(p.name)}</button></div>`; }).join("")}</div>
       <p class="adm-muted">${b.renewing?"To change plan, turn auto-renew off first: the new plan starts when you subscribe to it.":"Trial days left are not charged: the first payment starts the paid time."}</p><p role="alert" class="adm-error" id="bl-err"></p></div>
+    ${d.scope?"":`<div class="adm-card"><div class="adm-card-head"><h2>Dejoiy's own domain</h2><button class="adm-btn ghost" id="bl-own-on">Make ${esc(b.domain)} Dejoiy's own</button></div>
+      <p class="adm-muted">For domains Dejoiy runs (for example a Dejoiy brand or project): no subscription, and mail leaves through Dejoiy's own mail service. Only Dejoiy super admins see this.</p></div>`}
     <div class="adm-card adm-flush"><div class="adm-card-head adm-pad"><h2>Payments</h2></div>
       ${b.invoices.length?`<table class="adm-table"><thead><tr><th>Date</th><th>Plan</th><th>Amount</th><th>Status</th></tr></thead><tbody>${b.invoices.map(x=>`<tr><td><small>${day(x.paidAt||x.created)}</small></td>
         <td>${esc(b.plans.find(p=>p.id===x.plan)?.name||x.plan)} · ${x.period==="year"?"yearly":"monthly"}${x.mode==="test"?` <span class="adm-pill warn">test</span>`:""}</td><td>${inr(x.amount)}</td>
@@ -380,6 +388,7 @@ async function billing(main, d){
         :`<p class="adm-muted adm-pad">No payments yet.</p>`}</div>`;
     main.querySelectorAll("[data-period]").forEach(x=>x.addEventListener("click",()=>{ period=billing.period=x.dataset.period; draw(); }));
     $("bl-check")?.addEventListener("click",()=>billing(main,d));
+    $("bl-own-on")?.addEventListener("click",()=>own(true));
     $("bl-stop")?.addEventListener("click",async e=>{ if(!confirm("Turn off auto-renew? Nothing more is charged; the time already paid still runs.")) return; e.currentTarget.disabled=true;
       try{ await act({op:"billing_cancel",domain}); toast("Auto-renew is off."); billing(main,d); }catch(x){ toast(x.message); e.currentTarget.disabled=false; } });
     main.querySelectorAll("[data-plan]").forEach(x=>x.addEventListener("click",async()=>{

@@ -176,6 +176,21 @@ const App = {
     const first = root.querySelector("input,textarea,select"); if(first) setTimeout(()=>first.focus(), 50);
   },
   closeDialog(){ document.getElementById("dialog-root").innerHTML=""; Back.closed(); },
+  /* Mail to outside addresses is turned off for this person: say so plainly, and offer "Request your admin"
+     (an access request in Roles & permissions plus a help desk ticket to the company's admins). */
+  outsideBlocked(error){
+    const list = (error.outside||[]).map(d=>`<b>${esc(d)}</b>`).join(", ");
+    if(error.pending){ this.dialog({title:"Outside mail is turned off for you", body:`<p>${esc(error.message)}</p><p>You already asked your admin. You will get a help desk update when they answer; your message is kept so you can send it then.</p>`, actions:[{label:"OK", primary:true}]}); return; }
+    this.dialog({title:"Outside mail is turned off for you", body:`<p>Your company admin has turned off sending mail outside your company for your account${list?`, so this message to ${list} was not sent`:""}.</p>
+      <p>Your message is kept, so you can send it once they turn it on.</p>
+      <div class="field"><label for="ob-why">Why do you need it? (optional)</label><input type="text" id="ob-why" maxlength="500" placeholder="e.g. I send quotes to customers"></div><p class="note" id="ob-note" role="alert"></p>`,
+      actions:[{label:"Not now"},{label:"Request your admin", primary:true, fn:()=>{
+        const button=document.querySelector(".dlg-foot .primary"), note=document.getElementById("ob-note"); button.disabled=true;
+        Live.request("access-request",{perm:"email.send_external", reason:document.getElementById("ob-why").value})
+          .then(out=>{ this.closeDialog(); this.toast("Request sent to your admin"+(out.ticket?` (help desk ticket ${out.ticket})`:"")+". You will hear back on the help desk."); })
+          .catch(e=>{ button.disabled=false; note.textContent=e.message; });
+        return false; }}]});
+  },
   /* Sign in to one more mailbox beside this one. You stay signed in here and switch from the account menu. */
   addAccount(){
     const send = ()=>{
@@ -261,7 +276,9 @@ const App = {
     job.run = async ()=>{
       if(job.done) return; finish(); if(job.toast) job.toast.remove();
       try{ await deliver(); this.toast("Message sent.", {label:"View", fn:()=> this.go("mail:sent")}); this.sound("sent"); }
-      catch(error){ if(error.draftId) restore.draftId=error.draftId; this.undoneSend=restore; this.toast(error.message+" Open it to fix and send again.", {label:"Open", fn:()=> this.go("compose:restore"), duration:15000}); }
+      catch(error){ if(error.draftId) restore.draftId=error.draftId; this.undoneSend=restore;
+        if(error.blocked==="external"){ this.outsideBlocked(error); this.toast("Not sent. Open it to change the recipients or send later.", {label:"Open", fn:()=> this.go("compose:restore"), duration:15000}); return; }
+        this.toast(error.message+" Open it to fix and send again.", {label:"Open", fn:()=> this.go("compose:restore"), duration:15000}); }
     };
     job.timer = setTimeout(job.run, seconds*1000);
     document.addEventListener("visibilitychange", onHide); window.addEventListener("pagehide", job.run); window.addEventListener("beforeunload", warn);

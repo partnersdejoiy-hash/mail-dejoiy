@@ -786,6 +786,10 @@ class IAM:
         approvals = 1 + sum(1 for v in req['votes'] if v['decision'] == 'approve')
         if approvals < req['needed']: return self.get_request(domain, rid)
         if req['kind'] == 'permission':
+            with self.lock:   # approving turns it on: a direct deny of the same permission is lifted (a role's deny still wins)
+                denies = [g for (g,) in self.db.execute("SELECT id FROM user_permissions WHERE domain=? AND email=? AND perm=? AND effect='deny' AND revoked IS NULL",
+                                                         (domain, req['requester'], req['target']))]
+            for g in denies: self.revoke_grant(domain, approver, g, ip)
             self.grant(domain, approver, req['requester'], req['target'], scope=req['scope'], hours=req['hours'], reason=req['reason'], request=rid, ip=ip)
         else:
             self.assign_role(domain, approver, req['requester'], req['target'], scope=req['scope'], hours=req['hours'], reason=req['reason'], request=rid, ip=ip)
