@@ -142,7 +142,7 @@ def risk(*, sender, name='', reply_to='', subject='', html_body='', text_body=''
                 else: hit('p', 5, f'A link shows {shown_host} but really goes to {host}.')
     for f in attachments or ():
         f = str(f or '')
-        if DOUBLE.search(f): hit('p', 5, f'The attachment “{f}” hides a program behind a document name.')
+        if DOUBLE.search(f): hit('p', 7, f'The attachment “{f}” hides a program behind a document name.')   # 7: even a real (perhaps hacked) sender stays 'phishing'
         elif DANGEROUS.search(f): hit('p', 3, f'The attachment “{f}” is a program or script.')
         elif re.search(r'\.html?$', f, re.I): hit('p', 2, f'The attachment “{f}” is a web page (often a fake sign-in form).')
 

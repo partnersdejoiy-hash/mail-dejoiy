@@ -21,6 +21,7 @@ import http.client
 import urllib.parse
 import security
 import feeds
+import iam
 import xml.etree.ElementTree as ET
 from http.cookies import SimpleCookie
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -1614,6 +1615,12 @@ OP_PERMISSIONS={**{op:'mailboxes.manage' for op in ('create_user','set_name','st
     'delete_user':'mailboxes.delete','dns_records':'domain.view',
     **{op:'teams.manage' for op in ('create_department','set_department','create_list','delete_list','add_member','remove_member','list_members')},
     **{op:'roles.manage' for op in ('role','set_title','save_roles','company_settings','policies_get','policies_save','policy_assign')}}
+# The same console operations in the roles & permissions catalog (iam.py): checked against the person's roles and their scope.
+OP_IAM={'create_user':'user.create','set_name':'user.edit','password':'user.reset_password','quota':'mailbox.quota_manage','forward':'mailbox.forwarding',
+    'add_alias':'mailbox.edit','remove_alias':'mailbox.edit','delete_user':'user.delete','dns_records':'dns.view','create_department':'department.create',
+    'set_department':'department.assign_users','create_list':'groups.create','delete_list':'groups.delete','add_member':'groups.manage_members',
+    'remove_member':'groups.manage_members','list_members':'user.view','role':'roles.assign','set_title':'roles.assign','save_roles':'roles.edit',
+    'company_settings':'organization.settings_manage','policies_get':'organization.view','policies_save':'security.password_policy','policy_assign':'security.password_policy'}
 # ---------- mailbox policies a company sets for itself ----------
 # Each rule is a real mail-server setting on the mailbox, so the server itself enforces it: (lowest, highest, standard value).
 POLICY_NUMBERS={'passwordMinLength':(PASSWORD_MIN,64,PASSWORD_MIN),'passwordMaxAgeDays':(0,365,0),'passwordHistory':(0,24,0),
@@ -1693,12 +1700,24 @@ def role_perms(roles, title, is_admin):
     role=next((r for r in roles if title and r['name'].lower()==title.lower()),None)
     if role is None: return set(PERMISSIONS) if is_admin else set()
     return set(role['perms'])
+def iam_perms(store, scope, actor, notes, title, is_admin=True):
+    """A company person's permissions: the old 10 names (what older parts of the app ask) plus the catalog ids (iam.py).
+    People without roles in the catalog yet keep exactly what their old role gave them. The company's owner (an admin
+    without a role) becomes its first Super Administrator the first time they come here."""
+    roles=read_roles(notes); old=role_perms(roles,title,is_admin)
+    if store is None or not scope: return old
+    store.ensure_company(scope,roles)
+    owner=is_admin and not any(r['name'].lower()==(title or '').lower() for r in roles)
+    if owner and not store.has_roles(scope,actor) and not store.super_holders(scope):
+        store.assign_role(scope,'dejoiy',actor,store.role_id(scope,'super_admin'),reason='Company owner: first Super Administrator')
+    allowed=store.allowed_set(scope,actor,legacy_perms='all' if owner else sorted(old))
+    return allowed|iam.legacy_flags(allowed)
 def attr(element, name):
     return next((a.text or '' for a in element.findall('{'+ADMIN+'}a') if a.get('n')==name),'')
 
 class Admin(Zimbra):
     """Separate, upstream-authorized admin session; no shared service credentials."""
-    mail_host='localhost'; dkim_dir=None
+    mail_host='localhost'; dkim_dir=None; iam=None   # iam: the roles & permissions store (set at start-up)
     def __init__(self, url):
         super().__init__(url)
         self.url=url.rstrip('/')+'/service/admin/soap/'
@@ -1717,7 +1736,7 @@ class Admin(Zimbra):
         account=self.call(lookup,token).find('{'+ADMIN+'}account')
         domain=node(ADMIN,'GetDomainRequest'); domain.append(node(ADMIN,'domain',{'by':'name'},scope))
         found=self.call(domain,token).find('{'+ADMIN+'}domain')
-        return role_perms(read_roles(attr(found,'zimbraNotes') if found is not None else ''),attr(account,'title') if account is not None else '',True)
+        return iam_perms(self.iam,scope,actor,attr(found,'zimbraNotes') if found is not None else '',attr(account,'title') if account is not None else '')
     def overview(self, token, scope=None):
         """Everything the admin may see; a company admin (scope=its domain) sees only that domain."""
         def in_domain(request):
@@ -2422,6 +2441,192 @@ class Handler(SimpleHTTPRequestHandler):
         else: kept=' The message was not sent. Copy your text before leaving this page.'
         self.reply(error.status if error.status>=400 else 502,{'error':str(error)+note+kept,'draftId':draft_id,'notSent':True})
     # ---------- help desk: the company's own internal tickets ----------
+    # ---------- roles & permissions (iam.py) ----------
+    def iam_store(self):
+        store=getattr(self.server,'iam',None)
+        if not store: raise APIError('Roles & permissions are not switched on for this server.',503)
+        return store
+    def iam_legacy(self, admin, token, domain, email):
+        """What a person's earlier role gave them ('all' for the company's owner), and their mailbox id."""
+        found=node(ADMIN,'GetDomainRequest'); found.append(node(ADMIN,'domain',{'by':'name'},domain))
+        notes=attr(admin.call(found,token).find('{'+ADMIN+'}domain'),'zimbraNotes')
+        me=node(ADMIN,'GetAccountRequest'); me.append(node(ADMIN,'account',{'by':'name'},email))
+        try: account=admin.call(me,token).find('{'+ADMIN+'}account')
+        except APIError: account=None
+        if account is None: return [],None,'',False
+        roles=read_roles(notes); title=attr(account,'title'); is_admin=attr(account,'zimbraIsDelegatedAdminAccount')=='TRUE'
+        owner=is_admin and not any(r['name'].lower()==title.lower() for r in roles)
+        return ('all' if owner else sorted(role_perms(roles,title,is_admin))),account.get('id'),attr(account,'ou'),is_admin
+    def outside_blocked(self, session, data):
+        """None, or why this mail may not go: it has addresses outside the company and the person may not mail outside."""
+        store=getattr(self.server,'iam',None); domain=self.domain(session); me=session['user']['email'].lower()
+        if not store or not domain or me in JOI_MAILBOXES: return None
+        found=re.findall(r'[^\s<>@,;"]+@([^\s<>@,;"]+)',' '.join(str(data.get(k,'')) for k in ('to','cc','bcc')))
+        outside=sorted({d.lower().rstrip('.') for d in found if d.lower().rstrip('.')!=domain})
+        if not outside: return None
+        ok,_=store.decide(domain,me,'email.send_external',{'email':me},self.client_ip(),legacy_perms=self.org(session).get('legacy'))
+        if ok: return None
+        pending=any(r['target']=='email.send_external' for r in store.requests(domain,'pending',me))
+        return {'error':'Your admin has turned off mail to addresses outside '+domain+'. You can ask them to turn it on for you.',
+                'blocked':'external','outside':outside[:10],'pending':pending}
+    def access_request(self, session, data):
+        """'Request your admin': an access request in Roles & permissions, plus a help desk ticket to the Company admin team."""
+        store=self.iam_store(); domain=self.domain(session); me=session['user']['email'].lower()
+        perm=str(data.get('perm') or 'email.send_external')
+        if perm not in iam.CATALOG: raise APIError('Choose what you need.')
+        name=iam.CATALOG[perm]['name']
+        reason=re.sub(r'[\x00-\x1f]',' ',str(data.get('reason') or '')).strip()[:500] or f'I need "{name}" for my work.'
+        try: req=store.request(domain,me,'permission',perm,hours=data.get('hours'),reason=reason)
+        except iam.IAMError as e: raise APIError(str(e),e.status)
+        try:
+            from tickets import ADMIN_TEAM
+            desk,who,teams,_=self.desk_context(session)
+            ticket,_=desk.create(who,{'subject':f'Access request: {name}','team':ADMIN_TEAM,'priority':'normal',
+                'body':f'{me} asks for "{name}".\n\nReason: {reason}\n\nApprove or reject it in Dejoiy Mail Admin → Roles & permissions → Access requests. '
+                       'Approving there turns it on straight away; this ticket is only the notice.'},teams)
+            store.link_ticket(domain,req['id'],ticket['code'])
+            self.desk_notify([])
+        except (APIError,TicketError): ticket=None   # the request itself is saved; the ticket is only the notice
+        return {'request':store.get_request(domain,req['id']),'ticket':ticket and ticket['code']}
+    def iam_gate(self, client, token, scope, actor, data, perms):
+        """A console operation, checked against the person's roles and their scope (department, chosen people).
+        Only for people who have roles here; everyone else keeps the earlier checks unchanged."""
+        store=getattr(self.server,'iam',None); need=OP_IAM.get(data.get('op'))
+        if not store or not scope or perms is None or not need or not store.has_roles(scope,actor): return
+        if data.get('op')=='status' and data.get('status')=='active': need='user.restore'
+        elif data.get('op')=='status': need='user.suspend'
+        target=None
+        ident=str(data.get('id') or ''); email=str(data.get('email') or '').strip().lower()
+        if UUID.fullmatch(ident) or EMAIL.fullmatch(email):
+            lookup=node(ADMIN,'GetAccountRequest'); lookup.append(node(ADMIN,'account',{'by':'id'} if UUID.fullmatch(ident) else {'by':'name'},ident if UUID.fullmatch(ident) else email))
+            try: account=client.call(lookup,token).find('{'+ADMIN+'}account')
+            except APIError: account=None
+            target={'email':account.get('name','') if account is not None else email,'department':attr(account,'ou') if account is not None else ''}
+        ok,why=store.decide(scope,actor,need,target,self.client_ip(),legacy_perms=self.iam_legacy(client,token,scope,actor)[0])
+        if not ok: raise APIError(f'Your role does not allow "{iam.CATALOG[need]["name"]}"'+(' for this person.' if 'scope' in why else '.')+' Ask an admin.',403)
+    IAM_OPS=('iam_summary','iam_role','iam_role_save','iam_role_clone','iam_role_delete','iam_assign','iam_unassign','iam_grant','iam_revoke_grant',
+             'iam_inspect','iam_requests','iam_decide','iam_reviews','iam_review_start','iam_review_decide','iam_audit','iam_break_glass','iam_my_requests')
+    def iam_admin(self, session, data):
+        """Roles & permissions in the admin console. A company admin works in their own company; the Dejoiy team names one."""
+        store=self.iam_store(); client,token,scope=self.admin_session(session)
+        actor=session['user']['email'].lower(); op=data['op']; ip=self.client_ip()
+        domain=scope or str(data.get('domain') or '').strip().lower()
+        if not domain or not re.fullmatch(r'(?:[a-z0-9-]+\.)+[a-z]{2,63}',domain): raise APIError('Choose a company.')
+        found=node(ADMIN,'GetDomainRequest'); found.append(node(ADMIN,'domain',{'by':'name'},domain))
+        notes=attr(client.call(found,token).find('{'+ADMIN+'}domain'),'zimbraNotes')
+        store.ensure_company(domain,read_roles(notes))
+        perms=client.actor_perms(token,actor,scope)
+        mine=set(iam.CATALOG) if perms is None else {p for p in perms if p in iam.CATALOG}
+        def need(*options):
+            if not any(p in mine for p in options): raise APIError(f'Your role does not allow this. Ask an admin for "{iam.CATALOG[options[0]]["name"]}".',403)
+        def no_escalation(allow):
+            more=sorted(set(allow)-mine)
+            if more: raise APIError(f'You cannot give "{iam.CATALOG[more[0]]["name"]}": you do not have it yourself.',403)
+        def person(email):
+            email=str(email or '').strip().lower()
+            if not EMAIL.fullmatch(email) or not email.endswith('@'+domain): raise APIError('Choose someone in '+domain+'.')
+            return email
+        writes=op not in ('iam_summary','iam_role','iam_inspect','iam_requests','iam_reviews','iam_audit','iam_my_requests')
+        try:
+            if writes: store.throttle(actor)
+            if op=='iam_summary':
+                need('roles.view','permissions.view')
+                return {'domain':domain,'summary':store.summary(domain),'roles':store.roles(domain),'modules':iam.MODULES,
+                        'catalog':list(iam.CATALOG.values()),'assignments':store.assignments(domain),'mine':sorted(mine),
+                        'pending':len(store.requests(domain,'pending')),'platform':scope is None}
+            if op=='iam_role':
+                need('roles.view'); role=store.role(domain,str(data.get('id','')))
+                return {'role':role,'assignments':[a for a in store.assignments(domain)['roles'] if a['role']==role['id']],
+                        'history':[a for a in store.audit_list(domain,limit=300) if a['target']==role['name'] or a['perm']==role['name']][:50]}
+            if op=='iam_role_save':
+                rid=data.get('id') or None; need('roles.edit' if rid else 'roles.create')
+                no_escalation(data.get('allow') or [])
+                return {'role':store.save_role(domain,actor,data,rid,ip)}
+            if op=='iam_role_clone':
+                need('roles.clone'); src=store.role(domain,str(data.get('id',''))); no_escalation(src['allow'])
+                return {'role':store.clone_role(domain,actor,src['id'],data.get('name') or 'Copy of '+src['name'],ip)}
+            if op=='iam_role_delete':
+                need('roles.delete'); store.delete_role(domain,actor,str(data.get('id','')),ip); return {'ok':True}
+            if op=='iam_assign':
+                need('roles.assign'); email=person(data.get('email'))
+                if email==actor: raise APIError('Nobody can give themselves a role. Ask another admin.',403)
+                role=store.role(domain,str(data.get('role','')))
+                no_escalation([p for p in iam.CATALOG if not iam.CATALOG[p]['content']] if role['key']=='super_admin' else role['allow'])
+                if data.get('hours') is not None: need('permissions.expiry_manage')
+                if (data.get('scope') or {}).get('type','org')!='org': need('permissions.scope_manage')
+                legacy,ident,_,is_admin=self.iam_legacy(client,token,domain,email)
+                if ident is None: raise APIError('That mailbox does not exist.',404)
+                aid=store.assign_role(domain,actor,email,role['id'],data.get('scope'),data.get('hours'),str(data.get('reason') or '')[:300],ip=ip)
+                if role['admin'] and not is_admin:   # the admin console needs company-admin rights on the mail server
+                    provisioner=getattr(self.server,'provisioner',None)
+                    client.action(token,{'op':'role','id':ident,'role':'Domain admin'},actor,scope,provisioner.token if provisioner else None,None)
+                return {'assignment':aid,'assignments':store.assignments(domain,email)}
+            if op=='iam_unassign':
+                need('roles.revoke'); aid=str(data.get('id',''))
+                row=next((a for a in store.assignments(domain)['roles'] if a['id']==aid),None)
+                if row and row['email']==actor: raise APIError('Ask another admin to take a role away from you.',403)
+                store.revoke_role(domain,actor,aid,str(data.get('reason') or '')[:300],ip)
+                left=store.assignments(domain,row['email'])['roles'] if row else []
+                return {'ok':True,'left':len(left)}
+            if op=='iam_grant':
+                effect='deny' if data.get('effect')=='deny' else 'allow'
+                need('permissions.override' if effect=='deny' else 'permissions.assign')
+                email=person(data.get('email')); perm=str(data.get('perm',''))
+                if effect=='allow': no_escalation([perm])
+                if email==actor and effect=='allow': raise APIError('Nobody can give themselves access. Ask another admin.',403)
+                if data.get('hours') is not None: need('permissions.expiry_manage')
+                gid=store.grant(domain,actor,email,perm,effect,data.get('scope'),data.get('hours'),data.get('conditions'),str(data.get('reason') or '')[:300],ip=ip)
+                return {'grant':gid,'assignments':store.assignments(domain,email)}
+            if op=='iam_revoke_grant':
+                need('permissions.revoke'); store.revoke_grant(domain,actor,str(data.get('id','')),ip); return {'ok':True}
+            if op=='iam_inspect':
+                need('permissions.view'); email=person(data.get('email'))
+                legacy,ident,department,_=self.iam_legacy(client,token,domain,email)
+                if ident is None: raise APIError('That mailbox does not exist.',404)
+                out={'email':email,'department':department,'legacy':not store.has_roles(domain,email) and not store.managed(domain,email),
+                     'effective':store.effective(domain,email,legacy),'assignments':store.assignments(domain,email),
+                     'requests':store.requests(domain,requester=email)[:20]}
+                if data.get('perm'):
+                    perm=str(data['perm'])
+                    target=data.get('target')
+                    if isinstance(target,dict): target={'email':person(target.get('email')) if target.get('email') else '','department':str(target.get('department') or '')}
+                    ok,why=store.decide(domain,email,perm,target if isinstance(target,dict) else None,legacy_perms=legacy)
+                    out['answer']={'perm':perm,'allowed':ok,'why':why}
+                return out
+            if op=='iam_requests':
+                need('permissions.approval_manage','roles.assign')
+                status=data.get('status') if data.get('status') in ('pending','approved','rejected','cancelled') else None
+                return {'requests':store.requests(domain,status)}
+            if op=='iam_decide':
+                need('permissions.approval_manage','roles.assign')
+                return {'request':store.decide_request(domain,actor,str(data.get('id','')),data.get('approve') is True,str(data.get('reason') or ''),mine,ip)}
+            if op=='iam_reviews':
+                need('roles.view'); return {'reviews':store.reviews(domain)}
+            if op=='iam_review_start':
+                need('roles.revoke'); return {'review':store.start_review(domain,actor)}
+            if op=='iam_review_decide':
+                need('roles.revoke'); return {'review':store.review_decide(domain,actor,str(data.get('id','')),str(data.get('assignment','')),data.get('keep') is True,ip)}
+            if op=='iam_audit':
+                need('audit.view','audit.permission_changes')
+                f={k:data.get(k) for k in ('actor','action','module','severity','target') if data.get(k)}
+                since=data.get('since') if isinstance(data.get('since'),(int,float)) else None
+                rows=store.audit_list(domain,since=since,**f,limit=2000 if data.get('export') else 300)
+                if data.get('export'):
+                    need('audit.export')
+                    store.log(domain,actor,'audit.export',target=f'{len(rows)} rows',ip=ip)
+                    head=['When (UTC)','Who','What','Severity','Target','Permission','Approval','Reason','IP']
+                    body=[[time.strftime('%Y-%m-%d %H:%M:%S',time.gmtime(r['at'])),r['actor'],r['action'],r['severity'],r['target'],r['perm'],r['approval'],r['reason'],r['ip']] for r in rows]
+                    return {'csv':feeds.to_csv(head,body),'intact':store.verify_audit()}
+                return {'rows':rows,'intact':store.verify_audit()}
+            if op=='iam_break_glass':
+                need('security.incident_manage')
+                aid=store.break_glass(domain,actor,str(data.get('reason') or ''),ip)
+                self.log('admin:iam_break_glass',actor,domain)
+                return {'assignment':aid,'hours':1}
+            if op=='iam_my_requests':
+                return {'requests':store.requests(domain,requester=actor)}
+        except iam.IAMError as e: raise APIError(str(e),e.status)
+        raise APIError('Unknown operation.')
     def desk_context(self, session):
         """Who is asking (their department, and whether their role handles every ticket), the company's departments and its people.
         Looked up on the mail server and kept for two minutes per session."""
@@ -3146,8 +3351,14 @@ class Handler(SimpleHTTPRequestHandler):
                 notes=attr(admin.call(found,token).find('{'+ADMIN+'}domain'),'zimbraNotes')
                 me=node(ADMIN,'GetAccountRequest'); me.append(node(ADMIN,'account',{'by':'name'},user['email']))
                 title=attr(admin.call(me,token).find('{'+ADMIN+'}account'),'title')
-                mine=role_perms(read_roles(notes),title,bool(user.get('isAdmin')))
-                info.update(box=read_org(notes)['boxName'],post='updates.post' in mine,perms=sorted(mine))
+                roles=read_roles(notes); mine=role_perms(roles,title,bool(user.get('isAdmin')))
+                owner=bool(user.get('isAdmin')) and not any(r['name'].lower()==(title or '').lower() for r in roles)
+                legacy='all' if owner else sorted(mine)
+                store=getattr(self.server,'iam',None)
+                if store:   # roles & permissions (iam.py) decide, once the person has roles there
+                    store.ensure_company(domain,roles)
+                    mine=iam.legacy_flags(store.allowed_set(domain,user['email'],legacy)) if store.has_roles(domain,user['email']) or store.managed(domain,user['email']) else mine
+                info.update(box=read_org(notes)['boxName'],post='updates.post' in mine,perms=sorted(mine),legacy=legacy)
             except (APIError,AttributeError): pass
         session['org']=info; return info
     def updates_view(self, session):
@@ -3617,6 +3828,8 @@ class Handler(SimpleHTTPRequestHandler):
             if self.path=='/api/admin/action' and data.get('op') in APITOKEN_OPS:
                 return self.reply(200,self.apitoken_action(s,data))
             if self.path=='/api/admin/action' and data.get('op')=='passkeys_reset': return self.reply(200,self.passkeys_reset(s,data))
+            if self.path=='/api/admin/action' and data.get('op') in self.IAM_OPS:
+                return self.reply(200,self.iam_admin(s,data))
             if self.path=='/api/admin/action' and data.get('op')=='security_list':
                 return self.reply(200,self.security_list(s,data))
             if self.path=='/api/admin/action' and data.get('op') in ('billing_get','billing_checkout','billing_cancel'):
@@ -3641,6 +3854,7 @@ class Handler(SimpleHTTPRequestHandler):
                 client,token,scope=self.admin_session(s)
                 provisioner=getattr(self.server,'provisioner',None)
                 perms=client.actor_perms(token,s['user']['email'],scope)
+                self.iam_gate(client,token,scope,s['user']['email'].lower(),data,perms)
                 out=client.action(token,data,s['user']['email'],scope,provisioner.token if provisioner else None,perms)
                 # what changed and for whom (never the new password or any content); look-ups are not logged
                 if data.get('op') not in ('dns_records','list_members','policies_get'):
@@ -3648,6 +3862,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.reply(200,out)
             if self.path=='/api/send':
                 data=self.mention_recipients(s,data)
+                blocked=self.outside_blocked(s,data)
+                if blocked: return self.reply(403,blocked)   # Compose stays open, with a "Request your admin" button
                 started=time.time()
                 try:
                     own=None if s['user']['email'].lower() in JOI_MAILBOXES else self.relay_route(s,data)   # the company's own mail service, when it set one
@@ -3659,6 +3875,7 @@ class Handler(SimpleHTTPRequestHandler):
                 except APIError: pass  # the message went out; a missed contact is not worth an error
                 return self.reply(200,result)
             if self.path=='/api/tickets': return self.reply(200,self.desk_post(s,data))
+            if self.path=='/api/access-request': return self.reply(200,self.access_request(s,data))
             if self.path=='/api/updates': return self.reply(200,self.post_update(s,data))
             if self.path=='/api/calendar':
                 if data.get('op')=='delete': return self.reply(200,self.cal(dcalendar.delete_event,self.server.zimbra,s['token'],data))
@@ -3776,6 +3993,9 @@ def serve():
     followup_mail=FollowupMail(server.zimbra,server.provisioner,'no-reply@'+(server.mail_host or 'mail.dejoiy.com')) if server.zimbra and server.provisioner else None
     server.desk_mail=followup_mail   # ticket notices land in people's inboxes the same way reminders do
     server.tickets=Tickets(state_dir/'tickets.sqlite') if state_dir else None
+    # roles & permissions: templates, custom roles, scoped and temporary access, requests and the append-only access log
+    server.iam=iam.IAM(str(state_dir/'iam.sqlite')) if state_dir else None
+    Admin.iam=server.iam
     server.automations=Automations(state_dir/'automations.json',lambda payload: shine_admin_call(server.shine_site,server.shine_secret,payload),server.audit,mail=followup_mail) if state_dir else None
     if server.automations: server.automations.start()
     # live spreadsheet feeds (feeds.py): /api/public/feeds/<token>/<name>.csv
