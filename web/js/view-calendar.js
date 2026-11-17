@@ -42,7 +42,7 @@ const demo = {
   }
 };
 const api = {
-  events:(from,to)=> Live.enabled ? Live.request(`calendar?start=${from}&end=${to}`).then(r=>r.events) : Promise.resolve(demo.expand(from,to)),
+  events:(from,to)=> Live.enabled ? Live.request(`calendar?start=${from}&end=${to}`).then(r=>r.events) : Promise.resolve(withDone(demo.expand(from,to))),
   detail:e=> Live.enabled ? Live.request(`calendar/event?id=${encodeURIComponent(e.id)}`) : Promise.resolve(demo.list().find(x=>x.id===e.id)||{}),
   save(data){
     if(Live.enabled) return Live.request("calendar", data);
@@ -55,8 +55,17 @@ const api = {
   },
   booking:()=> Live.enabled ? Live.request("booking") : Promise.resolve({enabled:false, title:"Meet with me", duration:30, days:[1,2,3,4,5], from:600, to:1080, notice:4, window:14, buffer:0,
     tz:tz(), description:"", location:"", slug:"you", url:location.origin+"/book/you", ready:false, ...(Store.state.booking||{})}),
-  saveBooking:data=> Live.enabled ? Live.request("booking", data) : (Store.state.booking=data, Store.save(), api.booking())
+  saveBooking:data=> Live.enabled ? Live.request("booking", data) : (Store.state.booking=data, Store.save(), api.booking()),
+  /* mark a meeting, booking or interview done, with notes and remarks (done:false takes it off) */
+  complete(data){
+    if(Live.enabled) return Live.request("calendar", {...data, op:"complete"});
+    const all=Store.state.calDone||(Store.state.calDone={}), key=`${data.id}|${data.start}`;
+    if(data.done===false) delete all[key]; else all[key]={done:true, notes:data.notes||"", remarks:data.remarks||"", at:Date.now()};
+    Store.save(); return Promise.resolve({ok:true});
+  }
 };
+/* this device keeps its own marks in demo mode */
+const withDone = list => Live.enabled ? list : list.map(e=>{ const o=(Store.state.calDone||{})[`${e.id}|${e.start}`]; return o?{...e, done:true, outcome:o}:e; });
 
 Views.calendar = function(el){
   const wide = ()=> matchMedia("(min-width:900px)").matches;
@@ -74,13 +83,13 @@ Views.calendar = function(el){
   }
   const on = day => events.filter(e=> e.start < day+DAY && e.end > day && !(e.allDay && e.end===day));
 
-  function chip(e){ return `<button type="button" class="cal-chip${e.allDay?" all":""}" data-ev="${esc(e.id)}|${e.start}" style="--c:${colour(e)}">
-    ${e.allDay?"":`<b>${esc(timeLabel(e.start))}</b>`}<span>${esc(e.title)}</span></button>`; }
+  function chip(e){ return `<button type="button" class="cal-chip${e.allDay?" all":""}${e.done?" done":""}" data-ev="${esc(e.id)}|${e.start}" style="--c:${colour(e)}">
+    ${e.done?`<i aria-label="Completed">✓</i>`:""}${e.allDay?"":`<b>${esc(timeLabel(e.start))}</b>`}<span>${esc(e.title)}</span></button>`; }
   function card(e){ const guests=e.guests||"";
-    return `<button type="button" class="cal-card" data-ev="${esc(e.id)}|${e.start}" style="--c:${colour(e)}">
+    return `<button type="button" class="cal-card${e.done?" done":""}" data-ev="${esc(e.id)}|${e.start}" style="--c:${colour(e)}">
       <span class="cal-card-time">${e.allDay?"All day":`${esc(timeLabel(e.start))}<small>${esc(timeLabel(e.end))}</small>`}</span>
       <span class="cal-card-main"><b>${esc(e.title)}</b>
-        ${e.location?`<small>📍 ${esc(e.location)}</small>`:""}${e.repeats?`<small>🔁 Repeats</small>`:""}${e.booked?`<small>🔗 Booked through your link</small>`:""}</span></button>`; }
+        ${e.location?`<small>📍 ${esc(e.location)}</small>`:""}${e.repeats?`<small>🔁 Repeats</small>`:""}${e.booked?`<small>🔗 Booked through your link</small>`:""}${e.done?`<small class="cal-done-tag">✓ Completed${e.outcome?.remarks?` · ${esc(e.outcome.remarks)}`:""}</small>`:""}</span></button>`; }
 
   function draw(){
     const title = mode==="month" ? cursor.toLocaleDateString([], {month:"long", year:"numeric"}) : new Date(selected).toLocaleDateString([], {month:"long", year:"numeric"});
@@ -151,7 +160,7 @@ Views.calendar = function(el){
     if(e){ try{ detail=await api.detail(e); }catch(error){ App.toast(error.message); } }
     // A repeating event is edited as a series, from its first date.
     const series=e?.repeats && detail.start && !e.allDay, start=series?detail.start:e?e.start:day+10*3600000, end=series&&detail.end?detail.end:e?e.end:start+3600000, all=e?e.allDay:false;
-    const guests=(detail.guests||(typeof e?.guests==="string"?e.guests.split(/[,\s]+/):[])||[]).filter(Boolean);
+    const rawGuests=detail.guests??e?.guests??[], guests=(Array.isArray(rawGuests)?rawGuests:String(rawGuests).split(/[,\s]+/)).filter(Boolean);
     const replies=detail.replies||{};
     App.dialog({title:e?"Event":"New event", body:`<form class="cal-form" id="cal-form" novalidate>
       <input name="title" class="cal-f-title" maxlength="200" placeholder="Add a title" value="${esc(e?.title||"")}" required aria-label="Title">
@@ -167,9 +176,11 @@ Views.calendar = function(el){
       <label>Guests<input name="guests" type="email" multiple value="${esc(guests.join(", "))}" placeholder="priya@company.com, rahul@gmail.com"></label>
       ${guests.length&&Object.keys(replies).length?`<ul class="cal-guests">${guests.map(g=>`<li><span>${esc(g)}</span><em data-r="${esc(replies[g]||"NE")}">${({AC:"Going",DE:"Not going",TE:"Maybe"})[replies[g]]||"Invited"}</em></li>`).join("")}</ul>`:""}
       <label>Notes<textarea name="notes" rows="3" maxlength="10000">${esc(detail.notes??e?.notes??"")}</textarea></label>
+      ${e?.done?`<div class="cal-outcome"><b>✓ Completed</b>${e.outcome?.remarks?`<span>${esc(e.outcome.remarks)}</span>`:""}${e.outcome?.notes?`<p>${esc(e.outcome.notes)}</p>`:""}</div>`:""}
       <p class="cal-hint">${series?"🔁 Changes apply to every repeat. ":""}Guests get an email invite they can accept from Gmail, Outlook or any mail app.</p>
       <p class="cal-error" role="alert"></p></form>`,
-      actions:[...(e&&e.organizer!==false?[{label:"Delete", fn:()=>{ remove(e, guests); return false; }}]:[]), {label:"Cancel"}, {label:e?"Save":"Add event", primary:true, fn:()=>{ save(e); return false; }}]});
+      actions:[...(e&&e.organizer!==false?[{label:"Delete", fn:()=>{ remove(e, guests); return false; }}, {label:e.done?"Edit outcome":"Mark completed", fn:()=>{ outcome(e); return false; }}]:[]),
+        {label:"Cancel"}, {label:e?"Save":"Add event", primary:true, fn:()=>{ save(e); return false; }}]});
     const form=document.getElementById("cal-form");
     form.elements.allDay.addEventListener("change",()=>{ form.elements.st.hidden=form.elements.et.hidden=form.elements.allDay.checked; });
     form.elements.sd.addEventListener("change",()=>{ if(form.elements.ed.value<form.elements.sd.value) form.elements.ed.value=form.elements.sd.value; });
@@ -199,6 +210,24 @@ Views.calendar = function(el){
         location:f.location.value, guests:f.guests.value, notes:f.notes.value, tz:tz()});
       App.closeDialog(); App.toast(f.guests.value.trim()?"Saved. Invites sent.":"Saved."); selected=startOfDay(start); if(mode==="month") cursor=new Date(start); load();
     }catch(error){ err.textContent=error.message; if(button) button.disabled=false; }
+  }
+  /* the organiser closes a meeting, booking or interview: what happened (notes) and a short verdict (remarks) */
+  function outcome(e){
+    const o=e.outcome||{};
+    App.dialog({title:"Mark completed", body:`<form class="cal-form" id="cal-done-form" novalidate>
+      <p class="cal-hint"><b>${esc(e.title)}</b> · ${esc(new Date(e.start).toLocaleString([], {weekday:"short", day:"numeric", month:"short", hour:"numeric", minute:"2-digit"}))}</p>
+      <label>Notes<textarea name="notes" rows="5" maxlength="5000" placeholder="What was discussed, decided or promised">${esc(o.notes||"")}</textarea></label>
+      <label>Remarks<input name="remarks" maxlength="1000" value="${esc(o.remarks||"")}" placeholder="e.g. Selected for next round · Follow up on Friday"></label>
+      <p class="cal-hint">Only you see these. They stay with this event in your calendar.</p>
+      <p class="cal-error" role="alert"></p></form>`,
+      actions:[...(e.done?[{label:"Not completed", fn:()=>{ mark(e,{done:false}); return false; }}]:[]), {label:"Cancel"},
+        {label:"Save as completed", primary:true, fn:()=>{ const f=document.getElementById("cal-done-form").elements; mark(e,{notes:f.notes.value, remarks:f.remarks.value}); return false; }}]});
+    setTimeout(()=>document.querySelector("#cal-done-form textarea")?.focus(),60);
+  }
+  async function mark(e, data){
+    const err=document.querySelector("#cal-done-form .cal-error");
+    try{ await api.complete({id:e.id, start:e.start, ...data}); App.closeDialog(); App.toast(data.done===false?"Marked as not completed.":"Marked as completed."); load(); }
+    catch(error){ if(err) err.textContent=error.message; else App.toast(error.message); }
   }
   function remove(e, guests){
     App.confirm(guests.length?`Delete "${e.title}" and tell ${guests.length} ${guests.length===1?"guest":"guests"}?`:`Delete "${e.title}"?`, async ()=>{

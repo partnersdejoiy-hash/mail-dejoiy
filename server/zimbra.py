@@ -2249,7 +2249,7 @@ class Handler(SimpleHTTPRequestHandler):
                     q=urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
                     try: start,end=int(q.get('start',['0'])[0]),int(q.get('end',['0'])[0])
                     except ValueError: raise APIError('Invalid dates.')
-                    return self.reply(200,{'events':self.cal(dcalendar.events,self.server.zimbra,s['token'],start,end)})
+                    return self.reply(200,{'events':self.with_outcomes(s['user']['email'],self.cal(dcalendar.events,self.server.zimbra,s['token'],start,end))})
                 if self.path.startswith('/api/calendar/event?'):
                     ident=urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get('id',[''])[0]
                     return self.reply(200,self.cal(dcalendar.event_detail,self.server.zimbra,s['token'],ident))
@@ -3456,6 +3456,26 @@ class Handler(SimpleHTTPRequestHandler):
         provisioner=getattr(self.server,'provisioner',None)
         if not provisioner: raise APIError('Booking links are not set up on this server yet.',503)
         return delegated_token(provisioner,email)
+    def outcome_key(self, email, ident, start):
+        if not re.fullmatch(r'[0-9a-f-]{1,64}',str(ident)): raise APIError('Invalid event.')
+        try: start=int(start)
+        except (TypeError,ValueError): raise APIError('Invalid event.')
+        return f'{email}|{ident}|{start}'
+    def complete_event(self, email, data):
+        """The organiser marks a meeting, booking or interview done, with notes and remarks. One record per
+        occurrence (a repeating event's days are separate). done=false takes the mark off."""
+        key=self.outcome_key(email,data.get('id'),data.get('start'))
+        if data.get('done') is False: self.server.outcomes.put(key,{}); return {'ok':True,'done':False}
+        notes=str(data.get('notes') or '').strip(); remarks=str(data.get('remarks') or '').strip()
+        if len(notes)>5000 or len(remarks)>1000: raise APIError('Keep notes under 5000 and remarks under 1000 characters.')
+        record={'done':True,'notes':notes,'remarks':remarks,'at':int(time.time()*1000)}
+        self.server.outcomes.put(key,record); return {'ok':True,**record}
+    def with_outcomes(self, email, events):
+        for e in events:
+            try: o=self.server.outcomes.get(self.outcome_key(email,e.get('id'),e.get('start')))
+            except APIError: continue
+            if o.get('done'): e['done']=True; e['outcome']={k:o.get(k,'') for k in ('notes','remarks','at')}
+        return events
     MAX_BOOKING_PAGES=10
     def booking_page(self, email, slug, saved):
         """One booking page as the app sees it: its settings, link and whether the server can book."""
@@ -3958,6 +3978,7 @@ class Handler(SimpleHTTPRequestHandler):
             if self.path=='/api/updates': return self.reply(200,self.post_update(s,data))
             if self.path=='/api/calendar':
                 if data.get('op')=='delete': return self.reply(200,self.cal(dcalendar.delete_event,self.server.zimbra,s['token'],data))
+                if data.get('op')=='complete': return self.reply(200,self.complete_event(s['user']['email'],data))
                 return self.reply(200,self.cal(dcalendar.save_event,self.server.zimbra,s['token'],data,s['user']['email']))
             if self.path=='/api/booking': return self.reply(200,self.save_booking(s,data))
             if self.path=='/api/shine/meeting': return self.reply(200,self.shine_meeting(s,data))
@@ -4021,6 +4042,7 @@ def serve():
     server.hosts=AppearanceStore((str(Path(os.environ['SESSION_DB']).with_name('login-hosts.sqlite')) if os.environ.get('SESSION_DB') else None),'hosts')
     server.hosts_file=os.environ.get('CUSTOM_HOSTS_FILE') or (str(Path(os.environ['SESSION_DB']).with_name('custom-hosts.txt')) if os.environ.get('SESSION_DB') else None)
     server.booking=AppearanceStore((str(Path(os.environ['SESSION_DB']).with_name('booking.sqlite')) if os.environ.get('SESSION_DB') else None),'booking')
+    server.outcomes=AppearanceStore((str(Path(os.environ['SESSION_DB']).with_name('outcomes.sqlite')) if os.environ.get('SESSION_DB') else None),'outcomes')
     server.updates=AppearanceStore((str(Path(os.environ['SESSION_DB']).with_name('updates.sqlite')) if os.environ.get('SESSION_DB') else None),'updates')
     server.passkeys=passkeys.Passkeys(AppearanceStore((str(Path(os.environ['SESSION_DB']).with_name('passkeys.sqlite')) if os.environ.get('SESSION_DB') else None),'passkeys'))
     server.ui_settings=AppearanceStore((str(Path(os.environ['SESSION_DB']).with_name('settings.sqlite')) if os.environ.get('SESSION_DB') else None),'ui_settings')

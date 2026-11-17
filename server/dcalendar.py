@@ -4,6 +4,7 @@ Events live in each mailbox's Zimbra calendar, so invites, replies and phone syn
 working with every other mail app. A booking link is a public page that offers free times from the
 owner's calendar; booking one creates the event in that calendar and Zimbra mails the invite."""
 import datetime, re, secrets, time
+import maillook
 from xml.etree import ElementTree as ET
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -85,8 +86,16 @@ def invite(event, organizer):
     if event['notes']: comp.append(node('desc', text=event['notes']))
     for guest in event['guests']: m.append(node('e', {'a': guest, 't': 't'}))
     m.append(node('su', text=event['title']))
-    body = node('mp', {'ct': 'text/plain'}); body.append(node('content', text=event['notes'] or event['title'])); m.append(body)
+    m.append(alternative(event['notes'] or event['title'], maillook.event_mail(event, organizer)))
     return m
+
+
+def alternative(text, html):
+    """Plain text plus Shine's HTML card; Zimbra adds the calendar file itself."""
+    body = node('mp', {'ct': 'multipart/alternative'})
+    plain = node('mp', {'ct': 'text/plain'}); plain.append(node('content', text=text)); body.append(plain)
+    rich = node('mp', {'ct': 'text/html'}); rich.append(node('content', text=html)); body.append(rich)
+    return body
 
 
 def events(client, token, start, end):
@@ -146,7 +155,7 @@ def delete_event(client, token, data):
         m = node('m')
         for g in guests: m.append(node('e', {'a': g, 't': 't'}))
         m.append(node('su', text='Cancelled: ' + str(data.get('title', 'event'))[:200]))
-        body = node('mp', {'ct': 'text/plain'}); body.append(node('content', text='This event has been cancelled.')); m.append(body); r.append(m)
+        m.append(alternative('This event has been cancelled.', maillook.cancel_mail(str(data.get('title', 'event'))[:200]))); r.append(m)
     client.call(r, token)
     return {'ok': True}
 

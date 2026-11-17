@@ -128,3 +128,11 @@ html[data-scenic="true"] .cal :is(.cal-grid,.cal-side,.cal-card,.cal-strip,.cal-
   background:#FF4FA3;color:#121212;font:inherit;font-weight:800;cursor:pointer;box-shadow:3px 3px 0 #121212;transition:transform .15s,box-shadow .15s}
 .cal-shine:active{transform:translate(2px,2px);box-shadow:none}
 .cal-shine:disabled{opacity:.7;cursor:progress}
+
+/* completed meetings, bookings and interviews */
+.cal-chip.done span,.cal-card.done .cal-card-main>b{text-decoration:line-through;text-decoration-thickness:2px;opacity:.75}
+.cal-chip i{font-style:normal;font-weight:900;flex:none}
+.cal-done-tag{color:#1a7f4b;font-weight:700}
+.cal-outcome{border:2px solid #121212;border-radius:12px;background:color-mix(in srgb,#3ddc84 22%,var(--surface));padding:10px 12px;display:grid;gap:4px}
+.cal-outcome span{font-weight:700}
+.cal-outcome p{margin:0;white-space:pre-wrap;color:var(--ink-2)}

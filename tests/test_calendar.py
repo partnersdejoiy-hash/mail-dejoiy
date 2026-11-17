@@ -122,4 +122,38 @@ class BookingPagesTests(unittest.TestCase):
             free = c.slots(dict(c.DEFAULT_BOOKING, enabled=True, duration=duration), busy, now)['2026-11-17']
             self.assertFalse(any(s < busy[0][1] and busy[0][0] < s + duration * 60000 for s in free))
 
+
+class OutcomeAndMailTests(unittest.TestCase):
+    """Completed with notes and remarks; invites carry Shine's HTML card."""
+    def setUp(self):
+        import zimbra
+        from types import SimpleNamespace
+        self.z = zimbra
+        self.h = zimbra.Handler.__new__(zimbra.Handler)
+        self.h.server = SimpleNamespace(outcomes=zimbra.AppearanceStore())
+
+    def test_mark_completed_and_undo(self):
+        me = 'deepak@kaalitea.in'
+        out = self.h.complete_event(me, {'id': '7', 'start': 1000, 'notes': 'Hired', 'remarks': 'Selected'})
+        self.assertTrue(out['done'])
+        events = self.h.with_outcomes(me, [{'id': '7', 'start': 1000}, {'id': '7', 'start': 2000}])
+        self.assertEqual(events[0]['outcome']['remarks'], 'Selected'); self.assertNotIn('done', events[1])
+        # someone else's calendar does not see it
+        self.assertNotIn('done', self.h.with_outcomes('roopa@kaalitea.in', [{'id': '7', 'start': 1000}])[0])
+        self.h.complete_event(me, {'id': '7', 'start': 1000, 'done': False})
+        self.assertNotIn('done', self.h.with_outcomes(me, [{'id': '7', 'start': 1000}])[0])
+        with self.assertRaises(self.z.APIError): self.h.complete_event(me, {'id': '../x', 'start': 1})
+        with self.assertRaises(self.z.APIError): self.h.complete_event(me, {'id': '7', 'start': 1, 'remarks': 'x' * 1001})
+
+    def test_invite_has_shine_html_with_join_button(self):
+        e = c.clean_event({'title': 'Interview <Asha>', 'start': ms(2026, 11, 18, 11), 'end': ms(2026, 11, 18, 11, 30), 'tz': 'Asia/Kolkata',
+                           'guests': 'asha@gmail.com', 'location': 'https://meet.dejoiy.com/meet/interview/DJM-ABC-DEF'})
+        xml = ET.tostring(c.invite(e, 'deepak@kaalitea.in')).decode()
+        self.assertIn('ct="multipart/alternative"', xml); self.assertIn('ct="text/html"', xml)
+        html = c.maillook.event_mail(e, 'deepak@kaalitea.in')
+        self.assertIn('Join the meeting', html); self.assertIn('Interview &lt;Asha&gt;', html); self.assertNotIn('<Asha>', html)
+        self.assertIn('Wed, 18 Nov 2026 · 11:00 AM – 11:30 AM (Asia/Kolkata)', html)
+        booked = c.maillook.event_mail({**e, 'title': 'Booked: Sales demo with Asha', 'location': ''}, 'deepak@kaalitea.in')
+        self.assertIn('Booking confirmed', booked); self.assertNotIn('Join the meeting', booked)
+
 if __name__ == '__main__': unittest.main()
