@@ -1,0 +1,23 @@
+/* ID card in DEJOIY's Gen-Z look: ink outline, pink offset shadow, pink band, yellow role sticker. */
+.idc{--ink:#121212;width:min(100%,340px);margin:6px auto 10px;background:#fffbf7;color:var(--ink);border:2px solid var(--ink);border-radius:22px;box-shadow:6px 6px 0 #ff4fa3;overflow:hidden;font-family:inherit}
+.idc-top{display:flex;align-items:center;gap:10px;padding:14px 16px;background:#ff4fa3;border-bottom:2px solid var(--ink)}
+.idc-logo,.idc-mark{width:38px;height:38px;border-radius:10px;border:2px solid var(--ink);background:#fff;object-fit:contain;flex:none}
+.idc-mark{display:grid;place-items:center;font-weight:900;font-size:15px}
+.idc-co{display:grid;min-width:0;line-height:1.15}
+.idc-co b{font-size:16px;font-weight:900;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.idc-co small{font-size:12px;font-weight:600;opacity:.8}
+.idc-body{display:grid;justify-items:center;text-align:center;padding:18px 18px 8px}
+.idc-photo{position:relative;width:104px;height:104px;border-radius:50%;border:3px solid var(--ink);overflow:hidden;background:#ffe3f1;display:grid;place-items:center;box-shadow:4px 4px 0 var(--ink)}
+.idc-photo img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.idc-photo span{font-size:38px;font-weight:900;letter-spacing:-1px}
+.idc-name{margin:16px 0 2px;font-size:22px;font-weight:900;letter-spacing:-.5px;line-height:1.1}
+.idc-pos{margin:0;font-size:14px;font-weight:600;color:#514b56}
+.idc-role{margin-top:10px;display:inline-block;background:#ffd23f;border:2px solid var(--ink);border-radius:999px;padding:3px 12px;font-size:12px;font-weight:800;transform:rotate(-2deg)}
+.idc-rows{margin:14px 0 6px;width:100%;display:grid;gap:0;border:2px solid var(--ink);border-radius:14px;overflow:hidden;background:#fff}
+.idc-rows div{display:flex;justify-content:space-between;gap:10px;padding:8px 12px;text-align:left}
+.idc-rows div+div{border-top:1px solid #e1dadf}
+.idc-rows dt{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#514b56}
+.idc-rows dd{margin:0;font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.idc-foot{display:flex;justify-content:space-between;padding:10px 16px;background:var(--ink);color:#fbf3f8;font-size:12px;font-weight:800;letter-spacing:1px}
+.idc-foot span:last-child{font-family:ui-monospace,Menlo,Consolas,monospace;letter-spacing:.5px}
+.idc-note{text-align:center;font-size:13px;color:var(--ink-2,#514b56);margin:4px 0 0}

@@ -2254,6 +2254,7 @@ class Handler(SimpleHTTPRequestHandler):
                     ident=urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get('id',[''])[0]
                     return self.reply(200,self.cal(dcalendar.event_detail,self.server.zimbra,s['token'],ident))
                 if self.path=='/api/booking': return self.reply(200,self.booking_view(s))
+                if self.path=='/api/card': return self.reply(200,self.card_view(s['user']['email']))
                 if self.path=='/api/shine':
                     if not self.server.shine_secret: return self.reply(200,{'enabled':False,'error':"Shine chat isn't connected to this mailbox yet."})
                     return self.reply(200,{'enabled':True,'origin':self.server.shine_origin,'token':shine_token(self.server.shine_secret,s['user']['email'],s['user'].get('name',''),shine_admin(s['user']),self.shine_photo(s['user']['email']))})
@@ -3188,7 +3189,7 @@ class Handler(SimpleHTTPRequestHandler):
             a=box['a']; email=box['email']
             admin='platform' if a.get('zimbraIsAdminAccount')=='TRUE' else 'company' if a.get('zimbraIsDelegatedAdminAccount')=='TRUE' else ''
             people.append({'email':email,'name':a.get('displayName') or '','active':a.get('zimbraAccountStatus','active')=='active',
-                'admin':admin,'department':a.get('ou',''),'title':a.get('title',''),'photo':self.shine_photo(email)})
+                'admin':admin,'department':a.get('ou',''),'title':a.get('title',''),'photo':self.shine_photo(email),**self.card_fields(email)})
         return {'people':people}
     def shine_sso(self):
         # Shine's "Continue with Dejoiy Mail": signed in here -> back to Shine with a token; otherwise sign in first.
@@ -3456,6 +3457,38 @@ class Handler(SimpleHTTPRequestHandler):
         provisioner=getattr(self.server,'provisioner',None)
         if not provisioner: raise APIError('Booking links are not set up on this server yet.',503)
         return delegated_token(provisioner,email)
+    CARD_ID=re.compile(r'[A-Za-z0-9][A-Za-z0-9 ._/-]{0,31}')
+    def card_fields(self, email):
+        """Employee ID and position an admin set for this person (kept per company)."""
+        domain=email.lower().rsplit('@',1)[-1]
+        return self.server.cards.get('domain:'+domain).get(email.lower(),{})
+    def set_card(self, actor, scope, data):
+        """A company admin sets a person's employee ID and position (job title) for their ID card."""
+        email=str(data.get('email','')).strip().lower()
+        if not EMAIL.fullmatch(email) or (scope and not email.endswith('@'+scope)): raise APIError('You can only manage people in your own company.',403)
+        employee=str(data.get('employeeId','')).strip(); position=str(data.get('position','')).strip()
+        if employee and not self.CARD_ID.fullmatch(employee): raise APIError('Use up to 32 letters, numbers, spaces, dots, dashes or slashes for the employee ID.')
+        if len(position)>64 or any(ord(c)<32 for c in position): raise APIError('Keep the position under 64 characters.')
+        domain=email.rsplit('@',1)[1]; cards=dict(self.server.cards.get('domain:'+domain))
+        taken=next((e for e,c in cards.items() if e!=email and employee and c.get('employeeId','').lower()==employee.lower()),None)
+        if taken: raise APIError(f'{employee} is already the employee ID of {taken}.')
+        cards[email]={k:v for k,v in (('employeeId',employee),('position',position)) if v}
+        if not cards[email]: cards.pop(email)
+        self.server.cards.put('domain:'+domain,cards)
+        return {'ok':True,'email':email,**cards.get(email,{})}
+    def card_view(self, email):
+        """Everything on a person's ID card: name, role, position, employee ID, department, company, photo."""
+        email=email.lower(); domain=email.rsplit('@',1)[1]; a={}
+        provisioner=getattr(self.server,'provisioner',None)
+        if provisioner:
+            r=node(ADMIN,'GetAccountRequest'); r.append(node(ADMIN,'account',{'by':'name'},email))
+            try:
+                account=provisioner.admin.call(r,provisioner.token()).find('{'+ADMIN+'}account')
+                if account is not None: a={x.get('n'):x.text or '' for x in account.findall('{'+ADMIN+'}a')}
+            except APIError: pass
+        brand=self.brand_for(domain)
+        return {'email':email,'name':a.get('displayName') or email.split('@')[0],'role':a.get('title',''),'department':a.get('ou',''),
+            **self.card_fields(email),'company':brand.get('name') or domain,'domain':domain,'logo':brand.get('logo',''),'photo':self.shine_photo(email)}
     def outcome_key(self, email, ident, start):
         if not re.fullmatch(r'[0-9a-f-]{1,64}',str(ident)): raise APIError('Invalid event.')
         try: start=int(start)
@@ -3905,6 +3938,18 @@ class Handler(SimpleHTTPRequestHandler):
                 out=self.shine_admin_post(payload)
                 if data['op']!='shine_summary': self.log('admin:'+data['op'],s['user']['email'],payload.get('email') or payload.get('meetingId'))
                 return self.reply(200,out)
+            if self.path=='/api/admin/action' and data.get('op') in ('get_cards','set_card'):
+                # ID cards: employee ID and position, set by the company's admins; every change goes into the activity log
+                client,token,scope=self.admin_session(s)
+                perms=client.actor_perms(token,s['user']['email'],scope)
+                if data['op']=='get_cards':
+                    domain=scope or str(data.get('domain','')).strip().lower()
+                    return self.reply(200,{'cards':self.server.cards.get('domain:'+domain) if domain else {}})
+                if scope and perms is not None and 'mailboxes.manage' not in perms:
+                    raise APIError('Your role does not allow this. Ask an admin for "'+PERMISSIONS['mailboxes.manage']+'".',403)
+                out=self.set_card(s['user']['email'],scope,data)
+                self.log('admin:set_card',s['user']['email'],f"{out['email']} id={out.get('employeeId','')} position={out.get('position','')}"[:200])
+                return self.reply(200,out)
             if self.path=='/api/admin/action' and zconsole.is_console_op(data.get('op')):
                 # the full mail-server console (Monitor, Manage, Configure, Tools, Search): see zconsole.py
                 client,token,scope=self.admin_session(s)
@@ -4042,6 +4087,7 @@ def serve():
     server.hosts=AppearanceStore((str(Path(os.environ['SESSION_DB']).with_name('login-hosts.sqlite')) if os.environ.get('SESSION_DB') else None),'hosts')
     server.hosts_file=os.environ.get('CUSTOM_HOSTS_FILE') or (str(Path(os.environ['SESSION_DB']).with_name('custom-hosts.txt')) if os.environ.get('SESSION_DB') else None)
     server.booking=AppearanceStore((str(Path(os.environ['SESSION_DB']).with_name('booking.sqlite')) if os.environ.get('SESSION_DB') else None),'booking')
+    server.cards=AppearanceStore((str(Path(os.environ['SESSION_DB']).with_name('cards.sqlite')) if os.environ.get('SESSION_DB') else None),'cards')
     server.outcomes=AppearanceStore((str(Path(os.environ['SESSION_DB']).with_name('outcomes.sqlite')) if os.environ.get('SESSION_DB') else None),'outcomes')
     server.updates=AppearanceStore((str(Path(os.environ['SESSION_DB']).with_name('updates.sqlite')) if os.environ.get('SESSION_DB') else None),'updates')
     server.passkeys=passkeys.Passkeys(AppearanceStore((str(Path(os.environ['SESSION_DB']).with_name('passkeys.sqlite')) if os.environ.get('SESSION_DB') else None),'passkeys'))

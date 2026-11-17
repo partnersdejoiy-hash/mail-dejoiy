@@ -307,7 +307,7 @@ const OPS={create_user:"Created mailbox",delete_user:"Deleted mailbox",password:
   relay_set:"Changed the company mail service",relay_remove:"Removed the company mail service",relay_test:"Tested the company mail service",ses_promote:"Changed who uses Dejoiy's SES",swiss_buy:"Started buying Swiss Mail",swiss_stop:"Turned off Swiss Mail auto-renew",swiss_check:"Checked Swiss Mail DNS",
   add_alias:"Added alias",remove_alias:"Removed alias",set_name:"Renamed",set_plan:"Changed plan",role:"Changed role",set_title:"Changed title",save_roles:"Edited roles",
   company_settings:"Changed company settings",create_domain:"Added domain",delete_domain:"Removed domain",domain_status:"Changed domain status",create_list:"Created list",
-  delete_list:"Deleted list",add_member:"Added list member",remove_member:"Removed list member",create_department:"Created department",set_department:"Changed department",
+  delete_list:"Deleted list",add_member:"Added list member",remove_member:"Removed list member",create_department:"Created department",set_department:"Changed department",set_card:"Changed ID card",
   policies_save:"Changed mailbox policies",policy_assign:"Changed a mailbox's policy",shine_set_active:"Switched chat on or off",shine_end_meeting:"Ended a meeting",brand_set:"Changed name or logo",login_host_set:"Set sign-in address",login_host_remove:"Removed sign-in address",plan_update:"Edited plan",settings_update:"Changed server settings"};
 // Phishing & spam: every mail the server marked, in every mailbox this admin looks after (server/security.py).
 // Company admins see their own domain; Dejoiy super admins see every company.
@@ -674,7 +674,7 @@ async function mailService(domain, d){
 function manageUser(u, d){
   const plans=d.plans||[], self=u.email.toLowerCase()===(state.user?.email||"").toLowerCase();
   const root=dialog({title:u.email, wide:true, body:`
-    <div class="adm-tabs" role="tablist">${["Profile","Access","Storage","Forwarding","Aliases","Password","Delete"].map((t,i)=>`<button role="tab" data-tab="${i}" class="${i?"":"on"}" aria-selected="${!i}">${t}</button>`).join("")}</div>
+    <div class="adm-tabs" role="tablist">${[["Profile",0],["ID card",7],["Access",1],["Storage",2],["Forwarding",3],["Aliases",4],["Password",5],["Delete",6]].map(([t,i])=>`<button role="tab" data-tab="${i}" class="${i?"":"on"}" aria-selected="${!i}">${t}</button>`).join("")}</div>
     <section data-panel="0"><label>Display name<input id="mu-name" value="${esc(u.name)}" maxlength="200"></label><button class="adm-btn primary" id="mu-name-save">Save name</button>
       ${d.departments?`<label>Department<select id="mu-dept"><option value="">No department</option>${d.departments.map(x=>`<option value="${esc(x.id)}" ${x.name===u.department?"selected":""}>${esc(x.name)} · ${esc(x.email)}</option>`).join("")}</select></label>`:""}
       <label>Role<select id="mu-title"><option value="">No role</option>${companyRoles(d,u).map(r=>`<option value="${esc(r.name)}" ${r.name===u.title?"selected":""}>${esc(r.name)}${r.access==="Domain admin"?" · company admin":""}</option>`).join("")}</select></label>
@@ -695,8 +695,21 @@ function manageUser(u, d){
       <button class="adm-btn" id="mu-pk-reset" type="button">Remove this person's passkeys</button></section>
     <section data-panel="6" hidden>${self?'<p class="adm-muted">You cannot delete your own mailbox.</p>':`<p>Deleting removes this mailbox and all of its mail permanently.</p>
       <label>Type <b>${esc(u.email)}</b> to confirm<input id="mu-confirm" autocomplete="off"></label><button class="adm-btn danger" id="mu-delete">Delete mailbox</button>`}</section>
+    <section data-panel="7" hidden><p class="adm-muted">What this person's ID card shows in Dejoiy Mail and Shine. Role and department come from the Profile tab; the photo is the one they upload.</p>
+      <div class="adm-two"><label>Employee ID<input id="mu-emp" maxlength="32" placeholder="e.g. DJ-0042"></label><label>Position<input id="mu-pos" maxlength="64" placeholder="e.g. Senior Accountant"></label></div>
+      <button class="adm-btn primary" id="mu-card-save">Save ID card</button><div id="mu-card"></div></section>
     <p role="alert" class="adm-error"></p>`});
   const err=root.querySelector("[role=alert]");
+  /* ID card: employee ID and position live with the company; every change is in the activity log */
+  const domain=u.email.split("@")[1], cardFor=c=>({name:u.name, email:u.email, role:u.title||"", department:u.department||"", company:domain, domain, ...c});
+  const drawCard=c=>{ const box=root.querySelector("#mu-card"); if(box) box.innerHTML=IdCard.html(cardFor(c)); };
+  act({op:"get_cards",domain}).then(out=>{ const c=(out.cards||{})[u.email.toLowerCase()]||{}; $("mu-emp").value=c.employeeId||""; $("mu-pos").value=c.position||""; drawCard(c); }).catch(x=>{ err.textContent=x.message; });
+  ["mu-emp","mu-pos"].forEach(id=>$(id).addEventListener("input",()=>drawCard({employeeId:$("mu-emp").value.trim(), position:$("mu-pos").value.trim()})));
+  root.querySelector("#mu-card-save").addEventListener("click",async e=>{
+    const b=e.currentTarget; b.disabled=true; err.textContent="";
+    try{ await act({op:"set_card",email:u.email,employeeId:$("mu-emp").value,position:$("mu-pos").value}); toast("ID card saved."); }
+    catch(x){ err.textContent=x.message; } finally{ b.disabled=false; }
+  });
   root.querySelectorAll("[data-tab]").forEach(t=>t.addEventListener("click",()=>{root.querySelectorAll("[data-tab]").forEach(x=>{x.classList.toggle("on",x===t);x.setAttribute("aria-selected",String(x===t));});root.querySelectorAll("[data-panel]").forEach(p=>p.hidden=p.dataset.panel!==t.dataset.tab);err.textContent="";}));
   const run=(id,payload,done)=>{const b=root.querySelector("#"+id);if(b)b.addEventListener("click",async()=>{b.disabled=true;err.textContent="";try{await act(payload());$("adm-dialog-root").innerHTML="";await reload(done);}catch(e){err.textContent=e.message;b.disabled=false;}});};
   run("mu-name-save",()=>({op:"set_name",id:u.id,name:$("mu-name").value}),"Name saved.");
