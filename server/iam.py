@@ -294,9 +294,15 @@ def expand_legacy(perms):
     return out
 
 
+# The one catalog permission that stands for each old permission: having it turns the old one on.
+LEGACY_KEY = {'updates.post': 'organization.announce', 'mailboxes.manage': 'user.create', 'mailboxes.delete': 'user.delete',
+              'teams.manage': 'department.create', 'domain.view': 'dns.view', 'roles.manage': 'roles.edit', 'tickets.manage': 'support.ticket_view',
+              'mail.everyone': 'email.send_all', 'reports.view': 'audit.view', 'billing.manage': 'billing.manage'}
+
+
 def legacy_flags(perms):
     """The old 10 permissions a set of catalog permissions implies (for parts of the app that still ask those)."""
-    return {old for old, new in LEGACY.items() if set(new) & set(perms)} | ({'mail.everyone'} if 'email.send_all' in perms else set())
+    return {old for old, key in LEGACY_KEY.items() if key in perms}
 
 
 SCOPES = ('org', 'department', 'users', 'self')

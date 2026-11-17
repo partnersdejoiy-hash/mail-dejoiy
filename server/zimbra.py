@@ -1631,7 +1631,7 @@ OP_PERMISSIONS={**{op:'mailboxes.manage' for op in ('create_user','set_name','st
     **{op:'teams.manage' for op in ('create_department','set_department','create_list','delete_list','add_member','remove_member','list_members')},
     **{op:'roles.manage' for op in ('role','set_title','save_roles','company_settings','policies_get','policies_save','policy_assign')}}
 # The same console operations in the roles & permissions catalog (iam.py): checked against the person's roles and their scope.
-OP_IAM={'create_user':'user.create','set_name':'user.edit','password':'user.reset_password','quota':'mailbox.quota_manage','forward':'mailbox.forwarding',
+OP_IAM={'create_user':'user.create','status':'user.suspend','set_name':'user.edit','password':'user.reset_password','quota':'mailbox.quota_manage','forward':'mailbox.forwarding',
     'add_alias':'mailbox.edit','remove_alias':'mailbox.edit','delete_user':'user.delete','dns_records':'dns.view','create_department':'department.create',
     'set_department':'department.assign_users','create_list':'groups.create','delete_list':'groups.delete','add_member':'groups.manage_members',
     'remove_member':'groups.manage_members','list_members':'user.view','role':'roles.assign','set_title':'roles.assign','save_roles':'roles.edit',
@@ -2508,7 +2508,7 @@ class Handler(SimpleHTTPRequestHandler):
         """A console operation, checked against the person's roles and their scope (department, chosen people).
         Only for people who have roles here; everyone else keeps the earlier checks unchanged."""
         store=getattr(self.server,'iam',None); need=OP_IAM.get(data.get('op'))
-        if not store or not scope or perms is None or not need or not store.has_roles(scope,actor): return
+        if not store or not scope or perms is None or not need or not (store.has_roles(scope,actor) or store.managed(scope,actor)): return False
         if data.get('op')=='status' and data.get('status')=='active': need='user.restore'
         elif data.get('op')=='status': need='user.suspend'
         target=None
@@ -2520,6 +2520,7 @@ class Handler(SimpleHTTPRequestHandler):
             target={'email':account.get('name','') if account is not None else email,'department':attr(account,'ou') if account is not None else ''}
         ok,why=store.decide(scope,actor,need,target,self.client_ip(),legacy_perms=self.iam_legacy(client,token,scope,actor)[0])
         if not ok: raise APIError(f'Your role does not allow "{iam.CATALOG[need]["name"]}"'+(' for this person.' if 'scope' in why else '.')+' Ask an admin.',403)
+        return True   # checked here, with scope: the older all-or-nothing check is not asked again
     IAM_OPS=('iam_summary','iam_role','iam_role_save','iam_role_clone','iam_role_delete','iam_assign','iam_unassign','iam_grant','iam_revoke_grant',
              'iam_inspect','iam_requests','iam_decide','iam_reviews','iam_review_start','iam_review_decide','iam_audit','iam_break_glass','iam_my_requests')
     def iam_admin(self, session, data):
@@ -2538,6 +2539,10 @@ class Handler(SimpleHTTPRequestHandler):
         def no_escalation(allow):
             more=sorted(set(allow)-mine)
             if more: raise APIError(f'You cannot give "{iam.CATALOG[more[0]]["name"]}": you do not have it yourself.',403)
+        def within(email, perms_of_target):
+            # nobody restricts or removes access of someone above them (a deny on the owner, say)
+            more=sorted(set(perms_of_target)-mine)
+            if more: raise APIError(f'{email} has access you do not have ("{iam.CATALOG[more[0]]["name"]}"). Ask someone with at least their access.',403)
         def person(email):
             email=str(email or '').strip().lower()
             if not EMAIL.fullmatch(email) or not email.endswith('@'+domain): raise APIError('Choose someone in '+domain+'.')
@@ -2581,6 +2586,9 @@ class Handler(SimpleHTTPRequestHandler):
                 need('roles.revoke'); aid=str(data.get('id',''))
                 row=next((a for a in store.assignments(domain)['roles'] if a['id']==aid),None)
                 if row and row['email']==actor: raise APIError('Ask another admin to take a role away from you.',403)
+                if row:
+                    taken=store.role(domain,row['role'])
+                    within(row['email'],[p for p in iam.CATALOG if not iam.CATALOG[p]['content']] if taken['key']=='super_admin' else taken['allow'])
                 store.revoke_role(domain,actor,aid,str(data.get('reason') or '')[:300],ip)
                 left=store.assignments(domain,row['email'])['roles'] if row else []
                 return {'ok':True,'left':len(left)}
@@ -2589,6 +2597,7 @@ class Handler(SimpleHTTPRequestHandler):
                 need('permissions.override' if effect=='deny' else 'permissions.assign')
                 email=person(data.get('email')); perm=str(data.get('perm',''))
                 if effect=='allow': no_escalation([perm])
+                else: within(email,store.allowed_set(domain,email,self.iam_legacy(client,token,domain,email)[0]))
                 if email==actor and effect=='allow': raise APIError('Nobody can give themselves access. Ask another admin.',403)
                 if data.get('hours') is not None: need('permissions.expiry_manage')
                 gid=store.grant(domain,actor,email,perm,effect,data.get('scope'),data.get('hours'),data.get('conditions'),str(data.get('reason') or '')[:300],ip=ip)
@@ -2626,7 +2635,14 @@ class Handler(SimpleHTTPRequestHandler):
             if op=='iam_review_start':
                 need('roles.revoke'); return {'review':store.start_review(domain,actor)}
             if op=='iam_review_decide':
-                need('roles.revoke'); return {'review':store.review_decide(domain,actor,str(data.get('id','')),str(data.get('assignment','')),data.get('keep') is True,ip)}
+                need('roles.revoke')
+                if data.get('keep') is not True:
+                    item=next((i for i in store.review(domain,str(data.get('id','')))['items'] if i['assignment']==str(data.get('assignment',''))),None)
+                    row=item and next((a for a in store.assignments(domain)['roles'] if a['id']==item['assignment']),None)
+                    if row:
+                        taken=store.role(domain,row['role'])
+                        within(row['email'],[p for p in iam.CATALOG if not iam.CATALOG[p]['content']] if taken['key']=='super_admin' else taken['allow'])
+                return {'review':store.review_decide(domain,actor,str(data.get('id','')),str(data.get('assignment','')),data.get('keep') is True,ip)}
             if op=='iam_audit':
                 need('audit.view','audit.permission_changes')
                 f={k:data.get(k) for k in ('actor','action','module','severity','target') if data.get(k)}
@@ -3880,8 +3896,8 @@ class Handler(SimpleHTTPRequestHandler):
                 client,token,scope=self.admin_session(s)
                 provisioner=getattr(self.server,'provisioner',None)
                 perms=client.actor_perms(token,s['user']['email'],scope)
-                self.iam_gate(client,token,scope,s['user']['email'].lower(),data,perms)
-                out=client.action(token,data,s['user']['email'],scope,provisioner.token if provisioner else None,perms)
+                checked=self.iam_gate(client,token,scope,s['user']['email'].lower(),data,perms)
+                out=client.action(token,data,s['user']['email'],scope,provisioner.token if provisioner else None,None if checked else perms)
                 # what changed and for whom (never the new password or any content); look-ups are not logged
                 if data.get('op') not in ('dns_records','list_members','policies_get'):
                     self.log('admin:'+str(data.get('op'))[:40],s['user']['email'],data.get('email') or data.get('alias') or data.get('domain') or data.get('id') or data.get('name') or '')

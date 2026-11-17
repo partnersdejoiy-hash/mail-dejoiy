@@ -269,3 +269,25 @@ class OwnDomain(unittest.TestCase):
         with self.assertRaises(z.APIError): z.declare_own(s, 'dejoiy.com', False)
         z.declare_own(s, 'anupurana-angan.co.in', False)
         self.assertEqual(s.reserved_domains, {'dejoiy.com'}); self.assertNotIn('anupurana', s.ses_file.read_text())
+
+
+class ConsoleGate(unittest.TestCase):
+    """A department admin's console changes reach only their department; the earlier all-or-nothing check is then not asked."""
+    def test_department_admin(self):
+        import xml.etree.ElementTree as ET, zimbra as z
+        store = iam.IAM(); store.ensure_company(D)
+        store.assign_role(D, 'boss@kaali.in', 'lead@kaali.in', store.role_id(D, 'dept_admin'), scope={'type': 'department', 'values': ['Sales']})
+        people = {'s1@kaali.in': 'Sales', 'f1@kaali.in': 'Finance', 'lead@kaali.in': 'Sales'}
+        class Client:
+            def call(self, request, token):
+                who = request.find('{%s}account' % z.ADMIN).text
+                out = ET.Element('r'); acc = ET.SubElement(out, '{%s}account' % z.ADMIN, name=who)
+                ET.SubElement(acc, '{%s}a' % z.ADMIN, n='ou').text = people.get(who, '')
+                return out
+        h = z.Handler.__new__(z.Handler); h.server = type('S', (), {'iam': store})(); h.client_ip = lambda: ''
+        h.iam_legacy = lambda c, t, d, e: ([], 'id', '', True)
+        gate = lambda op, **kw: h.iam_gate(Client(), 't', D, 'lead@kaali.in', {'op': op, **kw}, {'user.view'})
+        self.assertTrue(gate('status', email='s1@kaali.in', status='locked'))
+        with self.assertRaises(z.APIError): gate('status', email='f1@kaali.in', status='locked')
+        with self.assertRaises(z.APIError): gate('create_user', email='new@kaali.in')         # not in the role
+        self.assertFalse(h.iam_gate(Client(), 't', D, 'old@kaali.in', {'op': 'status', 'email': 's1@kaali.in'}, {'mailboxes.manage'}))   # no roles: old check
