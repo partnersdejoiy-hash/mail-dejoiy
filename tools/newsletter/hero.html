@@ -1,0 +1,70 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+@font-face{font-family:Brico;src:url(bricolage-grotesque-latin-wght-normal.woff2) format('woff2');font-weight:200 800}
+html,body{margin:0;background:#121212}
+#stage{position:relative;width:600px;height:560px;overflow:hidden;background:#121212;font-family:Brico}
+canvas{position:absolute;inset:0}
+.top{position:absolute;left:32px;top:28px;right:32px;display:flex;justify-content:space-between;align-items:center;color:#FFF4EA;font-size:15px;font-weight:600}
+.top img{height:30px}
+.tag{border:1.5px solid #FFF4EA;border-radius:999px;padding:5px 12px;font-size:13px}
+h1{position:absolute;left:32px;bottom:34px;margin:0;color:#FFF4EA;font-weight:800;font-size:60px;line-height:.92;letter-spacing:-.035em;width:540px}
+h1 em{font-style:normal;color:#FF4FA3}
+</style>
+<script type="importmap">{"imports":{"three":"./node_modules/three/build/three.module.js","three/addons/":"./node_modules/three/examples/jsm/"}}</script>
+</head><body>
+<div id="stage">
+  <canvas id="c" width="1200" height="1120" style="width:600px;height:560px"></canvas>
+  <div class="top"><img src="dejoiy-mail-on-dark.svg" alt=""><span class="tag">Issue 01 · Nov 2026</span></div>
+  <h1>Company mail<br>that finally<br>feels <em>like you.</em></h1>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import {SVGLoader} from 'three/addons/loaders/SVGLoader.js';
+import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
+const PINK=0xFF4FA3, INK=0x121212, CREAM=0xFFF4EA;
+const renderer=new THREE.WebGLRenderer({canvas:document.getElementById('c'),antialias:true,preserveDrawingBuffer:true});
+renderer.setPixelRatio(1);renderer.setSize(1200,1120,false);renderer.setClearColor(INK);
+const scene=new THREE.Scene();
+const cam=new THREE.PerspectiveCamera(30,600/560,1,2000);cam.position.set(0,30,760);cam.lookAt(40,30,0);
+scene.add(new THREE.HemisphereLight(0xffffff,0x330018,1.6));
+const key=new THREE.DirectionalLight(0xffffff,2.4);key.position.set(-200,300,400);scene.add(key);
+const rim=new THREE.DirectionalLight(PINK,3);rim.position.set(300,-100,-200);scene.add(rim);
+
+// Logo mark: shapes taken from the real Dejoiy Mail SVG paths
+const toShapes=d=>SVGLoader.createShapes(new SVGLoader().parse(`<svg><path d="${d}"/></svg>`).paths[0]);
+const ex=(d,depth,color,bevel=3)=>{const g=new THREE.ExtrudeGeometry(toShapes(d),{depth,bevelEnabled:true,bevelSize:bevel,bevelThickness:bevel,bevelSegments:4,curveSegments:48});return new THREE.Mesh(g,new THREE.MeshStandardMaterial({color,roughness:.35,metalness:.05}))};
+const logo=new THREE.Group();
+const slab=ex('M18 -20H80A70 70 0 0 1 80 120H18A18 18 0 0 1 0 102V-2A18 18 0 0 1 18 -20Z',26,PINK,4);logo.add(slab);
+const inner=new THREE.Group();inner.position.set(22,17,30);inner.scale.set(.66,.66,1);
+inner.add(ex('M38 0H88A50 50 0 0 1 88 100H38Z M62 26H86A24 24 0 0 1 86 74H62Z',8,INK,1.5));
+const dot=(cy,c)=>{const m=new THREE.Mesh(new THREE.CylinderGeometry(12,12,10,48),new THREE.MeshStandardMaterial({color:c,roughness:.3}));m.rotation.x=Math.PI/2;m.position.set(13,cy,4);return m};
+inner.add(dot(28,CREAM),dot(72,INK));logo.add(inner);
+// SVG y points down: flip, and centre the mark on its own middle
+logo.scale.set(1.05,-1.05,1.05);
+const pivot=new THREE.Group();logo.position.set(-75*1.05,50*1.05,-16);pivot.add(logo);
+pivot.position.set(130,115,0);scene.add(pivot);
+
+// Envelopes orbiting the mark
+function envelope(body,flap){
+  const g=new THREE.Group();
+  g.add(new THREE.Mesh(new RoundedBoxGeometry(64,44,4,3,3),new THREE.MeshStandardMaterial({color:body,roughness:.5})));
+  const tri=new THREE.Shape();tri.moveTo(-31,21);tri.lineTo(31,21);tri.lineTo(0,-4);tri.closePath();
+  const f=new THREE.Mesh(new THREE.ExtrudeGeometry(tri,{depth:1.5,bevelEnabled:false}),new THREE.MeshStandardMaterial({color:flap,roughness:.5}));f.position.z=2.2;g.add(f);
+  return g;
+}
+const envs=[[CREAM,PINK],[PINK,CREAM],[CREAM,INK],[PINK,INK],[CREAM,PINK]].map(([b,f],i)=>{const e=envelope(b,f);scene.add(e);return {e,phase:i/5,r:170+(i%2)*40,tilt:i%2?.35:-.25}});
+
+window.renderAt=t=>{ // t in [0,1): seamless loop
+  const a=t*Math.PI*2;
+  pivot.rotation.y=Math.sin(a)*.55; pivot.rotation.x=Math.sin(a*2)*.06; pivot.position.y=115+Math.sin(a)*6;
+  envs.forEach(({e,phase,r,tilt})=>{
+    const p=(t+phase)*Math.PI*2;
+    e.position.set(130+Math.cos(p)*r, 115+Math.sin(p)*r*tilt+Math.sin(p*2)*14, Math.sin(p)*r*.9);
+    e.rotation.set(Math.sin(p)*.4, p+Math.cos(p)*.4, Math.cos(p)*.5);
+  });
+  renderer.render(scene,cam);
+};
+document.fonts.ready.then(()=>{window.renderAt(0);window.ready=true});
+</script>
+</body></html>
