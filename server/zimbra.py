@@ -3453,27 +3453,60 @@ class Handler(SimpleHTTPRequestHandler):
         provisioner=getattr(self.server,'provisioner',None)
         if not provisioner: raise APIError('Booking links are not set up on this server yet.',503)
         return delegated_token(provisioner,email)
+    MAX_BOOKING_PAGES=10
+    def booking_page(self, email, slug, saved):
+        """One booking page as the app sees it: its settings, link and whether the server can book."""
+        return {**{k:saved.get(k,v) for k,v in dcalendar.DEFAULT_BOOKING.items()},'slug':slug,'url':self.server.app_origin+'/book/'+slug,
+            'ready':bool(getattr(self.server,'provisioner',None))}
     def booking_view(self, session):
+        """The person's first booking page (as before), plus every page they have in `pages` (the first one first)."""
         email=session['user']['email']; store=self.server.booking; saved=store.get('user:'+email)
         if not saved.get('slug'):
             slug=dcalendar.make_slug(email,lambda x:bool(store.get('slug:'+x)))
             saved={**dcalendar.DEFAULT_BOOKING,'slug':slug,'name':session['user'].get('name') or email}
             store.put('user:'+email,saved); store.put('slug:'+slug,{'email':email})
-        return {**{k:saved.get(k,v) for k,v in dcalendar.DEFAULT_BOOKING.items()},'slug':saved['slug'],'url':self.server.app_origin+'/book/'+saved['slug'],
-            'ready':bool(getattr(self.server,'provisioner',None))}
+        pages=[{**self.booking_page(email,saved['slug'],saved),'main':True}]
+        for slug in saved.get('pages',[]):
+            extra=store.get('page:'+slug)
+            if extra: pages.append({**self.booking_page(email,slug,extra),'main':False})
+        return {**pages[0],'pages':pages}
     def save_booking(self, session, data):
-        email=session['user']['email']; store=self.server.booking; current=store.get('user:'+email) or self.booking_view(session) and store.get('user:'+email)
+        """Saves one page (`page` = its current link; the first page when left out), or with
+        `op` adds a new page ("add") or removes one that isn't the first ("delete")."""
+        email=session['user']['email']; store=self.server.booking; name=session['user'].get('name') or email
+        user=store.get('user:'+email)
+        if not user.get('slug'): self.booking_view(session); user=store.get('user:'+email)
+        extras=list(user.get('pages',[])); page=str(data.get('page') or user['slug']).strip().lower()
+        op=data.get('op')
+        if op=='add':
+            if len(extras)+1>=self.MAX_BOOKING_PAGES: raise APIError(f'You can have up to {self.MAX_BOOKING_PAGES} booking links.')
+            slug=dcalendar.make_slug(email,lambda x:bool(store.get('slug:'+x)) or x==user['slug'])
+            store.put('page:'+slug,{**dcalendar.DEFAULT_BOOKING,'title':'Another meeting','tz':user.get('tz',dcalendar.DEFAULT_BOOKING['tz']),'name':name})
+            store.put('slug:'+slug,{'email':email}); store.put('user:'+email,{**user,'pages':extras+[slug]})
+            return {**self.booking_view(session),'added':slug}
+        if page!=user['slug'] and page not in extras: raise APIError('That booking link is not yours.',404)
+        if op=='delete':
+            if page==user['slug']: raise APIError('Your first booking link stays. Switch it off instead.')
+            store.put('page:'+page,{}); store.put('slug:'+page,{}); store.put('user:'+email,{**user,'pages':[x for x in extras if x!=page]})
+            return self.booking_view(session)
+        main=page==user['slug']; current=user if main else store.get('page:'+page)
         settings=self.cal(dcalendar.clean_booking,data,current)
-        slug=str(data.get('slug',current['slug'])).strip().lower()
-        if slug!=current['slug']:
+        slug=str(data.get('slug',page)).strip().lower()
+        if slug!=page:
             if not dcalendar.SLUG.fullmatch(slug): raise APIError('Use 3 to 40 lowercase letters, numbers and dashes for your link.')
-            if store.get('slug:'+slug).get('email') not in (None,email): raise APIError('That link is taken. Try another.')
-            store.put('slug:'+current['slug'],{}); store.put('slug:'+slug,{'email':email})
-        store.put('user:'+email,{**settings,'slug':slug,'name':session['user'].get('name') or email})
+            if store.get('slug:'+slug).get('email') not in (None,email) or slug==user['slug'] or slug in extras: raise APIError('That link is taken. Try another.')
+            store.put('slug:'+page,{}); store.put('slug:'+slug,{'email':email})
+        if main: store.put('user:'+email,{**user,**settings,'slug':slug,'name':name,'pages':extras})
+        else:
+            store.put('page:'+page,{}); store.put('page:'+slug,{**settings,'name':name})
+            store.put('user:'+email,{**user,'pages':[slug if x==page else x for x in extras]})
         return self.booking_view(session)
     def booking_owner(self, slug):
+        """Whose page this link is, and that page's settings. Every page of a person checks the same calendar,
+        so time that is busy or already booked (through any of their links) is never offered."""
         email=self.server.booking.get('slug:'+slug).get('email') if dcalendar.SLUG.fullmatch(slug or '') else None
-        settings=self.server.booking.get('user:'+email) if email else {}
+        user=self.server.booking.get('user:'+email) if email else {}
+        settings=user if user.get('slug')==slug else self.server.booking.get('page:'+slug) if slug in user.get('pages',[]) else {}
         if not settings.get('enabled'): raise APIError('This booking link is not available.',404)
         return email,settings
     def free_slots(self, email, settings):

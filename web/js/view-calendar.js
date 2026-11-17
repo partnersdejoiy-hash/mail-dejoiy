@@ -207,11 +207,16 @@ Views.calendar = function(el){
   }
 
   /* ---------- the booking link ---------- */
-  async function bookingSheet(){
-    let b; try{ b=await api.booking(); }catch(error){ App.toast(error.message); return; }
+  /* Several booking links: tabs on top; each has its own settings, all of them check the same calendar. */
+  async function bookingSheet(pick){
+    let all; try{ all=await api.booking(); }catch(error){ App.toast(error.message); return; }
+    const pages=all.pages||[all], b=pages.find(p=>p.slug===pick)||pages[0], many=Live.enabled;
+    const tabs=(pages.length>1||many)?`<div class="cal-chips cal-book-tabs" role="tablist">${pages.map(p=>`<label><input type="radio" name="book-page" value="${esc(p.slug)}" ${p.slug===b.slug?"checked":""}><span>${esc(p.title)}${p.enabled?"":" (off)"}</span></label>`).join("")}
+      ${many&&pages.length<10?`<button type="button" class="btn sm" id="book-add">+ New link</button>`:""}</div>`:"";
     const times=Array.from({length:96},(_,i)=>i*15).filter(m=>m>=300&&m<=1425);
     const sel=(name,list,value)=>`<select name="${name}">${list.map(([v,l])=>`<option value="${v}" ${+value===+v?"selected":""}>${l}</option>`).join("")}</select>`;
-    App.dialog({title:"Your booking link", wide:true, body:`<form class="cal-form cal-book" id="book-form" novalidate>
+    App.dialog({title:pages.length>1?"Your booking links":"Your booking link", wide:true, body:`<form class="cal-form cal-book" id="book-form" novalidate data-page="${esc(b.slug)}">
+      ${tabs}
       <div class="cal-book-hero"><label class="cal-switch big"><input type="checkbox" name="enabled" ${b.enabled?"checked":""}> People can book time with me</label>
         <div class="cal-book-url"><code id="book-url">${esc(b.url)}</code>
           <button type="button" class="btn sm" id="book-copy">Copy</button>${navigator.share?`<button type="button" class="btn sm" id="book-share">Share</button>`:""}<a class="btn sm" href="${esc(b.url)}" target="_blank" rel="noopener">Open</a></div>
@@ -226,20 +231,31 @@ Views.calendar = function(el){
         <label>Break after${sel("buffer",[[0,"None"],[5,"5 min"],[10,"10 min"],[15,"15 min"],[30,"30 min"]],b.buffer)}</label></div>
       <label>Where we'll meet<input name="location" maxlength="300" value="${esc(b.location)}" placeholder="Office address or a video link"></label>
       <label>About the meeting<textarea name="description" rows="2" maxlength="500" placeholder="What people should know before booking">${esc(b.description)}</textarea></label>
-      <p class="cal-hint">Times are in ${esc(tz())}. Busy times in your calendar are never offered. Every booking lands in your calendar and the guest gets an invite.</p>
+      <p class="cal-hint">Times are in ${esc(tz())}. Busy times in your calendar, including bookings from your other links, are never offered. Every booking lands in your calendar and the guest gets an invite.</p>
       <p class="cal-error" role="alert"></p></form>`,
-      actions:[{label:"Close"},{label:"Save", primary:true, fn:()=>{ saveBooking(); return false; }}]});
+      actions:[{label:"Close"}, ...(many&&b.main===false?[{label:"Delete link", fn:()=>{ deleteBooking(b); return false; }}]:[]),
+        {label:"Save", primary:true, fn:()=>{ saveBooking(); return false; }}]});
+    document.querySelectorAll("[name=book-page]").forEach(r=>r.addEventListener("change",()=>{ App.closeDialog(); bookingSheet(r.value); }));
+    document.getElementById("book-add")?.addEventListener("click",async()=>{
+      try{ const out=await api.saveBooking({op:"add"}); App.closeDialog(); bookingSheet(out.added); }catch(error){ App.toast(error.message); }
+    });
     const copy=document.getElementById("book-copy");
     copy.addEventListener("click",async()=>{ try{ await navigator.clipboard.writeText(b.url); copy.textContent="Copied ✓"; }catch(e){ App.toast(b.url); } });
     document.getElementById("book-share")?.addEventListener("click",()=>navigator.share({title:b.title, url:b.url}).catch(()=>{}));
   }
   async function saveBooking(){
     const form=document.getElementById("book-form"), f=form.elements, err=form.querySelector(".cal-error");
-    const data={enabled:f.enabled.checked, title:f.title.value, slug:f.slug.value.trim().toLowerCase(), duration:+form.querySelector("[name=duration]:checked")?.value,
+    const data={page:form.dataset.page, enabled:f.enabled.checked, title:f.title.value, slug:f.slug.value.trim().toLowerCase(), duration:+form.querySelector("[name=duration]:checked")?.value,
       days:[...form.querySelectorAll("[name=days]:checked")].map(x=>+x.value), from:+f.from.value, to:+f.to.value, notice:+f.notice.value, window:+f.window.value,
       buffer:+f.buffer.value, location:f.location.value, description:f.description.value, tz:tz()};
     try{ await api.saveBooking(data); App.closeDialog(); App.toast(data.enabled?"Booking link is live.":"Booking link saved (switched off)."); }
     catch(error){ err.textContent=error.message; }
+  }
+  function deleteBooking(b){
+    App.confirm(`Delete the booking link "${b.title}"? People who open ${b.url} won't be able to book any more.`, async()=>{
+      try{ await api.saveBooking({op:"delete", page:b.slug}); App.toast("Booking link deleted."); setTimeout(()=>bookingSheet(),0); }
+      catch(error){ App.toast(error.message); }
+    });
   }
 
   load();

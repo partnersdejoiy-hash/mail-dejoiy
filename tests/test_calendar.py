@@ -71,4 +71,55 @@ class BookingTests(unittest.TestCase):
         self.assertEqual(c.make_slug('deepak@kaalitea.in', lambda s: False), 'deepak-kaalitea')
         self.assertTrue(c.make_slug('deepak@kaalitea.in', lambda s: s == 'deepak-kaalitea').startswith('deepak-kaalitea-'))
 
+
+class BookingPagesTests(unittest.TestCase):
+    """Several booking links per person; all of them read the one calendar."""
+    def setUp(self):
+        import zimbra
+        from types import SimpleNamespace
+        self.z = zimbra
+        self.h = zimbra.Handler.__new__(zimbra.Handler)
+        self.h.server = SimpleNamespace(booking=zimbra.AppearanceStore(), app_origin='https://mail.example', provisioner=None)
+        self.s = {'user': {'email': 'deepak@kaalitea.in', 'name': 'Deepak'}}
+        self.other = {'user': {'email': 'roopa@kaalitea.in', 'name': 'Roopa'}}
+
+    def test_add_edit_find_and_delete_pages(self):
+        first = self.h.booking_view(self.s)
+        self.assertEqual([p['slug'] for p in first['pages']], [first['slug']])
+        added = self.h.save_booking(self.s, {'op': 'add'})
+        new = added['added']; self.assertNotEqual(new, first['slug'])
+        self.assertEqual(len(added['pages']), 2)
+        # editing the new page leaves the first page alone
+        out = self.h.save_booking(self.s, {'page': new, 'enabled': True, 'title': 'Sales demo', 'duration': 45, 'slug': 'sales-demo'})
+        pages = {p['slug']: p for p in out['pages']}
+        self.assertEqual(pages['sales-demo']['title'], 'Sales demo'); self.assertEqual(pages['sales-demo']['duration'], 45)
+        self.assertEqual(pages[first['slug']]['title'], 'Meet with me'); self.assertFalse(pages[first['slug']]['enabled'])
+        # the public link finds the owner and that page's settings; the old link is gone
+        email, settings = self.h.booking_owner('sales-demo')
+        self.assertEqual((email, settings['title']), ('deepak@kaalitea.in', 'Sales demo'))
+        with self.assertRaises(self.z.APIError): self.h.booking_owner(new)
+        # the first page can't be deleted; another person can't touch this page
+        with self.assertRaises(self.z.APIError): self.h.save_booking(self.s, {'op': 'delete'})
+        with self.assertRaises(self.z.APIError): self.h.save_booking(self.other, {'page': 'sales-demo', 'title': 'Mine'})
+        out = self.h.save_booking(self.s, {'op': 'delete', 'page': 'sales-demo'})
+        self.assertEqual([p['slug'] for p in out['pages']], [first['slug']])
+        with self.assertRaises(self.z.APIError): self.h.booking_owner('sales-demo')
+
+    def test_links_are_unique_and_limited(self):
+        self.h.booking_view(self.s); self.h.booking_view(self.other)
+        new = self.h.save_booking(self.s, {'op': 'add'})['added']
+        roopa = self.h.booking_view(self.other)['slug']
+        with self.assertRaises(self.z.APIError): self.h.save_booking(self.s, {'page': new, 'slug': roopa})
+        for _ in range(8): self.h.save_booking(self.s, {'op': 'add'})
+        self.assertEqual(len(self.h.booking_view(self.s)['pages']), 10)
+        with self.assertRaises(self.z.APIError): self.h.save_booking(self.s, {'op': 'add'})
+
+    def test_one_calendar_blocks_every_page(self):
+        """A time that is busy (e.g. booked through another link) is offered by no page."""
+        now = ms(2026, 11, 16, 9)
+        busy = [(ms(2026, 11, 17, 11), ms(2026, 11, 17, 11, 30))]
+        for duration in (30, 60):
+            free = c.slots(dict(c.DEFAULT_BOOKING, enabled=True, duration=duration), busy, now)['2026-11-17']
+            self.assertFalse(any(s < busy[0][1] and busy[0][0] < s + duration * 60000 for s in free))
+
 if __name__ == '__main__': unittest.main()
