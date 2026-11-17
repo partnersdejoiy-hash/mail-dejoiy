@@ -160,7 +160,7 @@ html[data-photo-theme="true"] #view{box-shadow:0 10px 35px #0002}
 button.tm-to{background:none;border:0;padding:0;font:inherit;font-size:12px;color:var(--ink-3);cursor:pointer;text-align:left;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 button.tm-to:hover,button.tm-to:focus-visible{color:var(--ink)}
 .tm-caret{display:inline-block;transition:transform .15s}button.tm-to[aria-expanded="true"] .tm-caret{transform:rotate(180deg)}
-.tm-details{margin:8px 0 14px;padding:12px 14px;border-radius:12px;background:var(--surface-2);font-size:12px;display:grid;gap:8px}
+.tm-details{margin:8px 0 14px;padding:12px 14px;border-radius:12px;background:color-mix(in srgb,var(--ink) 8%,transparent);border:1px solid color-mix(in srgb,var(--ink) 14%,transparent);font-size:12px;display:grid;gap:8px}
 .tm-details[hidden]{display:none}
 .thread-message:not(.open) .tm-details{display:none}
 .tm-drow{display:grid;grid-template-columns:64px minmax(0,1fr);gap:10px;align-items:start;color:var(--ink-2)}
