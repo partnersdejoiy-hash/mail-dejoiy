@@ -149,7 +149,8 @@ Views.mail = function(el, folder){
       ev.stopPropagation(); const row=button.closest(".msg-row"), thread=visibleItems().find(t=>t.id===row.dataset.id); if(!thread) return;
       try{
         if(button.dataset.hact==="archive"){ await Mail.archive(thread.ids); App.toast("Archived.",{label:"Undo",fn:async ()=>{ await Mail.moveTo(thread.ids,ui.folder); renderList(); App.refreshNav(); }}); }
-        else if(button.dataset.hact==="trash"){ await Mail.trash(thread.ids); App.toast("Moved to Trash.",{label:"Undo",fn:async ()=>{ await Mail.moveTo(thread.ids,ui.folder); renderList(); App.refreshNav(); }}); }
+        else if(button.dataset.hact==="trash"){ const from=ui.folder; await Mail.remove(thread.ids, from==="trash", text=>{ renderList(); App.refreshNav();
+          App.toast(text, from==="trash"?undefined:{label:"Undo",fn:async ()=>{ await Mail.moveTo(thread.ids,from); renderList(); App.refreshNav(); }}); }); }
         else await Mail.setRead(thread.messages.map(m=>m.id), !thread.read);
       }catch(error){ App.toast(error.message); }
       renderList(); App.refreshNav();
@@ -215,7 +216,7 @@ Views.mail = function(el, folder){
   el.querySelector("#tb-refresh").addEventListener("click", refresh);
   el.querySelector("#tb-archive").addEventListener("click", async ()=>{ if(!needSel())return; await Mail.archive(selIds()); ui.sel.clear(); renderList(); App.refreshNav(); App.toast("Archived."); });
   el.querySelector("#tb-spam").addEventListener("click", async ()=>{ if(!needSel())return; await Mail.spam(selIds()); ui.sel.clear(); renderList(); App.refreshNav(); App.toast("Reported as spam."); });
-  el.querySelector("#tb-trash").addEventListener("click", async ()=>{ if(!needSel())return; await Mail.trash(selIds()); ui.sel.clear(); renderList(); App.refreshNav(); App.toast("Moved to Trash."); });
+  el.querySelector("#tb-trash").addEventListener("click", async ()=>{ if(!needSel())return; await Mail.remove(selIds(), ui.folder==="trash", text=>{ ui.sel.clear(); renderList(); App.refreshNav(); App.toast(text); }); });
   el.querySelector("#tb-read").addEventListener("click", async ()=>{ if(!needSel())return;
     const messageIds=selIds().flatMap(threadId=>Mail.getThread(threadId)?.ids||[threadId]);
     const anyUnread=messageIds.some(id=>!Mail.get(id)?.read);
@@ -416,7 +417,7 @@ Views.mail = function(el, folder){
     const spam = async ()=>{ const next=neighbour(); await Mail.spam(moveIds); leave(next); renderList(); App.refreshNav(); App.toast("Reported as spam."); };
     b("r-archive").addEventListener("click", archive);
     b("r-spam").addEventListener("click", spam);
-    b("r-trash").addEventListener("click", async ()=>{ const next=neighbour(); await Mail.trash(moveIds); leave(next); renderList(); App.refreshNav(); App.toast("Moved to Trash."); });
+    b("r-trash").addEventListener("click", async ()=>{ const next=neighbour(); await Mail.remove(moveIds, ui.folder==="trash", text=>{ leave(next); renderList(); App.refreshNav(); App.toast(text); }); });
     b("r-star").addEventListener("click", async ()=>{ await Promise.all((thread?.ids||[id]).map(messageId=>Mail.toggleStar(messageId))); renderReader(); renderList(); App.refreshNav(); });
     b("r-unread").addEventListener("click", async ()=>{ await Mail.setRead(thread?.ids||[id], false); closeTab(id); renderList(); App.refreshNav(); });
     b("r-print").addEventListener("click", ()=> window.print());

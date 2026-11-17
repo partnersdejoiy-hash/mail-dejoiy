@@ -507,3 +507,7 @@ html[data-panel-ink="dark"] .search-wrap{--ink:#121212;--ink-2:#3d3a42;--ink-3:#
 html[data-panel-ink] :is(#topbar,#view,#sidebar) :is(select,input:not([type="checkbox"])){color:#121212;text-shadow:none}
 html[data-panel-ink] .list-toolbar :is(button,.btn){color:inherit;text-shadow:inherit}
 html[data-panel-ink] .folder-total{color:#121212;text-shadow:none}
+
+/* Notepad: list beside the note on wide screens, above it on phones */
+.nt-grid{grid-template-columns:240px minmax(0,1fr);align-items:start}
+@media (max-width:760px){.nt-grid{grid-template-columns:minmax(0,1fr)}}

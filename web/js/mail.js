@@ -110,6 +110,15 @@ const Mail = {
     Store.state.emails = Store.state.emails.filter(e=>!set.has(e.id));
     Store.save();
   },
+  /* The Delete button: to Trash, or, in Trash, gone for good after a confirm. done(text) runs once it happened. */
+  async remove(ids, fromTrash, done){
+    const list = Array.isArray(ids) ? ids : [ids];
+    if(!fromTrash){ await this.trash(list); done("Moved to Trash."); return; }
+    const gone = list.filter(id=>this.get(id)?.folder==="trash");
+    if(!gone.length) return;
+    App.confirm(`Delete ${gone.length===1?"this message":gone.length+" messages"} forever? This cannot be undone.`, async ()=>{
+      try{ await this.deleteForever(gone); done("Deleted forever."); }catch(error){ App.toast(error.message); } });
+  },
   emptyTrash(){
     Store.state.emails = Store.state.emails.filter(e=>e.folder!=="trash");
     Store.save();

@@ -90,7 +90,7 @@
 .st-addrow{display:flex;gap:8px;margin:8px 0 12px}
 .st-addrow input{flex:1;min-width:0;min-height:44px;font-size:16px}
 .tp-body{min-height:160px}
-.btn.danger,.btn.ghost.danger{color:#d93025}
+.btn.ghost.danger{color:#d93025}
 
 /* Save bar stays in reach while you scroll a long section */
 .st-save{position:sticky;bottom:0;z-index:4;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 16px;margin:0 -12px 14px;

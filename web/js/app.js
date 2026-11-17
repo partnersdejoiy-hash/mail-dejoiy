@@ -369,7 +369,7 @@ const App = {
         else if(k==="x" && ui.activeTab){ const id=ui.activeTab; ui.sel.has(id)?ui.sel.delete(id):ui.sel.add(id); ui._mail.renderList(); }
         else if(k==="s" && ui.activeTab){ await Mail.toggleStar(ui.activeTab); ui._mail.renderList(); this.refreshNav(); }
         else if(k==="e" && ui.activeTab){ await Mail.archive(ui.activeTab); ui._mail.closeTab(ui.activeTab); ui._mail.renderList(); this.refreshNav(); }
-        else if(k==="#" && ui.activeTab){ await Mail.trash(ui.activeTab); ui._mail.closeTab(ui.activeTab); ui._mail.renderList(); this.refreshNav(); }
+        else if(k==="#" && ui.activeTab){ const id=ui.activeTab; await Mail.remove(id, ui.folder==="trash", ()=>{ ui._mail.closeTab(id); ui._mail.renderList(); this.refreshNav(); }); }
         else if(k==="r" && ui.activeTab){ this.go("compose:reply:"+ui.activeTab); }
         else if(k==="f" && ui.activeTab){ this.go("compose:forward:"+ui.activeTab); }
       }

@@ -9,15 +9,14 @@ Views.notes = function(el){
   const live = !!(window.Live && Live.enabled);
   if(live) s.notes = Array.isArray(Settings.ui.notes) ? Settings.ui.notes.map(n=>({...n})) : [];
   let syncTimer = null;
-  const persist = () => {
-    if(!live){ Store.save(); return; }
-    const status = el.querySelector("#nt-status"); if(status) status.textContent = "Saving…";
+  const status = text => { const st=el.querySelector("#nt-status"); if(st) st.textContent=text; };
+  const saveNow = async (manual) => {
     clearTimeout(syncTimer);
-    syncTimer = setTimeout(async ()=>{
-      try{ await Settings.save({ui:{notes:s.notes}}); const st=el.querySelector("#nt-status"); if(st) st.textContent="Saved ✓"; }
-      catch(error){ const st=el.querySelector("#nt-status"); if(st) st.textContent="Not saved: "+error.message; App.toast("Note not saved: "+error.message); }
-    }, 700);
+    if(!live){ Store.save(); status("Saved ✓"); if(manual) App.toast("Note saved."); return; }
+    try{ await Settings.save({ui:{notes:s.notes}}); status("Saved ✓"); if(manual) App.toast("Note saved."); }
+    catch(error){ status("Not saved: "+error.message); App.toast("Note not saved: "+error.message); }
   };
+  const persist = () => { status("Saving…"); clearTimeout(syncTimer); syncTimer = setTimeout(saveNow, 700); };
   let active = s.notes[0] && s.notes[0].id;
 
   function render(){
@@ -26,7 +25,7 @@ Views.notes = function(el){
     el.innerHTML = `
       <div class="view-head"><h1>📝 Notepad</h1><span class="sub">autosaves as you type${live?" · on every device":""}</span><span style="flex:1"></span>
         <button class="btn sm primary" id="nt-new">+ New note</button></div>
-      <div class="grid" style="grid-template-columns:240px 1fr;align-items:start">
+      <div class="grid nt-grid">
         <div class="card" style="padding:8px">${s.notes.map(x=>`
           <button class="nav-item ${x.id===active?"active":""}" data-note="${x.id}">
             <span class="n-ico">📄</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(x.title||"Untitled")}</span>
@@ -35,7 +34,7 @@ Views.notes = function(el){
           <div class="field"><input type="text" id="nt-title" value="${esc(n.title)}" placeholder="Note title" style="font-weight:700;font-size:15px"></div>
           <div class="field"><textarea id="nt-body" rows="16" placeholder="Write here…">${esc(n.body)}</textarea></div>
           <div class="btn-row"><span id="nt-status" style="font-size:12px;color:var(--ink-3)">Saved ✓</span><span style="flex:1"></span>
-          <button class="btn sm danger" id="nt-del">Delete note</button></div>`
+          <button class="btn sm ghost danger" id="nt-del">Delete note</button><button class="btn sm primary" id="nt-save">Save note</button></div>`
           : `<div class="empty-note">Create your first note →</div>`}</div>
       </div>`;
     el.querySelectorAll("[data-note]").forEach(b=> b.addEventListener("click", ()=>{ active=b.dataset.note; render(); }));
@@ -47,6 +46,7 @@ Views.notes = function(el){
     if(n){
       el.querySelector("#nt-title").addEventListener("input", ev=>{ n.title = ev.target.value; persist(); });
       el.querySelector("#nt-body").addEventListener("input", ev=>{ n.body = ev.target.value; n.ts = Date.now(); persist(); });
+      el.querySelector("#nt-save").addEventListener("click", ()=>{ status("Saving…"); saveNow(true); });
       el.querySelector("#nt-del").addEventListener("click", ()=>{
         App.confirm("Delete this note?", ()=>{ s.notes = s.notes.filter(x=>x.id!==n.id); persist(); render(); });
       });
