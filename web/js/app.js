@@ -157,6 +157,14 @@ const App = {
   },
 
   /* ---------------- dialogs ---------------- */
+  /* My ID card, from the profile menu in the header: name, role, position, employee ID, department and
+     company as the company's admins set them, with the person's photo or initials. */
+  async idCard(){
+    const u = Store.state.user, domain = (u.email||"").split("@")[1]||"";
+    let card = {name:u.name, email:u.email, company:domain, domain, photo:Profile.photo(u.email)||""};
+    if(Live.enabled){ try{ card = await Live.request("card"); }catch(error){ this.toast(error.message); } }
+    this.dialog({title:"My ID card", body:IdCard.html(card)+`<p class="idc-note">Your company's admins set your role, position, employee ID and department. Change your photo from this menu.</p>`});
+  },
   dialog({title, body, actions, wide}){
     const root = document.getElementById("dialog-root");
     root.innerHTML = `<div class="dlg-back"><div class="dlg ${wide?"wide":""}" role="dialog" aria-modal="true" aria-label="${esc(title)}">
@@ -417,6 +425,7 @@ const App = {
       const switchTo = async email=>{ try{ await Live.request("accounts/switch",{email}); location.reload(); }catch(error){ this.toast(error.message); } };
       this.menu(anchor, [
         {label:`👤 ${u.name} — ${u.email}`, fn:()=>this.go("settings:general")},
+        {label:"🪪 My ID card", fn:()=>this.idCard()},
         ...(window.Presence && Presence.enabled ? [{label:`${{online:"🟢",away:"🟡",busy:"🔴",offline:"⚪"}[{auto:"online",away:"away",busy:"busy",invisible:"offline"}[Presence.mine.choice]]} ${Presence.mine.text||"Set a status"}`, fn:()=>Presence.open()}] : []),
         {label:"📷 Change profile photo", fn:()=>{
           // Opens the file picker straight away; the photo is cropped and saved for every device.

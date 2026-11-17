@@ -10,7 +10,6 @@ const TABS = [
   ["labels","Labels","tag","Show, hide and organise labels"],
   ["inbox","Inbox","inbox","Inbox order and reading pane"],
   ["accounts","Accounts","contacts","Name, password, reply-to and storage"],
-  ["idcard","My ID card","contacts","Your company ID card"],
   ["filters","Filters and blocked addresses","spam","Sort incoming mail automatically and block senders"],
   ["forwarding","Forwarding and POP/IMAP","forward","Forward mail and use other mail apps"],
   ["vacation","Out of office","calendar","Automatic replies while you are away"],
@@ -33,7 +32,7 @@ Views.accountSettings = function(el, tab){
   const body = el.querySelector("#st-body");
   if(!tab){ renderHome(body); return; }
   const tabs = el.querySelector(".st-tabs .on"); if(tabs && tabs.scrollIntoView) tabs.scrollIntoView({block:"nearest", inline:"center"});
-  ({general, labels, inbox, accounts, idcard, filters, forwarding, vacation, advanced,
+  ({general, labels, inbox, accounts, filters, forwarding, vacation, advanced,
     themes:b=>Views.settingsParts.renderThemes(b), shortcuts})[tab](body);
 };
 
@@ -85,15 +84,6 @@ const failed = (body, error, retry)=>{ body.innerHTML = `<div class="st-card st-
 /* ---------- General ---------- */
 const FONTS = [["arial, helvetica, sans-serif","Sans Serif"],["times new roman, new york, times, serif","Serif"],["courier new, courier, monaco, monospace","Fixed width"],["georgia, serif","Georgia"],["verdana, helvetica, sans-serif","Verdana"],["tahoma, verdana, sans-serif","Tahoma"],["trebuchet ms, helvetica, sans-serif","Trebuchet"],["comic sans ms, comic sans, sans-serif","Comic Sans"]];
 const ZONES = [["Asia/Kolkata","(GMT+05:30) India — Kolkata, New Delhi"],["Asia/Dubai","(GMT+04:00) Dubai"],["Asia/Karachi","(GMT+05:00) Karachi"],["Asia/Kathmandu","(GMT+05:45) Kathmandu"],["Asia/Dhaka","(GMT+06:00) Dhaka"],["Asia/Singapore","(GMT+08:00) Singapore"],["Asia/Shanghai","(GMT+08:00) Beijing, Shanghai"],["Asia/Tokyo","(GMT+09:00) Tokyo"],["Australia/Sydney","(GMT+10:00) Sydney"],["Pacific/Auckland","(GMT+12:00) Auckland"],["Europe/London","(GMT+00:00) London"],["Europe/Berlin","(GMT+01:00) Berlin"],["Europe/Paris","(GMT+01:00) Paris"],["Africa/Lagos","(GMT+01:00) Lagos"],["Africa/Johannesburg","(GMT+02:00) Johannesburg"],["America/Sao_Paulo","(GMT-03:00) São Paulo"],["America/New_York","(GMT-05:00) New York"],["America/Chicago","(GMT-06:00) Chicago"],["America/Denver","(GMT-07:00) Denver"],["America/Los_Angeles","(GMT-08:00) Los Angeles"],["UTC","(GMT+00:00) Coordinated Universal Time"]];
-/* My ID card: name, role, position, employee ID, department and company, as the company's admins set them */
-async function idcard(body){
-  const u = Store.state.user;
-  let card = {name:u.name, email:u.email, company:(u.email||"").split("@")[1]||"", domain:(u.email||"").split("@")[1]||"", photo:Profile.photo(u.email)||""};
-  if(live()){ try{ card = await Live.request("card"); }catch(error){ App.toast(error.message); } }
-  body.innerHTML = `<div class="st-card">${IdCard.html(card)}
-    <p class="idc-note">Your company's admins set your role, position, employee ID and department in Dejoiy Mail Admin. Change your photo in <a href="#/settings:general">General</a>.</p></div>`;
-}
-
 function general(body){
   const u = Store.state.user, mb = Settings.mailbox, photo = Profile.photo(u.email);
   const notif = !("Notification" in window) ? "This browser cannot show notifications." : Notification.permission==="granted" ? "Notifications are allowed in this browser." : Notification.permission==="denied" ? "Notifications are blocked for this site. Allow them in your browser's site settings." : `<button class="btn sm" type="button" id="sg-notify">Allow notifications in this browser</button>`;
