@@ -6,6 +6,7 @@ Google Sheets IMPORTDATA). GET /feeds/<token>/<name>.csv on mail.dejoiy.com.
   daily.csv      one row a day for the last 30 days (for charts)
   companies.csv  one row per company
   status.csv     every Dejoiy service up or down right now, and this server's health
+  roles.csv      roles & permissions: one row per company and role (people, allowed, denied, temporary), and requests
 
 Counts only: never mail content, passwords or keys. Subjects and addresses do not appear in any feed.
 The token is in <state>/feed-token (made on first start, 0600); change or delete it to cut off old links.
@@ -16,7 +17,7 @@ from pathlib import Path
 
 DAY = 86400
 WINDOWS = (('24h', DAY), ('7d', 7 * DAY), ('30d', 30 * DAY), ('90d', 90 * DAY))
-NAMES = ('mail', 'admin', 'daily', 'companies', 'status')
+NAMES = ('mail', 'admin', 'daily', 'companies', 'status', 'roles')
 
 
 def token(state_dir):
@@ -158,6 +159,27 @@ def companies(s, now=None, mailboxes=None):
                      'yes' if addons.get(d, 0) > now else '', 'Swiss Mail' if cfg.get('kind') == 'swiss' else cfg.get('host', '') if cfg.get('active') else ''])
     return to_csv(['Company', 'State', 'Plan', 'Period', 'Paid or trial until', 'Mailboxes', 'People active 30d', 'Mails sent 30d',
                    'Phishing 30d', 'Spam 30d', 'Swiss add-on', 'Own mail service'], rows)
+
+
+def roles(s, now=None):
+    """One row per company and role, from the roles & permissions store (iam.py). Counts only, never who."""
+    now = now or time.time(); store = getattr(s, 'iam', None)
+    if store is None: return to_csv(['Company', 'Role'], [])
+    people = {(r[0], r[1]): (r[2], r[3]) for r in _q(store, '''SELECT ur.domain, ur.role, COUNT(DISTINCT ur.email), COUNT(DISTINCT CASE WHEN ur.expires IS NOT NULL THEN ur.email END)
+        FROM user_roles ur WHERE ur.revoked IS NULL AND (ur.expires IS NULL OR ur.expires>?) GROUP BY ur.domain, ur.role''', (now,))}
+    perms = {(r[0], r[1]): r[2] for r in _q(store, 'SELECT role, effect, COUNT(*) FROM role_permissions GROUP BY role, effect')}
+    pending = dict(_q(store, "SELECT domain, COUNT(*) FROM access_requests WHERE status='pending' GROUP BY domain"))
+    asked = dict(_q(store, 'SELECT domain, COUNT(*) FROM access_requests WHERE created>=? GROUP BY domain', (now - 30 * DAY,)))
+    denies = dict(_q(store, "SELECT domain, COUNT(DISTINCT email) FROM user_permissions WHERE effect='deny' AND revoked IS NULL AND (expires IS NULL OR expires>?) GROUP BY domain", (now,)))
+    changes = dict(_q(store, 'SELECT domain, COUNT(*) FROM audit WHERE at>=? GROUP BY domain', (now - 30 * DAY,)))
+    rows = []
+    for rid, d, key, name, sens, system, updated in _q(store, 'SELECT id, domain, key, name, sensitivity, system, updated FROM roles WHERE deleted IS NULL ORDER BY domain, system DESC, name'):
+        n, temp = people.get((d, rid), (0, 0))
+        rows.append([d, name, 'Ready-made' if system else 'Custom', sens, n, temp, 'all' if key == 'super_admin' else perms.get((rid, 'allow'), 0),
+                     perms.get((rid, 'deny'), 0), pending.get(d, 0), asked.get(d, 0), denies.get(d, 0), changes.get(d, 0),
+                     time.strftime('%Y-%m-%d %H:%M', time.gmtime(updated)) if updated else ''])
+    return to_csv(['Company', 'Role', 'Type', 'Sensitivity', 'People', 'Of them temporary', 'Permissions allowed', 'Permissions denied',
+                   'Company: requests waiting', 'Company: requests 30d', 'Company: people with a deny', 'Company: access changes 30d', 'Role updated (UTC)'], rows)
 
 
 # ---------- live status ----------

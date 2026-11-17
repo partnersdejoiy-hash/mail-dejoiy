@@ -2373,6 +2373,7 @@ class Handler(SimpleHTTPRequestHandler):
         elif name=='admin': body=feeds.admin(self.server)
         elif name=='daily': body=feeds.daily(self.server)
         elif name=='status': body=self.feed_status()
+        elif name=='roles': body=feeds.roles(self.server)
         else: body=feeds.companies(self.server,mailboxes=self.feed_totals()[1])
         raw=body.encode('utf-8-sig')   # the BOM makes spreadsheets read ₹ and other letters right
         self.send_response(200); self.send_header('Content-Type','text/csv; charset=utf-8'); self.send_header('Content-Length',str(len(raw)))

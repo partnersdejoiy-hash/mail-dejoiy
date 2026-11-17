@@ -80,3 +80,18 @@ class Status(unittest.TestCase):
         self.assertEqual(by['Services up'][1], '1 of 3')
         self.assertEqual(by['Mail system (Zimbra) answering'][1], 'UP')
         self.assertIn('Disk used', by)
+
+
+class Roles(unittest.TestCase):
+    def test_roles_feed_counts_people_not_names(self):
+        import iam
+        store = iam.IAM(); store.ensure_company('kaali.in')
+        store.assign_role('kaali.in', 'x', 'boss@kaali.in', store.role_id('kaali.in', 'super_admin'))
+        store.assign_role('kaali.in', 'boss@kaali.in', 'a@kaali.in', store.role_id('kaali.in', 'auditor'), hours=5)
+        store.request('kaali.in', 'tm@kaali.in', 'permission', 'email.send_external', reason='Quotes')
+        out = feeds.roles(type('S', (), {'iam': store})())
+        rows = {r[1]: r for r in csv.reader(io.StringIO(out))}
+        self.assertEqual(len(rows), 19)                                   # header + 18 roles
+        self.assertEqual(rows['Super Administrator'][4:7], ['1', '0', 'all'])
+        self.assertEqual(rows['Auditor'][4:6], ['1', '1']); self.assertEqual(rows['Auditor'][8], '1')
+        self.assertNotIn('@', out)
