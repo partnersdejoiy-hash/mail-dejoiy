@@ -3460,8 +3460,8 @@ class Handler(SimpleHTTPRequestHandler):
     CARD_ID=re.compile(r'[A-Za-z0-9][A-Za-z0-9 ._/-]{0,31}')
     def card_fields(self, email):
         """Employee ID and position an admin set for this person (kept per company)."""
-        domain=email.lower().rsplit('@',1)[-1]
-        return self.server.cards.get('domain:'+domain).get(email.lower(),{})
+        domain=email.lower().rsplit('@',1)[-1]; cards=getattr(self.server,'cards',None)
+        return cards.get('domain:'+domain).get(email.lower(),{}) if cards else {}
     def set_card(self, actor, scope, data):
         """A company admin sets a person's employee ID and position (job title) for their ID card."""
         email=str(data.get('email','')).strip().lower()
