@@ -349,13 +349,18 @@ async function billing(main, d){
   const pick = d.scope ? "" : `<label class="adm-inline">Company <select id="bl-domain">${domains.map(x=>`<option ${x===domain?"selected":""}>${esc(x)}</option>`).join("")}</select></label>`;
   main.innerHTML=head("Plan & billing","Dejoiy Mail with Shine chat, calls and meetings, in one subscription. Paid securely on pay.dejoiy.com.",pick)+`<div id="bl-body"><p class="adm-muted">Loading…</p></div>`;
   $("bl-domain")?.addEventListener("change",e=>{ billing.domain=e.target.value; billing(main,d); });
-  let b; try{ b=await act({op:"billing_get",domain}); }catch(e){ if($("bl-body")) $("bl-body").innerHTML=`<div class="adm-card adm-error">${esc(e.message)}</div>`; return; }
-  if(!$("bl-body")) return;
   // Dejoiy super admins only: declare a company domain Dejoiy's own (free, and its mail leaves through Dejoiy's own mail service)
   const own = on => confirmDialog(on?`Make ${domain} Dejoiy's own`:`Stop treating ${domain} as Dejoiy's own`,
     on?`${domain} will be free (no subscription) and its mail will leave through Dejoiy's own mail service, like dejoiy.com. Use this only for domains Dejoiy runs.`
       :`${domain} will need a subscription again (its trial or plan picks up where it was), and its mail goes back to the usual way.`,
     on?"Make it Dejoiy's own":"Stop", async () => { await act({op:"billing_own", domain, on}); toast(on?"Now one of Dejoiy's own domains":"No longer Dejoiy's own"); billing(main,d); });
+  const ownCard = `<div class="adm-card"><div class="adm-card-head"><h2>Dejoiy's own domain</h2><button class="adm-btn ghost" id="bl-own-on">Make ${esc(domain)} Dejoiy's own</button></div>
+      <p class="adm-muted">For domains Dejoiy runs (for example a Dejoiy brand or project): no subscription, and mail leaves through Dejoiy's own mail service. Only Dejoiy super admins see this.</p></div>`;
+  let b; try{ b=await act({op:"billing_get",domain}); }catch(e){ if($("bl-body")){ $("bl-body").innerHTML=`<div class="adm-card adm-error">${esc(e.message)}</div>${d.scope?"":ownCard}`;
+    $("bl-own-on")?.addEventListener("click",()=>own(true)); } return; }
+  if(!$("bl-body")) return;
+  if(b.state==="none"){ $("bl-body").innerHTML=`<div class="adm-card adm-note">Billing is not set up on this server yet.</div>${d.scope?"":ownCard}`;
+    $("bl-own-on")?.addEventListener("click",()=>own(true)); return; }
   if(b.state==="internal"){ $("bl-body").innerHTML=`<div class="adm-card"><h2>${esc(b.domain)}</h2><p class="adm-muted">This is one of Dejoiy's own domains, so it has no subscription to pay.</p>
     ${!d.scope&&b.declared?`<button class="adm-btn ghost" id="bl-own-off">Stop treating it as Dejoiy's own</button>`:""}</div>`; $("bl-own-off")?.addEventListener("click",()=>own(false)); return; }
   const inr = paise => "₹"+(paise/100).toLocaleString("en-IN",{minimumFractionDigits:paise%100?2:0,maximumFractionDigits:2});
@@ -379,8 +384,7 @@ async function billing(main, d){
           <p>${p.mailboxes===null?"Unlimited":"Up to "+p.mailboxes} mailboxes · Shine included</p>
           <button class="adm-btn ${mine?"ghost":"primary"}" data-plan="${p.id}" ${b.payReady&&!mine&&!b.renewing?"":"disabled"}>${mine?"Your plan":"Subscribe to "+esc(p.name)}</button></div>`; }).join("")}</div>
       <p class="adm-muted">${b.renewing?"To change plan, turn auto-renew off first: the new plan starts when you subscribe to it.":"Trial days left are not charged: the first payment starts the paid time."}</p><p role="alert" class="adm-error" id="bl-err"></p></div>
-    ${d.scope?"":`<div class="adm-card"><div class="adm-card-head"><h2>Dejoiy's own domain</h2><button class="adm-btn ghost" id="bl-own-on">Make ${esc(b.domain)} Dejoiy's own</button></div>
-      <p class="adm-muted">For domains Dejoiy runs (for example a Dejoiy brand or project): no subscription, and mail leaves through Dejoiy's own mail service. Only Dejoiy super admins see this.</p></div>`}
+    ${d.scope?"":ownCard}
     <div class="adm-card adm-flush"><div class="adm-card-head adm-pad"><h2>Payments</h2></div>
       ${b.invoices.length?`<table class="adm-table"><thead><tr><th>Date</th><th>Plan</th><th>Amount</th><th>Status</th></tr></thead><tbody>${b.invoices.map(x=>`<tr><td><small>${day(x.paidAt||x.created)}</small></td>
         <td>${esc(b.plans.find(p=>p.id===x.plan)?.name||x.plan)} · ${x.period==="year"?"yearly":"monthly"}${x.mode==="test"?` <span class="adm-pill warn">test</span>`:""}</td><td>${inr(x.amount)}</td>

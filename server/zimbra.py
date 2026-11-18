@@ -3791,7 +3791,7 @@ class Handler(SimpleHTTPRequestHandler):
     def billing_action(self, s, data):
         """The company's subscription (Dejoiy Mail with Shine) and paying for it through Dejoiy Pay."""
         billing=getattr(self.server,'billing',None)
-        if not billing: raise APIError('Billing is not set up on this server.',503)
+        if not billing and data.get('op') not in ('billing_own','billing_get'): raise APIError('Billing is not set up on this server.',503)
         client,token,scope=self.admin_session(s)
         perms=client.actor_perms(token,s['user']['email'],scope)
         if perms is not None and 'billing.manage' not in perms:
@@ -3806,6 +3806,7 @@ class Handler(SimpleHTTPRequestHandler):
         reserved=self.server.reserved_domains
         if any(domain==r or domain.endswith('.'+r) for r in reserved):
             return {'domain':domain,'state':'internal','declared':domain in declared_domains(self.server)}   # Dejoiy's own domains don't pay themselves
+        if not billing: return {'domain':domain,'state':'none'}   # no billing on this server: Dejoiy's own domains can still be declared
         try:
             if data['op']=='billing_cancel':
                 out=billing.cancel(domain); self.log('admin:billing_cancel',s['user']['email'],domain); return out
