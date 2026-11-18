@@ -163,6 +163,9 @@ class OutcomeAndMailTests(unittest.TestCase):
         n = len(z.sent); self.h.complete_event(me, {'id': '7', 'start': 1, 'notes': 'x'}, 'tok'); self.assertEqual(len(z.sent), n)
         other = self.h.complete_event('roopa@corp.dejoiy.com', {'id': '7', 'start': 1, 'notes': 'x', 'send': True}, 'tok')
         self.assertIn('organiser', other['emailError']); self.assertTrue(other['done'])
+        # the organiser signed in with an alias: Zimbra's isOrg flag decides
+        appt.find('.//' + M + 'comp').set('isOrg', '1')
+        self.assertEqual(self.h.complete_event('deepak@dejoiy.com', {'id': '7', 'start': 1, 'notes': 'x', 'send': True}, 'tok')['emailed'], 1)
 
     def test_invite_has_shine_html_with_join_button(self):
         e = c.clean_event({'title': 'Interview <Asha>', 'start': ms(2026, 11, 18, 11), 'end': ms(2026, 11, 18, 11, 30), 'tz': 'Asia/Kolkata',

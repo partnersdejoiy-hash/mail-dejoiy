@@ -126,7 +126,7 @@ def event_detail(client, token, ident):
     rule = comp.find('.//{' + MAIL + '}rule'); count = comp.find('.//{' + MAIL + '}count'); rel = comp.find('.//{' + MAIL + '}rel')
     desc = comp.find('{' + MAIL + '}desc')
     inv = appt.find('{' + MAIL + '}inv'); first = comp.find('{' + MAIL + '}s'); last = comp.find('{' + MAIL + '}e')
-    return {'id': appt.get('id'), 'title': comp.get('name') or '', 'invId': f"{appt.get('id')}-{inv.get('id')}" if inv is not None and inv.get('id') else appt.get('id'),
+    return {'id': appt.get('id'), 'title': comp.get('name') or '', 'isOrg': comp.get('isOrg') == '1' or appt.get('isOrg') == '1', 'invId': f"{appt.get('id')}-{inv.get('id')}" if inv is not None and inv.get('id') else appt.get('id'),
         'guests': [a.get('a') for a in comp.findall('{' + MAIL + '}at')],
         # the series itself, so editing a repeat from a later day doesn't move the whole series
         'start': int(first.get('u')) if first is not None and first.get('u') else None, 'end': int(last.get('u')) if last is not None and last.get('u') else None,
@@ -140,7 +140,8 @@ def send_outcome(client, token, ident, start, tz, notes, remarks, me):
     """Emails a finished meeting's notes and remarks to its guests, from the organiser's own mailbox.
     Only the organiser can; returns how many guests it went to (0 when the event has none)."""
     detail = event_detail(client, token, ident)
-    if (detail['organizer'] or me).lower() != me.lower(): raise CalendarError('Only the organiser can send the notes.', 403)
+    # Zimbra's own flag, so an alias (deepak@dejoiy.com signing in, deepak@corp.dejoiy.com as organiser) still counts
+    if not detail['isOrg'] and (detail['organizer'] or me).lower() != me.lower(): raise CalendarError('Only the organiser can send the notes.', 403)
     guests = [g for g in detail['guests'] if g and g.lower() != me.lower()]
     if not guests: return 0
     title = detail['title'] or '(no title)'
