@@ -85,6 +85,14 @@ def event_mail(event, organizer):
                 note='No Shine account? Open the link and join with your name, email and phone number.' if shine else '')
 
 
+def outcome_mail(title, when_text, notes, remarks, organizer):
+    """The notes and remarks the organiser wrote after a meeting, booking or interview, for its guests."""
+    body = f'<p style="margin:0 0 12px">{esc(organizer)} shared the notes from your meeting.</p>'
+    if notes: body += f'<p style="margin:12px 0;padding:12px 14px;border-left:4px solid {PINK};background:#fff4fa;white-space:pre-wrap">{esc(notes)}</p>'
+    rows = [('When', when_text), ('Organiser', organizer)] + ([('Remarks', remarks)] if remarks else [])
+    return card(preheader=f'Notes from {title}', tag='Meeting notes', title='Notes from', highlight=title, body=body, rows=rows)
+
+
 def cancel_mail(title):
     return card(preheader=f'{title} has been cancelled.', tag='Cancelled', title='Cancelled:', highlight=title,
                 body='<p style="margin:0">This event has been cancelled and taken off the calendar.</p>')

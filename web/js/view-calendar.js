@@ -179,7 +179,7 @@ Views.calendar = function(el){
       ${e?.done?`<div class="cal-outcome"><b>✓ Completed</b>${e.outcome?.remarks?`<span>${esc(e.outcome.remarks)}</span>`:""}${e.outcome?.notes?`<p>${esc(e.outcome.notes)}</p>`:""}</div>`:""}
       <p class="cal-hint">${series?"🔁 Changes apply to every repeat. ":""}Guests get an email invite they can accept from Gmail, Outlook or any mail app.</p>
       <p class="cal-error" role="alert"></p></form>`,
-      actions:[...(e&&e.organizer!==false?[{label:"Delete", fn:()=>{ remove(e, guests); return false; }}, {label:e.done?"Edit outcome":"Mark completed", fn:()=>{ outcome(e); return false; }}]:[]),
+      actions:[...(e&&e.organizer!==false?[{label:"Delete", fn:()=>{ remove(e, guests); return false; }}, {label:e.done?"Edit outcome":"Mark completed", fn:()=>{ outcome(e, guests); return false; }}]:[]),
         {label:"Cancel"}, {label:e?"Save":"Add event", primary:true, fn:()=>{ save(e); return false; }}]});
     const form=document.getElementById("cal-form");
     form.elements.allDay.addEventListener("change",()=>{ form.elements.st.hidden=form.elements.et.hidden=form.elements.allDay.checked; });
@@ -212,21 +212,23 @@ Views.calendar = function(el){
     }catch(error){ err.textContent=error.message; if(button) button.disabled=false; }
   }
   /* the organiser closes a meeting, booking or interview: what happened (notes) and a short verdict (remarks) */
-  function outcome(e){
+  function outcome(e, guests=[]){
     const o=e.outcome||{};
     App.dialog({title:"Mark completed", body:`<form class="cal-form" id="cal-done-form" novalidate>
       <p class="cal-hint"><b>${esc(e.title)}</b> · ${esc(new Date(e.start).toLocaleString([], {weekday:"short", day:"numeric", month:"short", hour:"numeric", minute:"2-digit"}))}</p>
       <label>Notes<textarea name="notes" rows="5" maxlength="5000" placeholder="What was discussed, decided or promised">${esc(o.notes||"")}</textarea></label>
       <label>Remarks<input name="remarks" maxlength="1000" value="${esc(o.remarks||"")}" placeholder="e.g. Selected for next round · Follow up on Friday"></label>
-      <p class="cal-hint">Only you see these. They stay with this event in your calendar.</p>
+      ${guests.length?`<label class="cal-switch"><input type="checkbox" name="send" checked> Email the notes and remarks to ${esc(guests.join(", "))}</label>`:""}
+      <p class="cal-hint">${guests.length?"Untick to keep them to yourself. ":""}They stay with this event in your calendar.</p>
       <p class="cal-error" role="alert"></p></form>`,
       actions:[...(e.done?[{label:"Not completed", fn:()=>{ mark(e,{done:false}); return false; }}]:[]), {label:"Cancel"},
-        {label:"Save as completed", primary:true, fn:()=>{ const f=document.getElementById("cal-done-form").elements; mark(e,{notes:f.notes.value, remarks:f.remarks.value}); return false; }}]});
+        {label:"Save as completed", primary:true, fn:()=>{ const f=document.getElementById("cal-done-form").elements; mark(e,{notes:f.notes.value, remarks:f.remarks.value, send:!!f.send?.checked, tz:tz()}); return false; }}]});
     setTimeout(()=>document.querySelector("#cal-done-form textarea")?.focus(),60);
   }
   async function mark(e, data){
     const err=document.querySelector("#cal-done-form .cal-error");
-    try{ await api.complete({id:e.id, start:e.start, ...data}); App.closeDialog(); App.toast(data.done===false?"Marked as not completed.":"Marked as completed."); load(); }
+    try{ const r=await api.complete({id:e.id, start:e.start, ...data}); App.closeDialog(); load();
+      App.toast(data.done===false?"Marked as not completed.":r?.emailError?"Marked as completed, but the email didn't go: "+r.emailError:r?.emailed?`Marked as completed. Notes emailed to ${r.emailed===1?"the guest":r.emailed+" guests"}.`:"Marked as completed."); }
     catch(error){ if(err) err.textContent=error.message; else App.toast(error.message); }
   }
   function remove(e, guests){

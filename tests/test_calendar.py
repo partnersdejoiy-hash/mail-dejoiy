@@ -145,6 +145,25 @@ class OutcomeAndMailTests(unittest.TestCase):
         with self.assertRaises(self.z.APIError): self.h.complete_event(me, {'id': '../x', 'start': 1})
         with self.assertRaises(self.z.APIError): self.h.complete_event(me, {'id': '7', 'start': 1, 'remarks': 'x' * 1001})
 
+    def test_notes_are_emailed_to_guests_by_the_organiser(self):
+        me = 'deepak@corp.dejoiy.com'
+        appt = ET.fromstring(f'''<GetAppointmentResponse xmlns="urn:zimbraMail"><appt id="7"><inv id="1"><comp name="Meeting with Raghvi &lt;R&gt;">
+          <s u="{ms(2026, 11, 17, 18)}"/><e u="{ms(2026, 11, 17, 18, 30)}"/><or a="{me}"/><at a="dr93151080@gmail.com"/></comp></inv></appt></GetAppointmentResponse>''')
+        class Z(Fake):
+            def call(self, r, token=None):
+                self.sent.append(r); return appt if r.tag.endswith('GetAppointmentRequest') else ET.Element(M + 'SendMsgResponse')
+        from types import SimpleNamespace
+        z = Z(); self.h.server = SimpleNamespace(outcomes=self.z.AppearanceStore(), zimbra=z)
+        out = self.h.complete_event(me, {'id': '7', 'start': ms(2026, 11, 17, 18), 'notes': 'Good call', 'remarks': 'Follow up Friday', 'send': True, 'tz': 'Asia/Kolkata'}, 'tok')
+        self.assertEqual(out['emailed'], 1); self.assertTrue(out['done'])
+        xml = ET.tostring(z.sent[-1]).decode()
+        self.assertIn('SendMsgRequest', xml); self.assertIn('a="dr93151080@gmail.com"', xml); self.assertIn('Notes: Meeting with Raghvi &lt;R&gt;', xml)
+        self.assertIn('Follow up Friday', xml); self.assertIn('6:00 PM', xml); self.assertNotIn('<R>', xml.replace('&lt;R&gt;', ''))
+        # without the tick nothing is sent; someone who is not the organiser cannot send
+        n = len(z.sent); self.h.complete_event(me, {'id': '7', 'start': 1, 'notes': 'x'}, 'tok'); self.assertEqual(len(z.sent), n)
+        other = self.h.complete_event('roopa@corp.dejoiy.com', {'id': '7', 'start': 1, 'notes': 'x', 'send': True}, 'tok')
+        self.assertIn('organiser', other['emailError']); self.assertTrue(other['done'])
+
     def test_invite_has_shine_html_with_join_button(self):
         e = c.clean_event({'title': 'Interview <Asha>', 'start': ms(2026, 11, 18, 11), 'end': ms(2026, 11, 18, 11, 30), 'tz': 'Asia/Kolkata',
                            'guests': 'asha@gmail.com', 'location': 'https://meet.dejoiy.com/meet/interview/DJM-ABC-DEF'})

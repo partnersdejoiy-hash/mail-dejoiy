@@ -3494,7 +3494,7 @@ class Handler(SimpleHTTPRequestHandler):
         try: start=int(start)
         except (TypeError,ValueError): raise APIError('Invalid event.')
         return f'{email}|{ident}|{start}'
-    def complete_event(self, email, data):
+    def complete_event(self, email, data, token=None):
         """The organiser marks a meeting, booking or interview done, with notes and remarks. One record per
         occurrence (a repeating event's days are separate). done=false takes the mark off."""
         key=self.outcome_key(email,data.get('id'),data.get('start'))
@@ -3502,7 +3502,12 @@ class Handler(SimpleHTTPRequestHandler):
         notes=str(data.get('notes') or '').strip(); remarks=str(data.get('remarks') or '').strip()
         if len(notes)>5000 or len(remarks)>1000: raise APIError('Keep notes under 5000 and remarks under 1000 characters.')
         record={'done':True,'notes':notes,'remarks':remarks,'at':int(time.time()*1000)}
-        self.server.outcomes.put(key,record); return {'ok':True,**record}
+        self.server.outcomes.put(key,record); out={'ok':True,**record}
+        if data.get('send') is True and token and (notes or remarks):
+            # saved first: a mail that fails to go out never loses what the organiser wrote
+            try: out['emailed']=dcalendar.send_outcome(self.server.zimbra,token,str(data.get('id')),int(data.get('start') or 0),str(data.get('tz') or ''),notes,remarks,email)
+            except (dcalendar.CalendarError,APIError) as e: out['emailError']=str(e)
+        return out
     def with_outcomes(self, email, events):
         for e in events:
             try: o=self.server.outcomes.get(self.outcome_key(email,e.get('id'),e.get('start')))
@@ -4023,7 +4028,7 @@ class Handler(SimpleHTTPRequestHandler):
             if self.path=='/api/updates': return self.reply(200,self.post_update(s,data))
             if self.path=='/api/calendar':
                 if data.get('op')=='delete': return self.reply(200,self.cal(dcalendar.delete_event,self.server.zimbra,s['token'],data))
-                if data.get('op')=='complete': return self.reply(200,self.complete_event(s['user']['email'],data))
+                if data.get('op')=='complete': return self.reply(200,self.complete_event(s['user']['email'],data,s['token']))
                 return self.reply(200,self.cal(dcalendar.save_event,self.server.zimbra,s['token'],data,s['user']['email']))
             if self.path=='/api/booking': return self.reply(200,self.save_booking(s,data))
             if self.path=='/api/shine/meeting': return self.reply(200,self.shine_meeting(s,data))

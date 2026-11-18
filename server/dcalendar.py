@@ -126,7 +126,7 @@ def event_detail(client, token, ident):
     rule = comp.find('.//{' + MAIL + '}rule'); count = comp.find('.//{' + MAIL + '}count'); rel = comp.find('.//{' + MAIL + '}rel')
     desc = comp.find('{' + MAIL + '}desc')
     inv = appt.find('{' + MAIL + '}inv'); first = comp.find('{' + MAIL + '}s'); last = comp.find('{' + MAIL + '}e')
-    return {'id': appt.get('id'), 'invId': f"{appt.get('id')}-{inv.get('id')}" if inv is not None and inv.get('id') else appt.get('id'),
+    return {'id': appt.get('id'), 'title': comp.get('name') or '', 'invId': f"{appt.get('id')}-{inv.get('id')}" if inv is not None and inv.get('id') else appt.get('id'),
         'guests': [a.get('a') for a in comp.findall('{' + MAIL + '}at')],
         # the series itself, so editing a repeat from a later day doesn't move the whole series
         'start': int(first.get('u')) if first is not None and first.get('u') else None, 'end': int(last.get('u')) if last is not None and last.get('u') else None,
@@ -134,6 +134,26 @@ def event_detail(client, token, ident):
         'repeat': {v: k for k, v in REPEATS.items() if v}.get(rule.get('freq') if rule is not None else '', ''),
         'count': int(count.get('num')) if count is not None else 0, 'reminder': int(rel.get('m', 0)) if rel is not None else -1,
         'notes': (desc.text or '') if desc is not None else '', 'organizer': comp.find('{' + MAIL + '}or').get('a', '') if comp.find('{' + MAIL + '}or') is not None else ''}
+
+
+def send_outcome(client, token, ident, start, tz, notes, remarks, me):
+    """Emails a finished meeting's notes and remarks to its guests, from the organiser's own mailbox.
+    Only the organiser can; returns how many guests it went to (0 when the event has none)."""
+    detail = event_detail(client, token, ident)
+    if (detail['organizer'] or me).lower() != me.lower(): raise CalendarError('Only the organiser can send the notes.', 403)
+    guests = [g for g in detail['guests'] if g and g.lower() != me.lower()]
+    if not guests: return 0
+    title = detail['title'] or '(no title)'
+    if title.startswith('Booked: '): title = title[len('Booked: '):]
+    length = (detail['end'] - detail['start']) if detail['start'] and detail['end'] else 3600000
+    when = maillook.when({'start': start, 'end': start + length, 'tz': tz or 'UTC', 'allDay': False})
+    m = node('m')
+    for guest in guests: m.append(node('e', {'a': guest, 't': 't'}))
+    m.append(node('su', text='Notes: ' + title))
+    text = '\n\n'.join(x for x in (f'{title} · {when}', notes, f'Remarks: {remarks}' if remarks else '') if x)
+    m.append(alternative(text, maillook.outcome_mail(title, when, notes, remarks, me)))
+    r = node('SendMsgRequest'); r.append(m); client.call(r, token)
+    return len(guests)
 
 
 def save_event(client, token, data, me):
